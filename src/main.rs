@@ -5,6 +5,7 @@ use std::path::Path;
 use std::time::SystemTime;
 use std::process::Command;
 use std::str;
+use std::cmp;
 
 fn main() {
     println!("Hello, world!");
@@ -45,15 +46,30 @@ fn write_header(file: &mut File) {
 }
 
 fn write_py_code(file: &mut File) {
+    
+    let operation_list: [OpCode; 6] = [
+        OpCode::LoadName(0),
+        OpCode::LoadConst(0),
+        OpCode::CallFunction(1),
+        OpCode::PopTop,
+        OpCode::LoadConst(1),
+        OpCode::ReturnValue,
+    ];
+
+
     file.write(&[0xE3]).unwrap(); // ObjectType
     file.write(&(0u32.to_le_bytes())).unwrap(); // ArgCount
     file.write(&(0u32.to_le_bytes())).unwrap(); // PosOnlyArgCount
     file.write(&(0u32.to_le_bytes())).unwrap(); // KwOnlyArgCount
     file.write(&(0u32.to_le_bytes())).unwrap(); // NumLocals
-    file.write(&(2u32.to_le_bytes())).unwrap(); // StackSize
+    let stack_size = calc_stack_size(&operation_list);
+    if stack_size < 0 {
+        panic!("invalid stack size: {}", stack_size);
+    }
+    file.write(&(stack_size as u32).to_le_bytes()).unwrap(); // StackSize
     file.write(&(64u32.to_le_bytes())).unwrap(); // Flags
 
-    let codes: [u8; 12] = [0x65, 0x00, 0x64, 0x00, 0x83, 0x01, 0x01, 0x00, 0x64, 0x01, 0x53, 0x00];
+    let codes = compile_code(&operation_list);
     write_py_string(file, &codes);
     {
         // SmallTuple: 定数定義
@@ -129,4 +145,79 @@ fn write_py_short_ascii(file: &mut File, value: &[u8]) {
     let str_len = value.len() as u8;
     file.write(&[str_len]).unwrap();
     file.write(value).unwrap();
+}
+
+enum OpCode {
+    PopTop,
+    BinaryAdd,
+    BinarySubtract,
+    BinaryMultiply,
+    BinaryTrueDivide,
+    ReturnValue,
+    LoadConst(u8),
+    LoadName(u8),
+    CallFunction(u8),
+}
+
+impl OpCode {
+    fn get_value(&self) -> u8 {
+        match *self {
+            OpCode::PopTop => 1,
+            OpCode::BinaryMultiply => 20,
+            OpCode::BinaryAdd => 23,
+            OpCode::BinarySubtract => 24,
+            OpCode::BinaryTrueDivide => 27,
+            OpCode::ReturnValue => 83,
+            OpCode::LoadConst(_) => 100,
+            OpCode::LoadName(_) => 101,
+            OpCode::CallFunction(_) => 131
+        }
+    }
+
+    pub fn to_bytes(&self) -> (u8, u8) {
+        let operand = match *self {
+            OpCode::LoadConst(v) |
+            OpCode::LoadName(v) |
+            OpCode::CallFunction(v) => v,
+            _ => 0
+        };
+        return (self.get_value(), operand);
+    }
+
+    pub fn stack_effect(&self) -> i32 {
+        match *self {
+            OpCode::PopTop => -1,
+            OpCode::BinaryAdd |
+            OpCode::BinaryMultiply |
+            OpCode::BinarySubtract |
+            OpCode::BinaryTrueDivide => -1,
+            OpCode::ReturnValue => -1,
+            OpCode::LoadConst(_) |
+            OpCode::LoadName(_) => 1,
+            OpCode::CallFunction(n) => -(n as i32)
+        }
+    }
+}
+
+fn compile_code(operation_list: &[OpCode]) -> Vec<u8> {
+    let code_size = operation_list.len() * 2;
+    let mut result = vec![0u8; code_size];
+    let mut i = 0;
+    for op in operation_list {
+        let (opcode, operand) = op.to_bytes();
+        result[i] = opcode;
+        result[i+1] = operand;
+        i += 2;
+    }
+    result
+}
+
+fn calc_stack_size(operation_list: &[OpCode]) -> i32 {
+    let mut max_size = 0;
+    let mut current_size = 0;
+    for op in operation_list {
+        current_size += op.stack_effect();
+        max_size = cmp::max(max_size, current_size);
+    }
+    max_size
 }
