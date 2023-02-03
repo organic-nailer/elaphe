@@ -55,6 +55,13 @@ fn write_py_code(file: &mut File) {
         OpCode::LoadConst(1),
         OpCode::ReturnValue,
     ];
+    let constant_list: [PyObject; 2] = [
+        PyObject::Int(10, true),
+        PyObject::None(false)
+    ];
+    let name_list: [PyObject; 1] = [
+        PyObject::Ascii("print", true),
+    ];
 
 
     file.write(&[0xE3]).unwrap(); // ObjectType
@@ -70,22 +77,14 @@ fn write_py_code(file: &mut File) {
     file.write(&(64u32.to_le_bytes())).unwrap(); // Flags
 
     let codes = compile_code(&operation_list);
-    write_py_string(file, &codes);
-    {
-        // SmallTuple: 定数定義
-        let tuple_len = 2u8;
-        file.write(&[0x29]).unwrap();
-        file.write(&[tuple_len]).unwrap();
-        write_py_int(file, 10);
-        write_py_none(file);
-    }
-    {
-        // SmallTuple: 名前一覧
-        let tuple_len = 1u8;
-        file.write(&[0x29]).unwrap();
-        file.write(&[tuple_len]).unwrap();
-        write_py_short_ascii_interned(file, "print".as_bytes());
-    }
+    write_py_string(file, &codes, false);
+
+    // 定数一覧
+    write_py_small_tuple(file, &constant_list);
+
+    // 名前一覧
+    write_py_small_tuple(file, &name_list);
+
     {
         // SmallTuple: ローカル変数一覧
         let tuple_len = 0u8;
@@ -107,7 +106,7 @@ fn write_py_code(file: &mut File) {
     // ファイル名
     write_py_short_ascii(file, "main.py".as_bytes());
     // 名前
-    write_py_short_ascii_interned(file, "<module>".as_bytes());
+    write_py_short_ascii_interned(file, "<module>".as_bytes(), true);
     // first line
     file.write(&(1u32.to_le_bytes())).unwrap();
     // line table
@@ -117,24 +116,28 @@ fn write_py_code(file: &mut File) {
     }
 }
 
-fn write_py_string(file: &mut File, value: &[u8]) {
-    file.write(&[0x73]).unwrap(); // ObjectType
+fn write_py_string(file: &mut File, value: &[u8], register_ref: bool) {
+    let object_type = 0x73u8 | ((register_ref as u8) << 7);
+    file.write(&[object_type]).unwrap(); // ObjectType
     let str_len = value.len() as u32;
     file.write(&(str_len.to_le_bytes())).unwrap();
     file.write(value).unwrap();
 }
 
-fn write_py_int(file: &mut File, value: u32) {
-    file.write(&[0xE9]).unwrap(); // ObjectType
+fn write_py_int(file: &mut File, value: i32, register_ref: bool) {
+    let object_type = 0x69u8 | ((register_ref as u8) << 7);
+    file.write(&[object_type]).unwrap(); // ObjectType
     file.write(&(value.to_le_bytes())).unwrap();
 }
 
-fn write_py_none(file: &mut File) {
-    file.write(&[0x4E]).unwrap();
+fn write_py_none(file: &mut File, register_ref: bool) {
+    let object_type = 0x4Eu8 | ((register_ref as u8) << 7);
+    file.write(&[object_type]).unwrap();
 }
 
-fn write_py_short_ascii_interned(file: &mut File, value: &[u8]) {
-    file.write(&[0xDA]).unwrap();
+fn write_py_short_ascii_interned(file: &mut File, value: &[u8], register_ref: bool) {
+    let object_type = 0x5Au8 | ((register_ref as u8) << 7);
+    file.write(&[object_type]).unwrap();
     let str_len = value.len() as u8;
     file.write(&[str_len]).unwrap();
     file.write(value).unwrap();
@@ -220,4 +223,25 @@ fn calc_stack_size(operation_list: &[OpCode]) -> i32 {
         max_size = cmp::max(max_size, current_size);
     }
     max_size
+}
+
+enum PyObject {
+    Int(i32, bool),
+    Str(&'static str, bool),
+    Ascii(&'static str, bool),
+    None(bool)
+}
+
+fn write_py_small_tuple(file: &mut File, value_list: &[PyObject]) {
+    let tuple_len = value_list.len() as u8;
+    file.write(&[0x29]).unwrap();
+    file.write(&[tuple_len]).unwrap();
+    for c in value_list {
+        match *c {
+            PyObject::Int(v,r) => write_py_int(file, v, r),
+            PyObject::Str(v,r) => write_py_string(file, v.as_bytes(), r),
+            PyObject::Ascii(v, r) => write_py_short_ascii_interned(file, v.as_bytes(), r),
+            PyObject::None(r) => write_py_none(file, r)
+        }
+    }
 }
