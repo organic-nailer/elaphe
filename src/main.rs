@@ -46,17 +46,23 @@ fn write_header(file: &mut File) {
 }
 
 fn write_py_code(file: &mut File) {
-    
-    let operation_list: [OpCode; 6] = [
+    // print((1+2)*5)
+    let operation_list: [OpCode; 10] = [
         OpCode::LoadName(0),
         OpCode::LoadConst(0),
+        OpCode::LoadConst(1),
+        OpCode::BinaryAdd,
+        OpCode::LoadConst(2),
+        OpCode::BinaryMultiply,
         OpCode::CallFunction(1),
         OpCode::PopTop,
         OpCode::LoadConst(1),
         OpCode::ReturnValue,
     ];
-    let constant_list: [PyObject; 2] = [
-        PyObject::Int(10, true),
+    let constant_list: [PyObject; 4] = [
+        PyObject::Int(1, true),
+        PyObject::Int(2, false),
+        PyObject::Int(5, false),
         PyObject::None(false)
     ];
     let name_list: [PyObject; 1] = [
@@ -93,15 +99,21 @@ fn write_py_code(file: &mut File) {
     }
     {
         // ObjectRef: 自由変数
-        file.write(&[0x72]).unwrap();
-        let target = 3u32;
-        file.write(&(target.to_le_bytes())).unwrap();
+        // file.write(&[0x72]).unwrap();
+        // let target = 3u32;
+        // file.write(&(target.to_le_bytes())).unwrap();
+        let tuple_len = 0u8;
+        file.write(&[0xA9]).unwrap();
+        file.write(&[tuple_len]).unwrap();
     }
     {
         // ObjectRef: セル変数
-        file.write(&[0x72]).unwrap();
-        let target = 3u32;
-        file.write(&(target.to_le_bytes())).unwrap();
+        // file.write(&[0x72]).unwrap();
+        // let target = 3u32;
+        // file.write(&(target.to_le_bytes())).unwrap();
+        let tuple_len = 0u8;
+        file.write(&[0xA9]).unwrap();
+        file.write(&[tuple_len]).unwrap();
     }
     // ファイル名
     write_py_short_ascii(file, "main.py".as_bytes());
