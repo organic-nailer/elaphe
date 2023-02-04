@@ -5,4 +5,12 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[build-dependencies]
+cfgrammar = "0.13.1"
+lrlex = "0.13.1"
+lrpar = "0.13.1"
+
 [dependencies]
+cfgrammar = "0.13.1"
+lrlex = "0.13.1"
+lrpar = "0.13.1"

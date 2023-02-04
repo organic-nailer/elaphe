@@ -1,24 +1,45 @@
+use std::env;
 use std::fs;
 use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::path::Path;
-use std::time::SystemTime;
 use std::process::Command;
 use std::str;
+use std::time::SystemTime;
 
 mod bytecode;
+mod bytecompiler;
+mod parser;
 mod pyobject;
 
 use crate::bytecode::OpCode;
+use crate::bytecompiler::ByteCompiler;
 use crate::pyobject::PyObject;
 
 fn main() {
-    println!("Hello, world!");
+    let args: Vec<String> = env::args().collect();
+    if args.len() <= 1 {
+        println!("arg 1 is missing.");
+        return;
+    }
+    let source = &args[1];
+    let node = parser::parse(source);
+    if node.is_none() {
+        println!("failed to parse the passed source: {}", source);
+        return;
+    }
+    let node = node.unwrap();
+    let compiler = ByteCompiler::run(&node, source);
+
+    let operation_list = compiler.byte_operations;
+    let constant_list = compiler.constant_list;
+    let name_list = compiler.name_list;
+
     let output = "main.pyc";
     {
         let path = Path::new(output);
         match fs::remove_file(path) {
-            Result::Ok(_) => println!("file removed"),
+            Result::Ok(_) => (), // println!("file removed"),
             Result::Err(_) => println!("file does not exists"),
         }
         let mut file = OpenOptions::new()
@@ -28,12 +49,15 @@ fn main() {
             .unwrap();
 
         write_header(&mut file);
-        write_py_code(&mut file);
+        write_py_code(&mut file, &operation_list, &constant_list, &name_list);
     }
 
-    match Command::new("bash").args(&["-c","python main.pyc"]).output() {
+    match Command::new("bash")
+        .args(&["-c", "python main.pyc"])
+        .output()
+    {
         Ok(e) => println!("{}", str::from_utf8(&e.stdout).unwrap()),
-        Err(e) => println!("Error: {}", e)
+        Err(e) => println!("Error: {}", e),
     }
 }
 
@@ -50,31 +74,12 @@ fn write_header(file: &mut File) {
     file.write(&(file_size.to_le_bytes())).unwrap();
 }
 
-fn write_py_code(file: &mut File) {
-    // print((1+2)*5)
-    let operation_list: [OpCode; 10] = [
-        OpCode::LoadName(0),
-        OpCode::LoadConst(0),
-        OpCode::LoadConst(1),
-        OpCode::BinaryAdd,
-        OpCode::LoadConst(2),
-        OpCode::BinaryMultiply,
-        OpCode::CallFunction(1),
-        OpCode::PopTop,
-        OpCode::LoadConst(1),
-        OpCode::ReturnValue,
-    ];
-    let constant_list: [PyObject; 4] = [
-        PyObject::Int(1, true),
-        PyObject::Int(2, false),
-        PyObject::Int(5, false),
-        PyObject::None(false)
-    ];
-    let name_list: [PyObject; 1] = [
-        PyObject::Ascii("print", true),
-    ];
-
-
+fn write_py_code(
+    file: &mut File,
+    operation_list: &[OpCode],
+    constant_list: &[PyObject],
+    name_list: &[PyObject],
+) {
     file.write(&[0xE3]).unwrap(); // ObjectType
     file.write(&(0u32.to_le_bytes())).unwrap(); // ArgCount
     file.write(&(0u32.to_le_bytes())).unwrap(); // PosOnlyArgCount
@@ -173,10 +178,10 @@ fn write_py_small_tuple(file: &mut File, value_list: &[PyObject]) {
     file.write(&[tuple_len]).unwrap();
     for c in value_list {
         match *c {
-            PyObject::Int(v,r) => write_py_int(file, v, r),
-            PyObject::Str(v,r) => write_py_string(file, v.as_bytes(), r),
+            PyObject::Int(v, r) => write_py_int(file, v, r),
+            PyObject::Str(v, r) => write_py_string(file, v.as_bytes(), r),
             PyObject::Ascii(v, r) => write_py_short_ascii_interned(file, v.as_bytes(), r),
-            PyObject::None(r) => write_py_none(file, r)
+            PyObject::None(r) => write_py_none(file, r),
         }
     }
 }
