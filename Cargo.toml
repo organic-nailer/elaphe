@@ -14,3 +14,4 @@ lrpar = "0.13.1"
 cfgrammar = "0.13.1"
 lrlex = "0.13.1"
 lrpar = "0.13.1"
+uuid = { version = "1.3.0", features = ["serde", "v4"] }

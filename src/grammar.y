@@ -22,7 +22,10 @@ MultiplicativeExpression -> Result<Node, ()>:
 
 PrimaryExpression -> Result<Node, ()>:
       '(' AdditiveExpression ')' { $2 }
-    | 'INT' { Ok(Node::NumericLiteral { span: $span }) }
+    | 'NUMBER' { Ok(Node::NumericLiteral { span: $span }) }
+    | 'STRING' { Ok(Node::StringLiteral { span: $span }) }
+    | 'BOOLEAN' { Ok(Node::BooleanLiteral { span: $span }) }
+    | 'NULL' { Ok(Node::NullLiteral { span: $span }) }
     ;
 %%
 // Any functions here are in scope for all the grammar actions above.
@@ -38,6 +41,15 @@ pub enum Node {
         right: Box<Node>,
     },
     NumericLiteral {
+        span: Span,
+    },
+    StringLiteral {
+        span: Span,
+    },
+    BooleanLiteral {
+        span: Span,
+    },
+    NullLiteral {
         span: Span,
     }
 }

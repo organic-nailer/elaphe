@@ -22,9 +22,9 @@ pub fn run(output: &str, source: &str) {
     let node = node.unwrap();
     let compiler = ByteCompiler::run(&node, source);
 
-    let operation_list = compiler.byte_operations;
-    let constant_list = compiler.constant_list;
-    let name_list = compiler.name_list;
+    let operation_list = compiler.byte_operations.borrow();
+    let constant_list = compiler.constant_list.borrow();
+    let name_list = compiler.name_list.borrow();
 
     {
         let path = Path::new(output);
@@ -134,6 +134,12 @@ fn write_py_int(file: &mut File, value: i32, register_ref: bool) {
     file.write(&(value.to_le_bytes())).unwrap();
 }
 
+fn write_py_float64(file: &mut File, value: f64, register_ref: bool) {
+    let object_type = 0x67u8 | ((register_ref as u8) << 7);
+    file.write(&[object_type]).unwrap(); // ObjectType
+    file.write(&(value.to_le_bytes())).unwrap();
+}
+
 fn write_py_none(file: &mut File, register_ref: bool) {
     let object_type = 0x4Eu8 | ((register_ref as u8) << 7);
     file.write(&[object_type]).unwrap();
@@ -154,6 +160,17 @@ fn write_py_short_ascii(file: &mut File, value: &[u8]) {
     file.write(value).unwrap();
 }
 
+fn write_py_boolean(file: &mut File, value: bool, register_ref: bool) {
+    if value {
+        let object_type = 0x54u8 | ((register_ref as u8) << 7);
+        file.write(&[object_type]).unwrap();
+    }
+    else {
+        let object_type = 0x46u8 | ((register_ref as u8) << 7);
+        file.write(&[object_type]).unwrap();
+    }
+}
+
 fn write_py_small_tuple(file: &mut File, value_list: &[PyObject]) {
     let tuple_len = value_list.len() as u8;
     file.write(&[0x29]).unwrap();
@@ -161,9 +178,12 @@ fn write_py_small_tuple(file: &mut File, value_list: &[PyObject]) {
     for c in value_list {
         match *c {
             PyObject::Int(v, r) => write_py_int(file, v, r),
+            PyObject::Float(v, r) => write_py_float64(file, v, r),
             PyObject::Str(v, r) => write_py_string(file, v.as_bytes(), r),
             PyObject::Ascii(v, r) => write_py_short_ascii_interned(file, v.as_bytes(), r),
             PyObject::None(r) => write_py_none(file, r),
+            PyObject::True(r) => write_py_boolean(file, true, r),
+            PyObject::False(r) => write_py_boolean(file, false, r)
         }
     }
 }
