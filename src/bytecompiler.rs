@@ -14,7 +14,7 @@ pub struct ByteCompiler<'a> {
 
 impl ByteCompiler<'_> {
     pub fn run<'a>(root_node: &Node, source: &'a str) -> ByteCompiler<'a> {
-        let mut compiler = ByteCompiler {
+        let compiler = ByteCompiler {
             byte_operations: RefCell::new(vec![]),
             constant_list: RefCell::new(vec![]),
             name_list: RefCell::new(vec![]),
@@ -47,7 +47,7 @@ impl ByteCompiler<'_> {
     fn compile(&self, node: &Node) {
         match node {
             Node::BinaryExpression {
-                span,
+                span: _,
                 operator,
                 left,
                 right,
