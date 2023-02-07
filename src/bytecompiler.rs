@@ -73,6 +73,15 @@ impl ByteCompiler<'_> {
                     _ => panic!("unknown operator: {}", *operator),
                 }
             }
+            Node::UnaryOpExpression { span: _, operator, child } => {
+                self.compile(child);
+                match *operator {
+                    "-" => self.byte_operations.borrow_mut().push(OpCode::UnaryNegative),
+                    "!" => self.byte_operations.borrow_mut().push(OpCode::UnaryNot),
+                    "~" => self.byte_operations.borrow_mut().push(OpCode::UnaryInvert),
+                    _ => panic!("unknown unary operator: {}", *operator),
+                }
+            }
             Node::NumericLiteral { span } => {
                 let const_position = self.constant_list.borrow().len() as u8;
                 let raw_value = self.span_to_str(span);

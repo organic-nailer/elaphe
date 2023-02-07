@@ -132,3 +132,20 @@ fn binary_op() {
         panic!("{:?}", result);
     }
 }
+
+#[test]
+fn unary_op() {
+    let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
+    let result = catch_unwind(|| {
+        elaphe::run(&output, "1+-2");
+        exec_py_and_assert(&output, "-1\n");
+        elaphe::run(&output, "~2");
+        exec_py_and_assert(&output, "-3\n");
+        elaphe::run(&output, "!(1!=2)");
+        exec_py_and_assert(&output, "False\n");
+    });
+    clean(&output);
+    if result.is_err() {
+        panic!("{:?}", result);
+    }
+}

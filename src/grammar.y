@@ -77,6 +77,19 @@ MultiplicativeExpression -> Result<Node, ()>:
     | MultiplicativeExpression '/' Primary { 
         Ok(Node::BinaryExpression { span: $span, operator: "/", left: Box::new($1?), right: Box::new($3?) })
     }
+    | UnaryExpression { $1 }
+    ;
+
+UnaryExpression -> Result<Node, ()>:
+      "-" UnaryExpression {
+        Ok(Node::UnaryOpExpression { span: $span, operator: "-", child: Box::new($2?) })
+    }
+    | "!" UnaryExpression {
+        Ok(Node::UnaryOpExpression { span: $span, operator: "!", child: Box::new($2?) })
+    }
+    | "~" UnaryExpression {
+        Ok(Node::UnaryOpExpression { span: $span, operator: "~", child: Box::new($2?) })
+    }
     | Primary { $1 }
     ;
 
@@ -103,6 +116,11 @@ pub enum Node {
         operator: &'static str,
         left: Box<Node>,
         right: Box<Node>,
+    },
+    UnaryOpExpression {
+        span: Span,
+        operator: &'static str,
+        child: Box<Node>,
     },
     NumericLiteral {
         span: Span,

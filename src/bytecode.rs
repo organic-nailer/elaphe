@@ -11,6 +11,9 @@ pub enum OpCode {
     BinaryAnd,
     BinaryOr,
     BinaryXor,
+    UnaryNegative,
+    UnaryNot,
+    UnaryInvert,
     ReturnValue,
     CompareOp(u8),
     LoadConst(u8),
@@ -37,6 +40,9 @@ impl OpCode {
     fn get_value(&self) -> u8 {
         match *self {
             OpCode::PopTop => 1,
+            OpCode::UnaryNegative => 11,
+            OpCode::UnaryNot => 12,
+            OpCode::UnaryInvert => 15,
             OpCode::BinaryMultiply => 20,
             OpCode::BinaryAdd => 23,
             OpCode::BinarySubtract => 24,
@@ -68,6 +74,11 @@ impl OpCode {
     pub fn stack_effect(&self) -> i32 {
         match *self {
             OpCode::PopTop => -1,
+            
+            OpCode::UnaryNegative |
+            OpCode::UnaryNot |
+            OpCode::UnaryInvert => 0,
+
             OpCode::BinaryAdd |
             OpCode::BinaryMultiply |
             OpCode::BinarySubtract |
@@ -78,9 +89,12 @@ impl OpCode {
             OpCode::BinaryXor |
             OpCode::BinaryOr |
             OpCode::CompareOp(_) => -1,
+
             OpCode::ReturnValue => -1,
+
             OpCode::LoadConst(_) |
             OpCode::LoadName(_) => 1,
+            
             OpCode::CallFunction(n) => -(n as i32)
         }
     }
