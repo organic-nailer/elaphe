@@ -1,5 +1,65 @@
-%start AdditiveExpression
+%start Expression
 %%
+Expression -> Result<Node, ()>:
+    EqualityExpression { $1 };
+
+EqualityExpression -> Result<Node, ()>:
+      RelationalExpression "==" RelationalExpression {
+        Ok(Node::BinaryExpression { span: $span, operator: "==", left: Box::new($1?), right: Box::new($3?) })
+    }
+    | RelationalExpression "!=" RelationalExpression {
+        Ok(Node::BinaryExpression { span: $span, operator: "!=", left: Box::new($1?), right: Box::new($3?) })
+    }
+    | RelationalExpression { $1 }
+    ;
+
+RelationalExpression -> Result<Node, ()>:
+      BitwiseOrExpression ">=" BitwiseOrExpression {
+        Ok(Node::BinaryExpression { span: $span, operator: ">=", left: Box::new($1?), right: Box::new($3?) })
+    }
+    | BitwiseOrExpression ">" BitwiseOrExpression {
+        Ok(Node::BinaryExpression { span: $span, operator: ">", left: Box::new($1?), right: Box::new($3?) })
+    }
+    | BitwiseOrExpression "<=" BitwiseOrExpression {
+        Ok(Node::BinaryExpression { span: $span, operator: "<=", left: Box::new($1?), right: Box::new($3?) })
+    }
+    | BitwiseOrExpression "<" BitwiseOrExpression {
+        Ok(Node::BinaryExpression { span: $span, operator: "<", left: Box::new($1?), right: Box::new($3?) })
+    }
+    | BitwiseOrExpression { $1 }
+    ;
+
+BitwiseOrExpression -> Result<Node, ()>:
+      BitwiseOrExpression "|" BitwiseXorExpression {
+        Ok(Node::BinaryExpression { span: $span, operator: "|", left: Box::new($1?), right: Box::new($3?) })
+    }
+    | BitwiseXorExpression { $1 }
+    ;
+
+BitwiseXorExpression -> Result<Node, ()>:
+      BitwiseXorExpression "^" BitwiseAndExpression {
+        Ok(Node::BinaryExpression { span: $span, operator: "^", left: Box::new($1?), right: Box::new($3?) })
+    }
+    | BitwiseAndExpression { $1 }
+    ;
+
+BitwiseAndExpression -> Result<Node, ()>:
+      BitwiseAndExpression "&" ShiftExpression {
+        Ok(Node::BinaryExpression { span: $span, operator: "&", left: Box::new($1?), right: Box::new($3?) })
+    }
+    | ShiftExpression { $1 }
+    ;
+
+ShiftExpression -> Result<Node, ()>:
+      ShiftExpression "<<" AdditiveExpression {
+        Ok(Node::BinaryExpression { span: $span, operator: "<<", left: Box::new($1?), right: Box::new($3?) })
+    }
+    | ShiftExpression ">>" AdditiveExpression {
+        Ok(Node::BinaryExpression { span: $span, operator: ">>", left: Box::new($1?), right: Box::new($3?) })
+    }
+    | AdditiveExpression { $1 }
+    ;
+
 AdditiveExpression -> Result<Node, ()>:
       AdditiveExpression '+' MultiplicativeExpression { 
         Ok(Node::BinaryExpression { span: $span, operator: "+", left: Box::new($1?), right: Box::new($3?) })
@@ -11,18 +71,22 @@ AdditiveExpression -> Result<Node, ()>:
     ;
 
 MultiplicativeExpression -> Result<Node, ()>:
-      MultiplicativeExpression '*' PrimaryExpression { 
+      MultiplicativeExpression '*' Primary { 
         Ok(Node::BinaryExpression { span: $span, operator: "*", left: Box::new($1?), right: Box::new($3?) })
     }
-    | MultiplicativeExpression '/' PrimaryExpression { 
+    | MultiplicativeExpression '/' Primary { 
         Ok(Node::BinaryExpression { span: $span, operator: "/", left: Box::new($1?), right: Box::new($3?) })
     }
-    | PrimaryExpression { $1 }
+    | Primary { $1 }
     ;
 
-PrimaryExpression -> Result<Node, ()>:
-      '(' AdditiveExpression ')' { $2 }
-    | 'NUMBER' { Ok(Node::NumericLiteral { span: $span }) }
+Primary -> Result<Node, ()>:
+      '(' Expression ')' { $2 }
+    | Literal { $1 }
+    ;
+
+Literal -> Result<Node, ()>:
+      'NUMBER' { Ok(Node::NumericLiteral { span: $span }) }
     | 'STRING' { Ok(Node::StringLiteral { span: $span }) }
     | 'BOOLEAN' { Ok(Node::BooleanLiteral { span: $span }) }
     | 'NULL' { Ok(Node::NullLiteral { span: $span }) }

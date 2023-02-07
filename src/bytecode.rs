@@ -6,10 +6,31 @@ pub enum OpCode {
     BinarySubtract,
     BinaryMultiply,
     BinaryTrueDivide,
+    BinaryLShift,
+    BinaryRShift,
+    BinaryAnd,
+    BinaryOr,
+    BinaryXor,
     ReturnValue,
+    CompareOp(u8),
     LoadConst(u8),
     LoadName(u8),
     CallFunction(u8),
+}
+
+impl OpCode {
+    pub fn compare_op_from_str(op: &str) -> OpCode {
+        let operand: u8 = match op {
+            "<" => 0,
+            "<=" => 1,
+            "==" => 2,
+            "!=" => 3,
+            ">" => 4,
+            ">=" => 5,
+            _ => panic!("Unknown compare op: {}", op)
+        };
+        OpCode::CompareOp(operand)
+    }
 }
 
 impl OpCode {
@@ -20,9 +41,15 @@ impl OpCode {
             OpCode::BinaryAdd => 23,
             OpCode::BinarySubtract => 24,
             OpCode::BinaryTrueDivide => 27,
+            OpCode::BinaryLShift => 62,
+            OpCode::BinaryRShift => 63,
+            OpCode::BinaryAnd => 64,
+            OpCode::BinaryXor => 65,
+            OpCode::BinaryOr => 66,
             OpCode::ReturnValue => 83,
             OpCode::LoadConst(_) => 100,
             OpCode::LoadName(_) => 101,
+            OpCode::CompareOp(_) => 107,
             OpCode::CallFunction(_) => 131
         }
     }
@@ -31,7 +58,8 @@ impl OpCode {
         let operand = match *self {
             OpCode::LoadConst(v) |
             OpCode::LoadName(v) |
-            OpCode::CallFunction(v) => v,
+            OpCode::CallFunction(v) |
+            OpCode::CompareOp(v) => v,
             _ => 0
         };
         return (self.get_value(), operand);
@@ -43,7 +71,13 @@ impl OpCode {
             OpCode::BinaryAdd |
             OpCode::BinaryMultiply |
             OpCode::BinarySubtract |
-            OpCode::BinaryTrueDivide => -1,
+            OpCode::BinaryTrueDivide |
+            OpCode::BinaryLShift |
+            OpCode::BinaryRShift |
+            OpCode::BinaryAnd |
+            OpCode::BinaryXor |
+            OpCode::BinaryOr |
+            OpCode::CompareOp(_) => -1,
             OpCode::ReturnValue => -1,
             OpCode::LoadConst(_) |
             OpCode::LoadName(_) => 1,

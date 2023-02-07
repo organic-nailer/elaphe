@@ -88,3 +88,47 @@ fn concat_string() {
         panic!("{:?}", result);
     }
 }
+
+#[test]
+fn compare_op() {
+    let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
+    let result = catch_unwind(|| {
+        elaphe::run(&output, "1 == 2");
+        exec_py_and_assert(&output, "False\n");
+        elaphe::run(&output, "1 != 2");
+        exec_py_and_assert(&output, "True\n");
+        elaphe::run(&output, "1 >= 2");
+        exec_py_and_assert(&output, "False\n");
+        elaphe::run(&output, "1.3 < 2.1");
+        exec_py_and_assert(&output, "True\n");
+        elaphe::run(&output, "1 > 2");
+        exec_py_and_assert(&output, "False\n");
+        elaphe::run(&output, "1 <= 2");
+        exec_py_and_assert(&output, "True\n");
+    });
+    clean(&output);
+    if result.is_err() {
+        panic!("{:?}", result);
+    }
+}
+
+#[test]
+fn binary_op() {
+    let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
+    let result = catch_unwind(|| {
+        elaphe::run(&output, "1 << 2");
+        exec_py_and_assert(&output, "4\n");
+        elaphe::run(&output, "8 >> 2");
+        exec_py_and_assert(&output, "2\n");
+        elaphe::run(&output, "3 & 6");
+        exec_py_and_assert(&output, "2\n");
+        elaphe::run(&output, "3 | 6");
+        exec_py_and_assert(&output, "7\n");
+        elaphe::run(&output, "3 ^ 6");
+        exec_py_and_assert(&output, "5\n");
+    });
+    clean(&output);
+    if result.is_err() {
+        panic!("{:?}", result);
+    }
+}

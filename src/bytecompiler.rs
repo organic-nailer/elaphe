@@ -55,6 +55,17 @@ impl ByteCompiler<'_> {
                 self.compile(left);
                 self.compile(right);
                 match *operator {
+                    "==" |
+                    "!=" |
+                    ">=" |
+                    ">"  |
+                    "<=" |
+                    "<"  => self.byte_operations.borrow_mut().push(OpCode::compare_op_from_str(operator)),
+                    "<<" => self.byte_operations.borrow_mut().push(OpCode::BinaryLShift),
+                    ">>" => self.byte_operations.borrow_mut().push(OpCode::BinaryRShift),
+                    "&" => self.byte_operations.borrow_mut().push(OpCode::BinaryAnd),
+                    "^" => self.byte_operations.borrow_mut().push(OpCode::BinaryXor),
+                    "|" => self.byte_operations.borrow_mut().push(OpCode::BinaryOr),
                     "+" => self.byte_operations.borrow_mut().push(OpCode::BinaryAdd),
                     "-" => self.byte_operations.borrow_mut().push(OpCode::BinarySubtract),
                     "*" => self.byte_operations.borrow_mut().push(OpCode::BinaryMultiply),
