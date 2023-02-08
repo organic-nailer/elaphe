@@ -176,3 +176,44 @@ fn global_variable() {
         panic!("{:?}", result);
     }
 }
+
+#[test]
+fn if_statement() {
+    let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
+    let result = catch_unwind(|| {
+        elaphe::run(&output, "
+        if (1 == 2) {
+            print(1);
+        }
+        else if (2 == 3) {
+            print(2);
+        }
+        else {
+            print(3);
+        }
+        ");
+        exec_py_and_assert(&output, "3\n");
+    });
+    clean(&output);
+    if result.is_err() {
+        panic!("{:?}", result);
+    }
+}
+
+#[test]
+fn for_statement() {
+    let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
+    let result = catch_unwind(|| {
+        elaphe::run(&output, "
+        for (var i = 0; i < 5;) {
+            print(i);
+            var i = i + 1;
+        }
+        ");
+        exec_py_and_assert(&output, "0\n1\n2\n3\n4\n");
+    });
+    clean(&output);
+    if result.is_err() {
+        panic!("{:?}", result);
+    }
+}

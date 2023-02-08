@@ -1,4 +1,9 @@
-use std::cmp;
+use std::{cmp, collections::HashMap};
+
+pub struct ByteCode {
+    operation: u8,
+    operand: u8,
+}
 
 pub enum OpCode {
     PopTop,
@@ -16,6 +21,12 @@ pub enum OpCode {
     UnaryInvert,
     ReturnValue,
     CompareOp(u8),
+    // JumpForward(u32),
+    // JumpIfFalseOrPop(u32),
+    // JumpIfTrueOrPop(u32),
+    JumpAbsolute(u32),
+    PopJumpIfFalse(u32),
+    PopJumpIfTrue(u32),
     LoadConst(u8),
     LoadName(u8),
     StoreName(u8),
@@ -58,23 +69,51 @@ impl OpCode {
             OpCode::LoadConst(_) => 100,
             OpCode::LoadName(_) => 101,
             OpCode::CompareOp(_) => 107,
+            // OpCode::JumpForward(_) => 110,
+            // OpCode::JumpIfFalseOrPop(_) => 111,
+            // OpCode::JumpIfTrueOrPop(_) => 112,
+            OpCode::JumpAbsolute(_) => 113,
+            OpCode::PopJumpIfFalse(_) => 114,
+            OpCode::PopJumpIfTrue(_) => 115,
             OpCode::CallFunction(_) => 131
         }
     }
 
-    pub fn to_bytes(&self) -> (u8, u8) {
-        let operand = match *self {
+    pub fn resolve(&self, label_table: &HashMap<u32,u8>) -> ByteCode {
+        match *self {
+            // OpCode::JumpForward(v) |
+            // OpCode::JumpIfFalseOrPop(v) |
+            // OpCode::JumpIfTrueOrPop(v) |
+            OpCode::JumpAbsolute(v) |
+            OpCode::PopJumpIfFalse(v) |
+            OpCode::PopJumpIfTrue(v) => {
+                let operand = *label_table.get(&v).unwrap();
+                ByteCode {
+                    operation: self.get_value(),
+                    operand: operand
+                }
+            },
             OpCode::StoreName(v) |
             OpCode::LoadConst(v) |
             OpCode::LoadName(v) |
             OpCode::CallFunction(v) |
-            OpCode::CompareOp(v) => v,
-            _ => 0
-        };
-        return (self.get_value(), operand);
+            OpCode::CompareOp(v) => {
+                ByteCode {
+                    operation: self.get_value(),
+                    operand: v
+                }
+            },
+            _ => {
+                ByteCode {
+                    operation: self.get_value(),
+                    operand: 0
+                }
+            }
+        }
     }
 
-    pub fn stack_effect(&self) -> i32 {
+    // https://github.com/python/cpython/blob/b2b85b5db9cfdb24f966b61757536a898abc3830/Python/compile.c#L1075
+    pub fn stack_effect(&self, jump: bool) -> i32 {
         match *self {
             OpCode::PopTop => -1,
             
@@ -100,19 +139,25 @@ impl OpCode {
             OpCode::LoadConst(_) |
             OpCode::LoadName(_) => 1,
             
-            OpCode::CallFunction(n) => -(n as i32)
+            OpCode::CallFunction(n) => -(n as i32),
+
+            // OpCode::JumpForward(_) |
+            OpCode::JumpAbsolute(_) => 0,
+            // OpCode::JumpIfFalseOrPop(_) |
+            // OpCode::JumpIfTrueOrPop(_) => if jump { 0 } else { -1 },
+            OpCode::PopJumpIfFalse(_) |
+            OpCode::PopJumpIfTrue(_) => -1
         }
     }
 }
 
-pub fn compile_code(operation_list: &[OpCode]) -> Vec<u8> {
+pub fn compile_code(operation_list: &[ByteCode]) -> Vec<u8> {
     let code_size = operation_list.len() * 2;
     let mut result = vec![0u8; code_size];
     let mut i = 0;
     for op in operation_list {
-        let (opcode, operand) = op.to_bytes();
-        result[i] = opcode;
-        result[i+1] = operand;
+        result[i] = op.operation;
+        result[i+1] = op.operand;
         i += 2;
     }
     result
@@ -122,7 +167,7 @@ pub fn calc_stack_size(operation_list: &[OpCode]) -> i32 {
     let mut max_size = 0;
     let mut current_size = 0;
     for op in operation_list {
-        current_size += op.stack_effect();
+        current_size += op.stack_effect(true);
         max_size = cmp::max(max_size, current_size);
     }
     max_size

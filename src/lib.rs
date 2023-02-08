@@ -9,7 +9,8 @@ mod bytecompiler;
 mod parser;
 mod pyobject;
 
-use crate::bytecode::OpCode;
+use bytecode::{ByteCode, calc_stack_size};
+
 use crate::bytecompiler::ByteCompiler;
 use crate::pyobject::PyObject;
 
@@ -23,7 +24,8 @@ pub fn run(output: &str, source: &str) {
     let node = node.unwrap();
     let compiler = ByteCompiler::run(&node, source);
 
-    let operation_list = compiler.byte_operations.borrow();
+    let stack_size = calc_stack_size(&compiler.byte_operations.borrow());
+    let operation_list = compiler.resolve_references();
     let constant_list = compiler.constant_list.borrow();
     let name_list = compiler.name_list.borrow();
 
@@ -40,7 +42,7 @@ pub fn run(output: &str, source: &str) {
             .unwrap();
 
         write_header(&mut file);
-        write_py_code(&mut file, &operation_list, &constant_list, &name_list);
+        write_py_code(&mut file, stack_size, &operation_list, &constant_list, &name_list);
     }
 }
 
@@ -59,7 +61,8 @@ fn write_header(file: &mut File) {
 
 fn write_py_code(
     file: &mut File,
-    operation_list: &[OpCode],
+    stack_size: i32,
+    operation_list: &[ByteCode],
     constant_list: &[PyObject],
     name_list: &[PyObject],
 ) {
@@ -68,7 +71,7 @@ fn write_py_code(
     file.write(&(0u32.to_le_bytes())).unwrap(); // PosOnlyArgCount
     file.write(&(0u32.to_le_bytes())).unwrap(); // KwOnlyArgCount
     file.write(&(0u32.to_le_bytes())).unwrap(); // NumLocals
-    let stack_size = bytecode::calc_stack_size(&operation_list);
+    // let stack_size = bytecode::calc_stack_size(&operation_list);
     if stack_size < 0 {
         panic!("invalid stack size: {}", stack_size);
     }

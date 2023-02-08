@@ -1,4 +1,5 @@
 %start Statement
+%expect 1
 %%
 Statements -> Result<Vec<Box<Node>>, ()>:
       %empty { Ok(vec![]) }
@@ -8,6 +9,10 @@ Statements -> Result<Vec<Box<Node>>, ()>:
 Statement -> Result<Node, ()>:
       BlockStatement { $1 }
     | LocalVariableDeclaration { $1 }
+    | IfStatement { $1 }
+    | ForStatement { $1 }
+    | WhileStatement { $1 }
+    | DoStatement { $1 }
     | ExpressionStatement { $1 }
     | ";" { Ok(Node::EmptyStatement { span: $span }) }
     ;
@@ -21,6 +26,46 @@ LocalVariableDeclaration -> Result<Node, ()>:
 
 ExpressionStatement -> Result<Node, ()>:
     Expression ";" { Ok(Node::ExpressionStatement { span: $span, expr: Box::new($1?) }) }
+    ;
+
+IfStatement -> Result<Node, ()>:
+      "if" "(" Expression ")" Statement { Ok(Node::IfStatement { span: $span, condition: Box::new($3?), if_true_stmt: Box::new($5?), if_false_stmt: None }) }
+    | "if" "(" Expression ")" Statement "else" Statement { Ok(Node::IfStatement { span: $span, condition: Box::new($3?), if_true_stmt: Box::new($5?), if_false_stmt: Some(Box::new($7?)) }) }
+    ;
+
+ForStatement -> Result<Node, ()>:
+    "for" "(" ForLoopParts ")" Statement {
+        let part = $3?;
+        Ok(Node::ForStatement { span: $span, init: part.0, condition: part.1, update: part.2, stmt: Box::new($5?) })
+    }
+    ;
+
+ForLoopParts -> Result<(Option<Box<Node>>,Option<Box<Node>>,Option<Vec<Box<Node>>>), ()>:
+      ForInitializerStatement ExpressionOpt ";" ExpressionListOpt {
+        Ok(($1?, $2?, $4?))
+      }
+    ;
+
+ForInitializerStatement -> Result<Option<Box<Node>>, ()>:
+      LocalVariableDeclaration { Ok(Some(Box::new($1?))) }
+    | ExpressionOpt ";" {
+        match $1? {
+            Some(v) => Ok(Some(Box::new(Node::ExpressionStatement { span: $span, expr: v }))),
+            None => Ok(None),
+        }
+     }
+    ;
+
+WhileStatement -> Result<Node, ()>:
+    "while" "(" Expression ")" Statement {
+        Ok(Node::WhileStatement { span: $span, condition: Box::new($3?), stmt: Box::new($5?) })
+    }
+    ;
+
+DoStatement -> Result<Node, ()>:
+    "do" Statement "while" "(" Expression ")" ";" {
+        Ok(Node::DoStatement { span: $span, condition: Box::new($5?), stmt: Box::new($2?) })
+    }
     ;
 
 InitializedVariableDeclaration -> Result<Node, ()>:
@@ -38,6 +83,11 @@ DeclaredIdentifier -> Result<Node, ()>:
 
 Expression -> Result<Node, ()>:
     EqualityExpression { $1 };
+
+ExpressionOpt -> Result<Option<Box<Node>>, ()>:
+      %empty { Ok(None) }
+    | Expression { Ok(Some(Box::new($1?))) }
+    ;
 
 EqualityExpression -> Result<Node, ()>:
       RelationalExpression "==" RelationalExpression {
@@ -151,6 +201,11 @@ ExpressionList -> Result<Vec<Box<Node>>, ()>:
     | Expression { Ok(vec![Box::new($1?)]) }
     ;
 
+ExpressionListOpt -> Result<Option<Vec<Box<Node>>>, ()>:
+      %empty { Ok(None) }
+    | ExpressionList { Ok(Some($1?)) }
+    ;
+
 CommaOpt -> Result<(), ()>:
       %empty { Ok(()) }
     | "," { Ok(()) }
@@ -236,5 +291,28 @@ pub enum Node {
         span: Span,
         identifier: Box<Node>,
         expr: Option<Box<Node>>,
+    },
+    IfStatement {
+        span: Span,
+        condition: Box<Node>,
+        if_true_stmt: Box<Node>,
+        if_false_stmt: Option<Box<Node>>,
+    },
+    ForStatement {
+        span: Span,
+        init: Option<Box<Node>>,
+        condition: Option<Box<Node>>,
+        update: Option<Vec<Box<Node>>>,
+        stmt: Box<Node>,
+    },
+    WhileStatement {
+        span: Span,
+        condition: Box<Node>,
+        stmt: Box<Node>,
+    },
+    DoStatement {
+        span: Span,
+        condition: Box<Node>,
+        stmt: Box<Node>,
     }
 }

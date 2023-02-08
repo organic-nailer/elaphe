@@ -1,3 +1,5 @@
 /target
+/tool
 *.pyc
 *.bin
+*.txt

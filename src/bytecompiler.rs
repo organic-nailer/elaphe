@@ -3,6 +3,7 @@ use std::i32;
 
 use cfgrammar::Span;
 
+use crate::bytecode::ByteCode;
 use crate::{bytecode::OpCode, parser::Node, pyobject::PyObject};
 
 pub struct ByteCompiler<'a> {
@@ -11,6 +12,8 @@ pub struct ByteCompiler<'a> {
     pub name_list: RefCell<Vec<PyObject<'a>>>,
     pub name_map: RefCell<HashMap<&'a str, u8>>,
     pub global_variables: RefCell<Vec<&'a str>>,
+    pub jump_label_table: RefCell<HashMap<u32, u8>>,
+    jump_label_key_index: RefCell<u32>,
     source: &'a str,
 }
 
@@ -24,6 +27,8 @@ impl ByteCompiler<'_> {
             name_list: RefCell::new(vec![]),
             name_map: RefCell::new(HashMap::new()),
             global_variables: RefCell::new(Vec::from(PREDEFINED_VARIABLES)),
+            jump_label_table: RefCell::new(HashMap::new()),
+            jump_label_key_index: RefCell::new(0),
             source: source,
         };
 
@@ -207,6 +212,72 @@ impl<'a> ByteCompiler<'a> {
                     }
                 }
             },
+            Node::IfStatement { span: _, condition, if_true_stmt, if_false_stmt } => {
+                match if_false_stmt {
+                    Some(if_false_stmt) => {
+                        // if expr stmt else stmt
+                        self.compile(condition);
+                        let label_false_starts = self.gen_jump_label();
+                        self.byte_operations.borrow_mut().push(OpCode::PopJumpIfFalse(label_false_starts));
+                        self.compile(if_true_stmt);
+                        
+                        let label_if_ends = self.gen_jump_label();
+                        self.byte_operations.borrow_mut().push(OpCode::JumpAbsolute(label_if_ends));
+
+                        self.set_jump_label_value(label_false_starts);
+                        self.compile(if_false_stmt);
+
+                        self.set_jump_label_value(label_if_ends);
+                    },
+                    None => {
+                        // if expr stmt
+                        self.compile(condition);
+                        let label_if_ends = self.gen_jump_label();
+                        self.byte_operations.borrow_mut().push(OpCode::PopJumpIfFalse(label_if_ends));
+                        self.compile(if_true_stmt);
+
+                        self.set_jump_label_value(label_if_ends);
+                    }
+                }
+            },
+            Node::ForStatement { span: _, init, condition, update, stmt } => {
+                // init is statement
+                // condition is expression
+                // update is expression list
+                let label_for_end = self.gen_jump_label();
+                if let Some(node) = init {
+                    self.compile(node);
+                }
+                if let Some(node) = condition {
+                    self.compile(node);
+                    self.byte_operations.borrow_mut().push(OpCode::PopJumpIfFalse(label_for_end));
+                }
+                self.compile(stmt);
+                if let Some(node_list) = update {
+                    for node in node_list {
+                        self.compile(node);
+                        self.byte_operations.borrow_mut().push(OpCode::PopTop);
+                    }
+                }
+                self.set_jump_label_value(label_for_end);
+            },
+            Node::WhileStatement { span: _, condition, stmt } => {
+                let label_while_end = self.gen_jump_label();
+                self.compile(condition);
+                self.byte_operations.borrow_mut().push(OpCode::PopJumpIfFalse(label_while_end));
+
+                self.compile(stmt);
+
+                self.set_jump_label_value(label_while_end);
+            },
+            Node::DoStatement { span: _, condition, stmt } => {
+                let label_do_start = self.gen_jump_label();
+                self.set_jump_label_value(label_do_start);
+                self.compile(stmt);
+
+                self.compile(condition);
+                self.byte_operations.borrow_mut().push(OpCode::PopJumpIfTrue(label_do_start));
+            }
         }
     }
 
@@ -238,5 +309,30 @@ impl<'a> ByteCompiler<'a> {
 
     fn check_variable_defined(&self, value: &str) -> bool {
         self.global_variables.borrow().contains(&value)
+    }
+
+    fn gen_jump_label(&self) -> u32 {
+        let key = *self.jump_label_key_index.borrow();
+        *self.jump_label_key_index.borrow_mut() += 1;
+        key
+    }
+    
+    // 今の次の位置にラベル位置を合わせる
+    fn set_jump_label_value(&self, key: u32) {
+        let index = self.byte_operations.borrow().len() as u8;
+        // 1命令あたり2バイトなので2倍
+        self.jump_label_table.borrow_mut().insert(key, index * 2);
+    }
+}
+
+impl <'a>ByteCompiler<'a> {
+    pub fn resolve_references(&self) -> Vec<ByteCode> {
+        let opcode_list = self.byte_operations.borrow();
+
+        let result = opcode_list.iter().map(|v| {
+            v.resolve(&self.jump_label_table.borrow())
+        }).collect();
+
+        result
     }
 }
