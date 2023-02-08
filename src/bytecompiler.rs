@@ -85,6 +85,78 @@ impl<'a> ByteCompiler<'a> {
                     _ => panic!("unknown unary operator: {}", *operator),
                 }
             },
+            Node::AssignmentExpression { span: _, operator, left, right } => {
+                if let Node::Identifier { span } = **left {
+                    let value = self.span_to_str(&span);
+                    match *operator {
+                        "=" => {
+                            self.compile(right);
+                            let position = self.search_name(value);
+                            match position {
+                                Some(v) => self.byte_operations.borrow_mut().push(OpCode::StoreName(v)),
+                                None => panic!("{} is used before its declaration.", value),
+                            }
+                        },
+                        "*=" |
+                        "/=" |
+                        "~/=" |
+                        "%=" |
+                        "+=" |
+                        "-=" |
+                        "<<=" |
+                        ">>=" |
+                        "&="|
+                        "^=" |
+                        "|=" => {
+                            let position = self.search_name(value);
+                            match position {
+                                Some(v) => {
+                                    self.byte_operations.borrow_mut().push(OpCode::LoadName(v));
+                                    self.compile(right);
+                                    match *operator {
+                                        "*=" => self.byte_operations.borrow_mut().push(OpCode::InplaceMultiply),
+                                        "/=" => self.byte_operations.borrow_mut().push(OpCode::InplaceTrueDivide),
+                                        "~/=" => self.byte_operations.borrow_mut().push(OpCode::InplaceFloorDivide),
+                                        "%=" => self.byte_operations.borrow_mut().push(OpCode::InplaceModulo),
+                                        "+=" => self.byte_operations.borrow_mut().push(OpCode::InplaceAdd),
+                                        "-=" => self.byte_operations.borrow_mut().push(OpCode::InplaceSubtract),
+                                        "<<=" => self.byte_operations.borrow_mut().push(OpCode::InplaceLShift),
+                                        ">>=" => self.byte_operations.borrow_mut().push(OpCode::InplaceRShift),
+                                        "&=" => self.byte_operations.borrow_mut().push(OpCode::InplaceAnd),
+                                        "^=" => self.byte_operations.borrow_mut().push(OpCode::InplaceXor),
+                                        "|=" => self.byte_operations.borrow_mut().push(OpCode::InplaceOr),
+                                        _ => ()
+                                    }
+                                    self.byte_operations.borrow_mut().push(OpCode::StoreName(v));
+                                },
+                                None => panic!("{} is used before its declaration.", value),
+                            }
+                        },
+                        "??=" => {
+                            let position = self.search_name(value);
+                            match position {
+                                Some(v) => {
+                                    self.byte_operations.borrow_mut().push(OpCode::LoadName(v));
+                                    self.byte_operations.borrow_mut().push(OpCode::LoadConst(0));
+                                    self.byte_operations.borrow_mut().push(OpCode::compare_op_from_str("=="));
+                                    let label_end = self.gen_jump_label();
+                                    self.byte_operations.borrow_mut().push(OpCode::PopJumpIfFalse(label_end));
+                                    self.compile(right);
+                                    self.byte_operations.borrow_mut().push(OpCode::StoreName(v));
+                                    self.set_jump_label_value(label_end);
+                                },
+                                None => panic!("{} is used before its declaration.", value),
+                            }
+                        },
+                        _ => panic!("Unknown assignment operator: {}", value)
+                    }
+                    // Expressionはスタックになにか残しておきたいので積む
+                    self.byte_operations.borrow_mut().push(OpCode::LoadConst(0));
+                }
+                else {
+                    panic!("Invalid AST. Assignment lhs must be an identifier.");
+                }
+            },
             Node::NumericLiteral { span } => {
                 let const_position = self.constant_list.borrow().len() as u8;
                 let raw_value = self.span_to_str(span);
@@ -245,9 +317,11 @@ impl<'a> ByteCompiler<'a> {
                 // condition is expression
                 // update is expression list
                 let label_for_end = self.gen_jump_label();
+                let label_loop_start = self.gen_jump_label();
                 if let Some(node) = init {
                     self.compile(node);
                 }
+                self.set_jump_label_value(label_loop_start);
                 if let Some(node) = condition {
                     self.compile(node);
                     self.byte_operations.borrow_mut().push(OpCode::PopJumpIfFalse(label_for_end));
@@ -259,14 +333,18 @@ impl<'a> ByteCompiler<'a> {
                         self.byte_operations.borrow_mut().push(OpCode::PopTop);
                     }
                 }
+                self.byte_operations.borrow_mut().push(OpCode::JumpAbsolute(label_loop_start));
                 self.set_jump_label_value(label_for_end);
             },
             Node::WhileStatement { span: _, condition, stmt } => {
                 let label_while_end = self.gen_jump_label();
+                let label_loop_start = self.gen_jump_label();
+                self.set_jump_label_value(label_loop_start);
                 self.compile(condition);
                 self.byte_operations.borrow_mut().push(OpCode::PopJumpIfFalse(label_while_end));
 
                 self.compile(stmt);
+                self.byte_operations.borrow_mut().push(OpCode::JumpAbsolute(label_loop_start));
 
                 self.set_jump_label_value(label_while_end);
             },

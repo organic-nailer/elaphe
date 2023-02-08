@@ -81,8 +81,33 @@ DeclaredIdentifier -> Result<Node, ()>:
 
 
 
+
 Expression -> Result<Node, ()>:
-    EqualityExpression { $1 };
+      AssignableExpression AssignmentOperator Expression {
+        Ok(Node::AssignmentExpression { span: $span, operator: $2?, left: Box::new($1?), right: Box::new($3?) })
+    }
+    | EqualityExpression { $1 }
+    ;
+
+AssignableExpression -> Result<Node, ()>:
+      Identifier { $1 }
+    ;
+
+AssignmentOperator -> Result<&'static str, ()>:
+      "=" { Ok("=") }
+    | "*=" { Ok("*=") }
+    | "/=" { Ok("/=") }
+    | "~/=" { Ok("~/=") }
+    | "%=" { Ok("%=") }
+    | "+=" { Ok("+=") }
+    | "-=" { Ok("-=") }
+    | "<<=" { Ok("<<=") }
+    | ">>=" { Ok(">>=") }
+    | "&=" { Ok("&=") }
+    | "^=" { Ok("^=") }
+    | "|=" { Ok("|=") }
+    | "??=" { Ok("??=") }
+    ;
 
 ExpressionOpt -> Result<Option<Box<Node>>, ()>:
       %empty { Ok(None) }
@@ -230,6 +255,21 @@ Literal -> Result<Node, ()>:
 %%
 // Any functions here are in scope for all the grammar actions above.
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 fn flatten<T>(left: Result<Vec<Box<T>>,()>, right: T) -> Result<Vec<Box<T>>,()> {
     let mut flt = left?;
     flt.push(Box::new(right));
@@ -250,6 +290,12 @@ pub enum Node {
         span: Span,
         operator: &'static str,
         child: Box<Node>,
+    },
+    AssignmentExpression {
+        span: Span,
+        operator: &'static str,
+        left: Box<Node>,
+        right: Box<Node>,
     },
     NumericLiteral {
         span: Span,

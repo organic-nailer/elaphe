@@ -205,12 +205,90 @@ fn for_statement() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
         elaphe::run(&output, "
-        for (var i = 0; i < 5;) {
+        for (var i = 0; i < 5; i += 1) {
             print(i);
-            var i = i + 1;
         }
         ");
         exec_py_and_assert(&output, "0\n1\n2\n3\n4\n");
+    });
+    clean(&output);
+    if result.is_err() {
+        panic!("{:?}", result);
+    }
+}
+
+#[test]
+fn while_statement() {
+    let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
+    let result = catch_unwind(|| {
+        elaphe::run(&output, "
+        {
+            var i = -5;
+            while(i < 0) {
+                print(i);
+                i += 1;
+            }
+        }
+        ");
+        exec_py_and_assert(&output, "-5\n-4\n-3\n-2\n-1\n");
+    });
+    clean(&output);
+    if result.is_err() {
+        panic!("{:?}", result);
+    }
+}
+
+#[test]
+fn do_statement() {
+    let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
+    let result = catch_unwind(|| {
+        elaphe::run(&output, "
+        {
+            var i = -5;
+            do {
+                print(i);
+                i += 1;
+            } while(i < 0);
+        }
+        ");
+        exec_py_and_assert(&output, "-5\n-4\n-3\n-2\n-1\n");
+    });
+    clean(&output);
+    if result.is_err() {
+        panic!("{:?}", result);
+    }
+}
+
+#[test]
+fn assignment_expressions() {
+    let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
+    let result = catch_unwind(|| {
+        elaphe::run(&output, "{var x = 4; x = 2; print(x);}");
+        exec_py_and_assert(&output, "2\n");
+        elaphe::run(&output, "{var x = 4; x += 2; print(x);}");
+        exec_py_and_assert(&output, "6\n");
+        elaphe::run(&output, "{var x = 4; x *= 2; print(x);}");
+        exec_py_and_assert(&output, "8\n");
+        elaphe::run(&output, "{var x = 5; x /= 2; print(x);}");
+        exec_py_and_assert(&output, "2.5\n");
+        elaphe::run(&output, "{var x = 5; x %= 2; print(x);}");
+        exec_py_and_assert(&output, "1\n");
+        elaphe::run(&output, "{var x = 5; x ~/= 2; print(x);}");
+        exec_py_and_assert(&output, "2\n");
+        elaphe::run(&output, "{var x = 4; x <<= 2; print(x);}");
+        exec_py_and_assert(&output, "16\n");
+        elaphe::run(&output, "{var x = 4; x >>= 2; print(x);}");
+        exec_py_and_assert(&output, "1\n");
+        elaphe::run(&output, "{var x = 3; x &= 6; print(x);}");
+        exec_py_and_assert(&output, "2\n");
+        elaphe::run(&output, "{var x = 3; x ^= 6; print(x);}");
+        exec_py_and_assert(&output, "5\n");
+        elaphe::run(&output, "{var x = 3; x |= 6; print(x);}");
+        exec_py_and_assert(&output, "7\n");
+        elaphe::run(&output, "{var x = null; x ??= 2; print(x);}");
+        exec_py_and_assert(&output, "2\n");
+        elaphe::run(&output, "{var x = 4; x ??= 2; print(x);}");
+        exec_py_and_assert(&output, "4\n");
     });
     clean(&output);
     if result.is_err() {

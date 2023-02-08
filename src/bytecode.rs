@@ -7,19 +7,33 @@ pub struct ByteCode {
 
 pub enum OpCode {
     PopTop,
-    BinaryAdd,
-    BinarySubtract,
-    BinaryMultiply,
-    BinaryTrueDivide,
-    BinaryLShift,
-    BinaryRShift,
-    BinaryAnd,
-    BinaryOr,
-    BinaryXor,
     UnaryNegative,
     UnaryNot,
     UnaryInvert,
+    BinaryMultiply,
+    BinaryAdd,
+    BinarySubtract,
+    BinaryTrueDivide,
+    InplaceFloorDivide,
+    InplaceTrueDivide,
+    InplaceAdd,
+    InplaceSubtract,
+    InplaceMultiply,
+    InplaceModulo,
+    BinaryLShift,
+    BinaryRShift,
+    BinaryAnd,
+    BinaryXor,
+    BinaryOr,
+    InplaceLShift,
+    InplaceRShift,
+    InplaceAnd,
+    InplaceXor,
+    InplaceOr,
     ReturnValue,
+    StoreName(u8),
+    LoadConst(u8),
+    LoadName(u8),
     CompareOp(u8),
     // JumpForward(u32),
     // JumpIfFalseOrPop(u32),
@@ -27,9 +41,6 @@ pub enum OpCode {
     JumpAbsolute(u32),
     PopJumpIfFalse(u32),
     PopJumpIfTrue(u32),
-    LoadConst(u8),
-    LoadName(u8),
-    StoreName(u8),
     CallFunction(u8),
 }
 
@@ -59,11 +70,22 @@ impl OpCode {
             OpCode::BinaryAdd => 23,
             OpCode::BinarySubtract => 24,
             OpCode::BinaryTrueDivide => 27,
+            OpCode::InplaceFloorDivide => 28,
+            OpCode::InplaceTrueDivide => 29,
+            OpCode::InplaceAdd => 55,
+            OpCode::InplaceSubtract => 56,
+            OpCode::InplaceMultiply => 57,
+            OpCode::InplaceModulo => 59,
             OpCode::BinaryLShift => 62,
             OpCode::BinaryRShift => 63,
             OpCode::BinaryAnd => 64,
             OpCode::BinaryXor => 65,
             OpCode::BinaryOr => 66,
+            OpCode::InplaceLShift => 75,
+            OpCode::InplaceRShift => 76,
+            OpCode::InplaceAnd => 77,
+            OpCode::InplaceXor => 78,
+            OpCode::InplaceOr => 79,
             OpCode::ReturnValue => 83,
             OpCode::StoreName(_) => 90,
             OpCode::LoadConst(_) => 100,
@@ -130,6 +152,17 @@ impl OpCode {
             OpCode::BinaryAnd |
             OpCode::BinaryXor |
             OpCode::BinaryOr |
+            OpCode::InplaceFloorDivide |
+            OpCode::InplaceTrueDivide |
+            OpCode::InplaceAdd |
+            OpCode::InplaceSubtract |
+            OpCode::InplaceMultiply |
+            OpCode::InplaceModulo |
+            OpCode::InplaceLShift |
+            OpCode::InplaceRShift |
+            OpCode::InplaceAnd |
+            OpCode::InplaceXor |
+            OpCode::InplaceOr |
             OpCode::CompareOp(_) => -1,
 
             OpCode::StoreName(_) => -1,
