@@ -113,7 +113,7 @@ impl OpCode {
     }
 
     // https://github.com/python/cpython/blob/b2b85b5db9cfdb24f966b61757536a898abc3830/Python/compile.c#L1075
-    pub fn stack_effect(&self, jump: bool) -> i32 {
+    pub fn stack_effect(&self, _jump: bool) -> i32 {
         match *self {
             OpCode::PopTop => -1,
             

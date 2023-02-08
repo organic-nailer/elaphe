@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 pub enum PyObject <'a> {
     Int(i32, bool),
     Float(f64, bool),
