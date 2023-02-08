@@ -18,6 +18,7 @@ pub enum OpCode {
     CompareOp(u8),
     LoadConst(u8),
     LoadName(u8),
+    StoreName(u8),
     CallFunction(u8),
 }
 
@@ -53,6 +54,7 @@ impl OpCode {
             OpCode::BinaryXor => 65,
             OpCode::BinaryOr => 66,
             OpCode::ReturnValue => 83,
+            OpCode::StoreName(_) => 90,
             OpCode::LoadConst(_) => 100,
             OpCode::LoadName(_) => 101,
             OpCode::CompareOp(_) => 107,
@@ -62,6 +64,7 @@ impl OpCode {
 
     pub fn to_bytes(&self) -> (u8, u8) {
         let operand = match *self {
+            OpCode::StoreName(v) |
             OpCode::LoadConst(v) |
             OpCode::LoadName(v) |
             OpCode::CallFunction(v) |
@@ -89,6 +92,8 @@ impl OpCode {
             OpCode::BinaryXor |
             OpCode::BinaryOr |
             OpCode::CompareOp(_) => -1,
+
+            OpCode::StoreName(_) => -1,
 
             OpCode::ReturnValue => -1,
 

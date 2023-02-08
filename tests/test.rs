@@ -162,3 +162,17 @@ fn statement_list() {
         panic!("{:?}", result);
     }
 }
+
+
+#[test]
+fn global_variable() {
+    let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
+    let result = catch_unwind(|| {
+        elaphe::run(&output, "{var x = 4;print(x*x);}");
+        exec_py_and_assert(&output, "16\n");
+    });
+    clean(&output);
+    if result.is_err() {
+        panic!("{:?}", result);
+    }
+}

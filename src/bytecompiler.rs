@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::{cell::RefCell, collections::HashMap};
 use std::i32;
 
 use cfgrammar::Span;
@@ -9,8 +9,12 @@ pub struct ByteCompiler<'a> {
     pub byte_operations: RefCell<Vec<OpCode>>,
     pub constant_list: RefCell<Vec<PyObject<'a>>>,
     pub name_list: RefCell<Vec<PyObject<'a>>>,
+    pub name_map: RefCell<HashMap<&'a str, u8>>,
+    pub global_variables: RefCell<Vec<&'a str>>,
     source: &'a str,
 }
+
+const PREDEFINED_VARIABLES: [&'static str; 1] = ["print"];
 
 impl ByteCompiler<'_> {
     pub fn run<'a>(root_node: &Node, source: &'a str) -> ByteCompiler<'a> {
@@ -18,6 +22,8 @@ impl ByteCompiler<'_> {
             byte_operations: RefCell::new(vec![]),
             constant_list: RefCell::new(vec![]),
             name_list: RefCell::new(vec![]),
+            name_map: RefCell::new(HashMap::new()),
+            global_variables: RefCell::new(Vec::from(PREDEFINED_VARIABLES)),
             source: source,
         };
 
@@ -35,7 +41,7 @@ impl ByteCompiler<'_> {
     }
 }
 
-impl ByteCompiler<'_> {
+impl<'a> ByteCompiler<'a> {
     fn compile(&self, node: &Node) {
         match node {
             Node::BinaryExpression {
@@ -136,20 +142,21 @@ impl ByteCompiler<'_> {
                 self.byte_operations.borrow_mut().push(OpCode::LoadConst(const_position));
             },
             Node::Identifier { span } => {
-                let value = &self.source[span.start()..span.end()];
-                let name_position = self.name_list.borrow().len() as u8;
-                if value.is_ascii() {
-                    if value.len() < 256 {
-                        self.name_list.borrow_mut().push(PyObject::AsciiShort(value, false));
-                    }
-                    else {
-                        self.name_list.borrow_mut().push(PyObject::Ascii(value, false));
+                let value = self.span_to_str(span);
+                match self.search_name(value) {
+                    Some(p) => {
+                        self.byte_operations.borrow_mut().push(OpCode::LoadName(p));
+                    },
+                    None => {
+                        if self.check_variable_defined(value) {
+                            let p = self.register_name(value);
+                            self.byte_operations.borrow_mut().push(OpCode::LoadName(p));
+                        }
+                        else {
+                            panic!("{} is used before its declaration.", value)
+                        }
                     }
                 }
-                else {
-                    self.name_list.borrow_mut().push(PyObject::Unicode(value, false));
-                }
-                self.byte_operations.borrow_mut().push(OpCode::LoadName(name_position));
             },
             Node::Arguments { span: _, children } => {
                 for node in children {
@@ -171,11 +178,65 @@ impl ByteCompiler<'_> {
                 for child in children {
                     self.compile(child);
                 }
-            }
+            },
+
+            Node::VariableDeclaration { span: _, identifier, expr } => {
+                match expr {
+                    Some(e) => {
+                        self.compile(e);
+                        if let Node::Identifier { span: id_span } = **identifier {
+                            let value = self.span_to_str(&id_span);
+                            let position = self.register_name(value);
+                            self.byte_operations.borrow_mut().push(OpCode::StoreName(position));
+
+                            self.global_variables.borrow_mut().push(value);
+                        }
+                        else {
+                            panic!("Invalid AST");
+                        }
+                    },
+                    None => {
+                        if let Node::Identifier { span: id_span } = **identifier {
+                            let value = &self.span_to_str(&id_span);
+                            self.register_name(value);
+                            self.global_variables.borrow_mut().push(value);
+                        }
+                        else {
+                            panic!("Invalid AST");
+                        }
+                    }
+                }
+            },
         }
     }
 
-    fn span_to_str<'a>(&'a self, span: &Span) -> &'a str {
+    fn span_to_str(&self, span: &Span) -> &'a str {
         return &self.source[span.start()..span.end()];
+    }
+
+    fn register_name(&self, value: &'a str) -> u8 {
+        let name_position = self.name_list.borrow().len() as u8;
+        if value.is_ascii() {
+            if value.len() < 256 {
+                self.name_list.borrow_mut().push(PyObject::AsciiShort(value, false));
+            }
+            else {
+                self.name_list.borrow_mut().push(PyObject::Ascii(value, false));
+            }
+        }
+        else {
+            self.name_list.borrow_mut().push(PyObject::Unicode(value, false));
+        }
+        self.name_map.borrow_mut().insert(value, name_position);
+        name_position
+    
+    }
+
+    fn search_name(&self, value: &str) -> Option<u8> {
+        self.name_map.borrow().get(value).copied()
+    }
+
+    fn check_variable_defined(&self, value: &str) -> bool {
+        self.global_variables.borrow().contains(&value)
     }
 }

@@ -7,6 +7,7 @@ Statements -> Result<Vec<Box<Node>>, ()>:
 
 Statement -> Result<Node, ()>:
       BlockStatement { $1 }
+    | LocalVariableDeclaration { $1 }
     | ExpressionStatement { $1 }
     | ";" { Ok(Node::EmptyStatement { span: $span }) }
     ;
@@ -15,8 +16,20 @@ BlockStatement -> Result<Node, ()>:
       "{" Statements "}" { Ok(Node::BlockStatement { span: $span, children: $2? }) }
     ;
 
+LocalVariableDeclaration -> Result<Node, ()>:
+    InitializedVariableDeclaration ";" { $1 };
+
 ExpressionStatement -> Result<Node, ()>:
     Expression ";" { Ok(Node::ExpressionStatement { span: $span, expr: Box::new($1?) }) }
+    ;
+
+InitializedVariableDeclaration -> Result<Node, ()>:
+      DeclaredIdentifier { Ok(Node::VariableDeclaration { span: $span, identifier: Box::new($1?), expr: None }) }
+    | DeclaredIdentifier "=" Expression { Ok(Node::VariableDeclaration { span: $span, identifier: Box::new($1?), expr: Some(Box::new($3?)) }) }
+    ;
+
+DeclaredIdentifier -> Result<Node, ()>:
+    "var" Identifier { $2 }
     ;
 
 
@@ -146,7 +159,11 @@ CommaOpt -> Result<(), ()>:
 Primary -> Result<Node, ()>:
       '(' Expression ')' { $2 }
     | Literal { $1 }
-    | 'IDENTIFIER' { Ok(Node::Identifier { span: $span }) }
+    | Identifier { $1 }
+    ;
+
+Identifier -> Result<Node, ()>:
+    'IDENTIFIER' { Ok(Node::Identifier { span: $span }) }
     ;
 
 Literal -> Result<Node, ()>:
@@ -214,5 +231,10 @@ pub enum Node {
     },
     EmptyStatement {
         span: Span,
+    },
+    VariableDeclaration {
+        span: Span,
+        identifier: Box<Node>,
+        expr: Option<Box<Node>>,
     }
 }
