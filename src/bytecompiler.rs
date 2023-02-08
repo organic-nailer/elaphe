@@ -20,23 +20,16 @@ impl ByteCompiler<'_> {
             name_list: RefCell::new(vec![]),
             source: source,
         };
+
+        compiler.constant_list.borrow_mut().push(PyObject::None(false));
+
         compiler.compile(root_node);
 
-        // print(x); return None;
-        let print_position = compiler.name_list.borrow().len() as u8;
-        compiler.name_list.borrow_mut().push(PyObject::Ascii("print", true));
-        let none_position = compiler.constant_list.borrow().len() as u8;
-        compiler.constant_list.borrow_mut().push(PyObject::None(false));
-        compiler
-            .byte_operations
-            .borrow_mut()
-            .insert(0, OpCode::LoadName(print_position));
-        compiler.byte_operations.borrow_mut().push(OpCode::CallFunction(1));
         compiler.byte_operations.borrow_mut().push(OpCode::PopTop);
         compiler
             .byte_operations
             .borrow_mut()
-            .push(OpCode::LoadConst(none_position));
+            .push(OpCode::LoadConst(0));
         compiler.byte_operations.borrow_mut().push(OpCode::ReturnValue);
 
         compiler
@@ -114,7 +107,17 @@ impl ByteCompiler<'_> {
                 let value = &value[1..len-1];
 
                 let const_position = self.constant_list.borrow().len() as u8;
-                self.constant_list.borrow_mut().push(PyObject::Str(value, false));
+                if value.is_ascii() {
+                    if value.len() < 256 {
+                        self.constant_list.borrow_mut().push(PyObject::AsciiShort(value, false));
+                    }
+                    else {
+                        self.constant_list.borrow_mut().push(PyObject::Ascii(value, false));
+                    }
+                }
+                else {
+                    self.constant_list.borrow_mut().push(PyObject::Unicode(value, false));
+                }
                 self.byte_operations.borrow_mut().push(OpCode::LoadConst(const_position));
             },
             Node::BooleanLiteral { span } => {
@@ -132,6 +135,32 @@ impl ByteCompiler<'_> {
                 let const_position = self.constant_list.borrow().len() as u8;
                 self.constant_list.borrow_mut().push(PyObject::None(false));
                 self.byte_operations.borrow_mut().push(OpCode::LoadConst(const_position));
+            },
+            Node::Identifier { span } => {
+                let value = &self.source[span.start()..span.end()];
+                let name_position = self.name_list.borrow().len() as u8;
+                if value.is_ascii() {
+                    if value.len() < 256 {
+                        self.name_list.borrow_mut().push(PyObject::AsciiShort(value, false));
+                    }
+                    else {
+                        self.name_list.borrow_mut().push(PyObject::Ascii(value, false));
+                    }
+                }
+                else {
+                    self.name_list.borrow_mut().push(PyObject::Unicode(value, false));
+                }
+                self.byte_operations.borrow_mut().push(OpCode::LoadName(name_position));
+            }
+            Node::Arguments { span: _, children } => {
+                for node in children {
+                    self.compile(node);
+                }
+                self.byte_operations.borrow_mut().push(OpCode::CallFunction(children.len() as u8))
+            },
+            Node::WithSelectorExpression { span: _, child, selector } => {
+                self.compile(child);
+                self.compile(selector);
             }
         }
     }

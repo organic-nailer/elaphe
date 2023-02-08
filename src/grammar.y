@@ -90,12 +90,40 @@ UnaryExpression -> Result<Node, ()>:
     | "~" UnaryExpression {
         Ok(Node::UnaryOpExpression { span: $span, operator: "~", child: Box::new($2?) })
     }
+    | PostfixExpression { $1 }
+    ;
+
+PostfixExpression -> Result<Node, ()>:
+      PostfixExpression Selector {
+        Ok(Node::WithSelectorExpression { span: $span, child: Box::new($1?), selector: Box::new($2?) })
+    }
     | Primary { $1 }
+    ;
+
+Selector -> Result<Node, ()>:
+      Arguments { $1 };
+
+Arguments -> Result<Node, ()>:
+      "(" ")" { Ok(Node::Arguments { span: $span, children: vec![] }) }
+    | "(" ExpressionList CommaOpt ")" { Ok(Node::Arguments { span: $span, children: $2? }) }
+    ;
+
+ExpressionList -> Result<Vec<Box<Node>>, ()>:
+      ExpressionList "," Expression { 
+        flatten($1, $3?)
+    }
+    | Expression { Ok(vec![Box::new($1?)]) }
+    ;
+
+CommaOpt -> Result<(), ()>:
+      %empty { Ok(()) }
+    | "," { Ok(()) }
     ;
 
 Primary -> Result<Node, ()>:
       '(' Expression ')' { $2 }
     | Literal { $1 }
+    | 'IDENTIFIER' { Ok(Node::Identifier { span: $span }) }
     ;
 
 Literal -> Result<Node, ()>:
@@ -106,6 +134,12 @@ Literal -> Result<Node, ()>:
     ;
 %%
 // Any functions here are in scope for all the grammar actions above.
+
+fn flatten<T>(left: Result<Vec<Box<T>>,()>, right: T) -> Result<Vec<Box<T>>,()> {
+    let mut flt = left?;
+    flt.push(Box::new(right));
+    Ok(flt)
+}
 
 use cfgrammar::Span;
 
@@ -133,5 +167,17 @@ pub enum Node {
     },
     NullLiteral {
         span: Span,
+    },
+    Identifier {
+        span: Span,
+    },
+    Arguments {
+        span: Span,
+        children: Vec<Box<Node>>
+    },
+    WithSelectorExpression {
+        span: Span,
+        child: Box<Node>,
+        selector: Box<Node>,
     }
 }

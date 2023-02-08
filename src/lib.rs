@@ -108,9 +108,9 @@ fn write_py_code(
         file.write(&[tuple_len]).unwrap();
     }
     // ファイル名
-    write_py_short_ascii(file, "main.py".as_bytes());
+    write_py_short_ascii(file, "main.py".as_bytes(), true);
     // 名前
-    write_py_short_ascii_interned(file, "<module>".as_bytes(), true);
+    write_py_short_ascii(file, "<module>".as_bytes(), true);
     // first line
     file.write(&(1u32.to_le_bytes())).unwrap();
     // line table
@@ -145,18 +145,35 @@ fn write_py_none(file: &mut File, register_ref: bool) {
     file.write(&[object_type]).unwrap();
 }
 
-fn write_py_short_ascii_interned(file: &mut File, value: &[u8], register_ref: bool) {
-    let object_type = 0x5Au8 | ((register_ref as u8) << 7);
+// fn write_py_short_ascii_interned(file: &mut File, value: &[u8], register_ref: bool) {
+//     let object_type = 0x5Au8 | ((register_ref as u8) << 7);
+//     file.write(&[object_type]).unwrap();
+//     let str_len = value.len() as u8;
+//     file.write(&[str_len]).unwrap();
+//     file.write(value).unwrap();
+// }
+
+fn write_py_short_ascii(file: &mut File, value: &[u8], register_ref: bool) {
+    let object_type = 0x7Au8 | ((register_ref as u8) << 7);
     file.write(&[object_type]).unwrap();
     let str_len = value.len() as u8;
     file.write(&[str_len]).unwrap();
     file.write(value).unwrap();
 }
 
-fn write_py_short_ascii(file: &mut File, value: &[u8]) {
-    file.write(&[0xFA]).unwrap();
-    let str_len = value.len() as u8;
-    file.write(&[str_len]).unwrap();
+fn write_py_ascii(file: &mut File, value: &[u8], register_ref: bool) {
+    let object_type = 0x61u8 | ((register_ref as u8) << 7);
+    file.write(&[object_type]).unwrap();
+    let str_len = value.len() as u32;
+    file.write(&str_len.to_le_bytes()).unwrap();
+    file.write(value).unwrap();
+}
+
+fn write_py_unicode(file: &mut File, value: &[u8], register_ref: bool) {
+    let object_type = 0x75u8 | ((register_ref as u8) << 7);
+    file.write(&[object_type]).unwrap();
+    let str_len = value.len() as u32;
+    file.write(&str_len.to_le_bytes()).unwrap();
     file.write(value).unwrap();
 }
 
@@ -179,8 +196,10 @@ fn write_py_small_tuple(file: &mut File, value_list: &[PyObject]) {
         match *c {
             PyObject::Int(v, r) => write_py_int(file, v, r),
             PyObject::Float(v, r) => write_py_float64(file, v, r),
-            PyObject::Str(v, r) => write_py_string(file, v.as_bytes(), r),
-            PyObject::Ascii(v, r) => write_py_short_ascii_interned(file, v.as_bytes(), r),
+            PyObject::String(v, r) => write_py_string(file, v.as_bytes(), r),
+            PyObject::Ascii(v, r) => write_py_ascii(file, v.as_bytes(), r),
+            PyObject::AsciiShort(v, r) => write_py_short_ascii(file, v.as_bytes(), r),
+            PyObject::Unicode(v, r) => write_py_unicode(file, v.as_bytes(), r),
             PyObject::None(r) => write_py_none(file, r),
             PyObject::True(r) => write_py_boolean(file, true, r),
             PyObject::False(r) => write_py_boolean(file, false, r)

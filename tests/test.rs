@@ -22,10 +22,10 @@ fn clean(filename: &str) {
 fn calc_operations() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
-        elaphe::run(&output, "(1+2)*5");
+        elaphe::run(&output, "print((1+2)*5)");
         exec_py_and_assert(&output, "15\n");
 
-        elaphe::run(&output, "5*(1-2)");
+        elaphe::run(&output, "print(5*(1-2))");
         exec_py_and_assert(&output, "-5\n");
     });
     clean(&output);
@@ -38,10 +38,10 @@ fn calc_operations() {
 fn calc_float() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
-        elaphe::run(&output, "1 + 2.3");
+        elaphe::run(&output, "print(1 + 2.3)");
         exec_py_and_assert(&output, "3.3\n");
     
-        elaphe::run(&output, ".5 * 4e+2");
+        elaphe::run(&output, "print(.5 * 4e+2)");
         exec_py_and_assert(&output, "200.0\n");
     });
     clean(&output);
@@ -54,7 +54,7 @@ fn calc_float() {
 fn calc_hex() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
-        elaphe::run(&output, "0x47 - 0X05");
+        elaphe::run(&output, "print(0x47 - 0X05)");
         exec_py_and_assert(&output, "66\n");
     });
     clean(&output);
@@ -67,7 +67,7 @@ fn calc_hex() {
 fn calc_boolean() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
-        elaphe::run(&output, "true + false");
+        elaphe::run(&output, "print(true + false)");
         exec_py_and_assert(&output, "1\n");    
     });
     clean(&output);
@@ -80,8 +80,8 @@ fn calc_boolean() {
 fn concat_string() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
-        elaphe::run(&output, "'abc' + 'defg'");
-        exec_py_and_assert(&output, "b'abcdefg'\n");
+        elaphe::run(&output, "print('abc' + 'defg')");
+        exec_py_and_assert(&output, "abcdefg\n");
     });
     clean(&output);
     if result.is_err() {
@@ -93,17 +93,17 @@ fn concat_string() {
 fn compare_op() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
-        elaphe::run(&output, "1 == 2");
+        elaphe::run(&output, "print(1 == 2)");
         exec_py_and_assert(&output, "False\n");
-        elaphe::run(&output, "1 != 2");
+        elaphe::run(&output, "print(1 != 2)");
         exec_py_and_assert(&output, "True\n");
-        elaphe::run(&output, "1 >= 2");
+        elaphe::run(&output, "print(1 >= 2)");
         exec_py_and_assert(&output, "False\n");
-        elaphe::run(&output, "1.3 < 2.1");
+        elaphe::run(&output, "print(1.3 < 2.1)");
         exec_py_and_assert(&output, "True\n");
-        elaphe::run(&output, "1 > 2");
+        elaphe::run(&output, "print(1 > 2)");
         exec_py_and_assert(&output, "False\n");
-        elaphe::run(&output, "1 <= 2");
+        elaphe::run(&output, "print(1 <= 2)");
         exec_py_and_assert(&output, "True\n");
     });
     clean(&output);
@@ -116,15 +116,15 @@ fn compare_op() {
 fn binary_op() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
-        elaphe::run(&output, "1 << 2");
+        elaphe::run(&output, "print(1 << 2)");
         exec_py_and_assert(&output, "4\n");
-        elaphe::run(&output, "8 >> 2");
+        elaphe::run(&output, "print(8 >> 2)");
         exec_py_and_assert(&output, "2\n");
-        elaphe::run(&output, "3 & 6");
+        elaphe::run(&output, "print(3 & 6)");
         exec_py_and_assert(&output, "2\n");
-        elaphe::run(&output, "3 | 6");
+        elaphe::run(&output, "print(3 | 6)");
         exec_py_and_assert(&output, "7\n");
-        elaphe::run(&output, "3 ^ 6");
+        elaphe::run(&output, "print(3 ^ 6)");
         exec_py_and_assert(&output, "5\n");
     });
     clean(&output);
@@ -137,11 +137,11 @@ fn binary_op() {
 fn unary_op() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
-        elaphe::run(&output, "1+-2");
+        elaphe::run(&output, "print(1+-2)");
         exec_py_and_assert(&output, "-1\n");
-        elaphe::run(&output, "~2");
+        elaphe::run(&output, "print(~2)");
         exec_py_and_assert(&output, "-3\n");
-        elaphe::run(&output, "!(1!=2)");
+        elaphe::run(&output, "print(!(1!=2))");
         exec_py_and_assert(&output, "False\n");
     });
     clean(&output);
