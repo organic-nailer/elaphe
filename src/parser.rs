@@ -6,16 +6,23 @@ lrpar_mod!("grammar.y");
 
 pub use grammar_y::Node;
 
-pub fn parse(source: &str) -> Option<Node> {
+pub fn parse(source: &str) -> Result<Node, &str> {
     let lexerdef = grammar_l::lexerdef();
     if source.trim().is_empty() {
-        return None;
+        return Err("source is empty");
     }
     let lexer = lexerdef.lexer(source);
-    let (res, _) = grammar_y::parse(&lexer);
+    let (res, err) = grammar_y::parse(&lexer);
+    if !err.is_empty() {
+        for e in err {
+            println!("{}", e.pp(&lexer, &grammar_y::token_epp));
+        }
+        return Err("there are parse error. aborting...");
+    }
+
     match res {
-        Some(Ok(r)) => return Some(r),
-        _ => return None
+        Some(Ok(r)) => return Ok(r),
+        _ => return Err("parse failed")
     };
 }
 

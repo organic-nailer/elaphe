@@ -12,11 +12,16 @@ fn main() {
     let output = "main.pyc";
     elaphe::run(output, source);
 
+    println!("run {}", output);
     match Command::new("bash")
         .args(&["-c", "python main.pyc"])
         .output()
     {
-        Ok(e) => println!("{}", str::from_utf8(&e.stdout).unwrap()),
+        Ok(e) => {
+            println!("----- result -----");
+            println!("{}", str::from_utf8(&e.stdout).unwrap());
+            println!("------ end -------");
+        },
         Err(e) => println!("Error: {}", e),
     }
 }

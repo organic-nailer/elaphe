@@ -25,7 +25,6 @@ impl ByteCompiler<'_> {
 
         compiler.compile(root_node);
 
-        compiler.byte_operations.borrow_mut().push(OpCode::PopTop);
         compiler
             .byte_operations
             .borrow_mut()
@@ -65,7 +64,7 @@ impl ByteCompiler<'_> {
                     "/" => self.byte_operations.borrow_mut().push(OpCode::BinaryTrueDivide),
                     _ => panic!("unknown operator: {}", *operator),
                 }
-            }
+            },
             Node::UnaryOpExpression { span: _, operator, child } => {
                 self.compile(child);
                 match *operator {
@@ -74,7 +73,7 @@ impl ByteCompiler<'_> {
                     "~" => self.byte_operations.borrow_mut().push(OpCode::UnaryInvert),
                     _ => panic!("unknown unary operator: {}", *operator),
                 }
-            }
+            },
             Node::NumericLiteral { span } => {
                 let const_position = self.constant_list.borrow().len() as u8;
                 let raw_value = self.span_to_str(span);
@@ -99,7 +98,7 @@ impl ByteCompiler<'_> {
                 }
 
                 self.byte_operations.borrow_mut().push(OpCode::LoadConst(const_position));
-            }
+            },
             Node::StringLiteral { span } => {
                 // let value = self.span_to_str(span);
                 let value = &self.source[span.start()..span.end()];
@@ -151,7 +150,7 @@ impl ByteCompiler<'_> {
                     self.name_list.borrow_mut().push(PyObject::Unicode(value, false));
                 }
                 self.byte_operations.borrow_mut().push(OpCode::LoadName(name_position));
-            }
+            },
             Node::Arguments { span: _, children } => {
                 for node in children {
                     self.compile(node);
@@ -161,6 +160,17 @@ impl ByteCompiler<'_> {
             Node::WithSelectorExpression { span: _, child, selector } => {
                 self.compile(child);
                 self.compile(selector);
+            },
+
+            Node::EmptyStatement { span: _ } => { },
+            Node::ExpressionStatement { span: _, expr } => {
+                self.compile(expr);
+                self.byte_operations.borrow_mut().push(OpCode::PopTop);
+            },
+            Node::BlockStatement { span: _, children } => {
+                for child in children {
+                    self.compile(child);
+                }
             }
         }
     }

@@ -15,7 +15,8 @@ use crate::pyobject::PyObject;
 
 pub fn run(output: &str, source: &str) {
     let node = parser::parse(source);
-    if node.is_none() {
+    if node.is_err() {
+        println!("{:?}", node.err());
         println!("failed to parse the passed source: {}", source);
         return;
     }

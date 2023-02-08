@@ -1,5 +1,28 @@
-%start Expression
+%start Statement
 %%
+Statements -> Result<Vec<Box<Node>>, ()>:
+      %empty { Ok(vec![]) }
+    | Statements Statement { flatten($1, $2?) }
+    ;
+
+Statement -> Result<Node, ()>:
+      BlockStatement { $1 }
+    | ExpressionStatement { $1 }
+    | ";" { Ok(Node::EmptyStatement { span: $span }) }
+    ;
+
+BlockStatement -> Result<Node, ()>:
+      "{" Statements "}" { Ok(Node::BlockStatement { span: $span, children: $2? }) }
+    ;
+
+ExpressionStatement -> Result<Node, ()>:
+    Expression ";" { Ok(Node::ExpressionStatement { span: $span, expr: Box::new($1?) }) }
+    ;
+
+
+
+
+
 Expression -> Result<Node, ()>:
     EqualityExpression { $1 };
 
@@ -179,5 +202,17 @@ pub enum Node {
         span: Span,
         child: Box<Node>,
         selector: Box<Node>,
+    },
+
+    BlockStatement {
+        span: Span,
+        children: Vec<Box<Node>>,
+    },
+    ExpressionStatement {
+        span: Span,
+        expr: Box<Node>,
+    },
+    EmptyStatement {
+        span: Span,
     }
 }
