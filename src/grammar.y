@@ -1,9 +1,64 @@
-%start Statement
+%start LibraryDeclaration
 %expect 1
 %%
+
+LibraryDeclaration -> Result<Vec<Box<Node>>, ()>:
+    TopLevelDeclarationList { $1 }
+    ;
+
+TopLevelDeclarationList -> Result<Vec<Box<Node>>, ()>:
+      %empty { Ok(vec![]) }
+    | TopLevelDeclarationList TopLevelDeclaration { flatten($1, Box::new($2?)) }
+    ;
+
+TopLevelDeclaration -> Result<Node, ()>:
+      TopFunctionDeclaration { $1 }
+    | TopVariableDeclaration { $1 }
+    ;
+
+TopFunctionDeclaration -> Result<Node, ()>:
+      Identifier FormalParameterList FunctionBody {
+        Ok(Node::FunctionDeclaration { span: $span, identifier: Box::new($1?), parameters: $2?, body: Box::new($3?) })
+    }
+    ;
+
+FormalParameterList -> Result<Vec<FunctionParameter>, ()>:
+      "(" ")" { Ok(vec![]) }
+    | "(" NormalFormalParameterList CommaOpt ")" { $2 }
+    ;
+
+NormalFormalParameterList -> Result<Vec<FunctionParameter>, ()>:
+      NormalFormalParameter { Ok(vec![$1?]) }
+    | NormalFormalParameterList "," NormalFormalParameter { flatten($1, $3?) }
+    ;
+
+NormalFormalParameter -> Result<FunctionParameter, ()>:
+      Identifier { Ok(FunctionParameter { identifier: Box::new($1?) }) }
+    ;
+
+FunctionBody -> Result<Node, ()>:
+      "=>" Expression ";" { Ok(Node::ExpressionStatement { span: $span, expr: Box::new($2?) }) }
+    | BlockStatement { $1 }
+    ;
+
+TopVariableDeclaration -> Result<Node, ()>:
+      "var" Identifier ";" { Ok(Node::VariableDeclaration { span: $span, identifier: Box::new($2?), expr: None }) }
+    | "var" Identifier "=" Expression ";" {
+        Ok(Node::VariableDeclaration { span: $span, identifier: Box::new($2?), expr: Some(Box::new($4?)) })
+    }
+    ;
+
+
+
+
+
+
+
+
+
 Statements -> Result<Vec<Box<Node>>, ()>:
       %empty { Ok(vec![]) }
-    | Statements Statement { flatten($1, $2?) }
+    | Statements Statement { flatten($1, Box::new($2?)) }
     ;
 
 Statement -> Result<Node, ()>:
@@ -221,7 +276,7 @@ Arguments -> Result<Node, ()>:
 
 ExpressionList -> Result<Vec<Box<Node>>, ()>:
       ExpressionList "," Expression { 
-        flatten($1, $3?)
+        flatten($1, Box::new($3?))
     }
     | Expression { Ok(vec![Box::new($1?)]) }
     ;
@@ -270,9 +325,9 @@ Literal -> Result<Node, ()>:
 
 
 
-fn flatten<T>(left: Result<Vec<Box<T>>,()>, right: T) -> Result<Vec<Box<T>>,()> {
+fn flatten<T>(left: Result<Vec<T>,()>, right: T) -> Result<Vec<T>,()> {
     let mut flt = left?;
-    flt.push(Box::new(right));
+    flt.push(right);
     Ok(flt)
 }
 
@@ -360,5 +415,16 @@ pub enum Node {
         span: Span,
         condition: Box<Node>,
         stmt: Box<Node>,
-    }
+    },
+    FunctionDeclaration {
+        span: Span,
+        identifier: Box<Node>,
+        parameters: Vec<FunctionParameter>,
+        body: Box<Node>,
+    },
+}
+
+#[derive(Debug)]
+pub struct FunctionParameter {
+    identifier: Box<Node>,
 }

@@ -32,6 +32,7 @@ pub enum OpCode {
     InplaceOr,
     ReturnValue,
     StoreName(u8),
+    StoreGlobal(u8),
     LoadConst(u8),
     LoadName(u8),
     CompareOp(u8),
@@ -40,8 +41,12 @@ pub enum OpCode {
     // JumpIfTrueOrPop(u32),
     JumpAbsolute(u32),
     PopJumpIfFalse(u32),
+    LoadGlobal(u8),
+    LoadFast(u8),
+    StoreFast(u8),
     PopJumpIfTrue(u32),
     CallFunction(u8),
+    MakeFunction, // フラグを持つらしい
 }
 
 impl OpCode {
@@ -88,6 +93,7 @@ impl OpCode {
             OpCode::InplaceOr => 79,
             OpCode::ReturnValue => 83,
             OpCode::StoreName(_) => 90,
+            OpCode::StoreGlobal(_) => 97,
             OpCode::LoadConst(_) => 100,
             OpCode::LoadName(_) => 101,
             OpCode::CompareOp(_) => 107,
@@ -97,7 +103,11 @@ impl OpCode {
             OpCode::JumpAbsolute(_) => 113,
             OpCode::PopJumpIfFalse(_) => 114,
             OpCode::PopJumpIfTrue(_) => 115,
-            OpCode::CallFunction(_) => 131
+            OpCode::LoadGlobal(_) => 116,
+            OpCode::LoadFast(_) => 124,
+            OpCode::StoreFast(_) => 125,
+            OpCode::CallFunction(_) => 131,
+            OpCode::MakeFunction => 132,
         }
     }
 
@@ -118,6 +128,10 @@ impl OpCode {
             OpCode::StoreName(v) |
             OpCode::LoadConst(v) |
             OpCode::LoadName(v) |
+            OpCode::LoadGlobal(v) |
+            OpCode::StoreGlobal(v) |
+            OpCode::LoadFast(v) |
+            OpCode::StoreFast(v) |
             OpCode::CallFunction(v) |
             OpCode::CompareOp(v) => {
                 ByteCode {
@@ -165,12 +179,16 @@ impl OpCode {
             OpCode::InplaceOr |
             OpCode::CompareOp(_) => -1,
 
+            OpCode::StoreGlobal(_) |
+            OpCode::StoreFast(_) |
             OpCode::StoreName(_) => -1,
 
             OpCode::ReturnValue => -1,
 
             OpCode::LoadConst(_) |
-            OpCode::LoadName(_) => 1,
+            OpCode::LoadName(_) |
+            OpCode::LoadFast(_) |
+            OpCode::LoadGlobal(_) => 1,
             
             OpCode::CallFunction(n) => -(n as i32),
 
@@ -179,7 +197,9 @@ impl OpCode {
             // OpCode::JumpIfFalseOrPop(_) |
             // OpCode::JumpIfTrueOrPop(_) => if jump { 0 } else { -1 },
             OpCode::PopJumpIfFalse(_) |
-            OpCode::PopJumpIfTrue(_) => -1
+            OpCode::PopJumpIfTrue(_) => -1,
+
+            OpCode::MakeFunction => -1,
         }
     }
 }

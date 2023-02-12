@@ -6,7 +6,7 @@ lrpar_mod!("grammar.y");
 
 pub use grammar_y::Node;
 
-pub fn parse(source: &str) -> Result<Node, &str> {
+pub fn parse(source: &str) -> Result<Vec<Box<Node>>, &str> {
     let lexerdef = grammar_l::lexerdef();
     if source.trim().is_empty() {
         return Err("source is empty");
