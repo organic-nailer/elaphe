@@ -344,3 +344,25 @@ fn top_level_variables() {
         panic!("{:?}", result);
     }
 }
+
+#[test]
+fn function_with_arguments() {
+    let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
+    let result = catch_unwind(|| {
+        elaphe::run(&output, "
+        add(a,b) {
+            print(a+b);
+        }
+        
+        main() {
+            add(10,100);
+            add(200,-200);
+        }
+        ").expect("execution failed.");
+        exec_py_and_assert(&output, "110\n0\n");
+    });
+    clean(&output);
+    if result.is_err() {
+        panic!("{:?}", result);
+    }
+}

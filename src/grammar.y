@@ -426,5 +426,5 @@ pub enum Node {
 
 #[derive(Debug)]
 pub struct FunctionParameter {
-    identifier: Box<Node>,
+    pub identifier: Box<Node>,
 }

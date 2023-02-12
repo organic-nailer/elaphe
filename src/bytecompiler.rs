@@ -79,6 +79,7 @@ pub fn run_root<'value>(
     PyObject::Code {
         file_name: file_name,
         code_name: "<module>",
+        num_args: 0,
         num_locals: 0,
         stack_size: stack_size,
         operation_list: operation_list,
@@ -92,6 +93,7 @@ pub fn run_root<'value>(
 pub fn run_function<'ctx, 'value, 'cpl>(
     file_name: &'value str,
     code_name: &'value str,
+    argument_list: Vec<&'value str>,
     outer_compiler: &'cpl ByteCompiler<'ctx, 'value>,
     body: &'value Node,
     source: &'value str,
@@ -108,6 +110,11 @@ pub fn run_function<'ctx, 'value, 'cpl>(
         outer: &mut py_context,
         variables: vec![],
     };
+
+    let num_args = argument_list.len() as u32;
+    for arg in argument_list {
+        block_context.declare_variable(arg);
+    }
 
     let mut compiler = ByteCompiler {
         byte_operations: RefCell::new(vec![]),
@@ -143,6 +150,7 @@ pub fn run_function<'ctx, 'value, 'cpl>(
     PyObject::Code {
         file_name,
         code_name,
+        num_args,
         num_locals: py_context.local_variables.len() as u32,
         stack_size,
         operation_list,
@@ -529,13 +537,26 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             Node::FunctionDeclaration {
                 span: _,
                 identifier,
-                parameters: _,
+                parameters,
                 body,
             } => {
+                let mut argument_list: Vec<&str> = vec![];
+                for p in parameters {
+                    if let Node::Identifier { span } = *p.identifier {
+                        let name = self.span_to_str(&span);
+                        argument_list.push(name);
+                    }
+                }
                 if let Node::Identifier { span } = **identifier {
                     let name = self.span_to_str(&span);
                     // TODO: parametersの利用
-                    let py_code = run_function("main.py", name, self, body, self.source);
+                    let py_code = run_function(
+                        "main.py", 
+                        name, 
+                        argument_list,
+                        self, 
+                        body, 
+                        self.source);
 
                     // コードオブジェクトの読み込み
                     let position = self.context.const_len() as u8;

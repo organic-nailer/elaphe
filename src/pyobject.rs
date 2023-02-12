@@ -20,6 +20,7 @@ pub enum PyObject<'a> {
     Code {
         file_name: &'a str,
         code_name: &'a str,
+        num_args: u32,
         num_locals: u32,
         stack_size: u32,
         operation_list: Vec<ByteCode>,
@@ -112,6 +113,7 @@ impl PyObject<'_> {
             PyObject::Code {
                 file_name,
                 code_name,
+                num_args,
                 num_locals,
                 stack_size,
                 operation_list,
@@ -120,7 +122,7 @@ impl PyObject<'_> {
                 local_list,
                 add_ref:_,
             } => {
-                file.write(&(0u32.to_le_bytes())).unwrap(); // ArgCount
+                file.write(&(num_args.to_le_bytes())).unwrap(); // ArgCount
                 file.write(&(0u32.to_le_bytes())).unwrap(); // PosOnlyArgCount
                 file.write(&(0u32.to_le_bytes())).unwrap(); // KwOnlyArgCount
                 file.write(&(num_locals.to_le_bytes())).unwrap(); // NumLocals
@@ -189,6 +191,7 @@ impl PyObject<'_> {
             PyObject::Code {
                 file_name: _,
                 code_name: _,
+                num_args: _,
                 num_locals: _,
                 stack_size: _,
                 operation_list: _,
