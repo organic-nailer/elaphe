@@ -23,7 +23,9 @@ pub struct BlockContext<'ctx, 'value> {
 pub trait ExecutionContext<'value> {
     fn push_const(&mut self, value: PyObject<'value>);
     fn const_len(&self) -> usize;
+    // return: (name_position, variable_position)
     fn declare_variable(&mut self, symbol: &'value str) -> u8;
+    fn get_local_variable(&self, symbol: &'value str) -> u8;
     fn check_variable_scope(&self, symbol: &str) -> VariableScope;
     fn register_or_get_name(&mut self, name: &'value str) -> u8;
     fn is_global(&self) -> bool;
@@ -46,6 +48,10 @@ impl<'value> ExecutionContext<'value> for GlobalContext<'value> {
         self.name_map.insert(symbol, position);
         self.global_variables.push(symbol);
         position
+    }
+
+    fn get_local_variable(&self, symbol: &'value str) -> u8 {
+        panic!("Not Implemented");
     }
 
     fn check_variable_scope(&self, symbol: &str) -> VariableScope {
@@ -92,6 +98,10 @@ impl<'ctx, 'value> ExecutionContext<'value> for PyContext<'ctx, 'value> {
         position
     }
 
+    fn get_local_variable(&self, symbol: &'value str) -> u8 {
+        self.local_variables.iter().position(|v| *v == symbol).unwrap() as u8
+    }
+
     fn check_variable_scope(&self, symbol: &str) -> VariableScope {
         self.outer.check_variable_scope(symbol)
     }
@@ -125,6 +135,10 @@ impl<'ctx, 'value> ExecutionContext<'value> for BlockContext<'ctx, 'value> {
         // ブロック内ローカル変数の定義
         self.variables.push(symbol);
         self.outer.declare_variable(symbol)
+    }
+
+    fn get_local_variable(&self, symbol: &'value str) -> u8 {
+        self.outer.get_local_variable(symbol)
     }
 
     fn check_variable_scope(&self, symbol: &str) -> VariableScope {

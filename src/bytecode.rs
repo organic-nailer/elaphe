@@ -7,6 +7,7 @@ pub struct ByteCode {
 
 pub enum OpCode {
     PopTop,
+    RotTwo,
     UnaryNegative,
     UnaryNot,
     UnaryInvert,
@@ -35,7 +36,10 @@ pub enum OpCode {
     StoreGlobal(u8),
     LoadConst(u8),
     LoadName(u8),
+    LoadAttr(u8),
     CompareOp(u8),
+    ImportName(u8),
+    ImportFrom(u8),
     // JumpForward(u32),
     // JumpIfFalseOrPop(u32),
     // JumpIfTrueOrPop(u32),
@@ -47,6 +51,8 @@ pub enum OpCode {
     PopJumpIfTrue(u32),
     CallFunction(u8),
     MakeFunction, // フラグを持つらしい
+    LoadMethod(u8),
+    CallMethod(u8),
 }
 
 impl OpCode {
@@ -68,6 +74,7 @@ impl OpCode {
     fn get_value(&self) -> u8 {
         match *self {
             OpCode::PopTop => 1,
+            OpCode::RotTwo => 2,
             OpCode::UnaryNegative => 11,
             OpCode::UnaryNot => 12,
             OpCode::UnaryInvert => 15,
@@ -96,7 +103,10 @@ impl OpCode {
             OpCode::StoreGlobal(_) => 97,
             OpCode::LoadConst(_) => 100,
             OpCode::LoadName(_) => 101,
+            OpCode::LoadAttr(_) => 106,
             OpCode::CompareOp(_) => 107,
+            OpCode::ImportName(_) => 108,
+            OpCode::ImportFrom(_) => 109,
             // OpCode::JumpForward(_) => 110,
             // OpCode::JumpIfFalseOrPop(_) => 111,
             // OpCode::JumpIfTrueOrPop(_) => 112,
@@ -108,6 +118,8 @@ impl OpCode {
             OpCode::StoreFast(_) => 125,
             OpCode::CallFunction(_) => 131,
             OpCode::MakeFunction => 132,
+            OpCode::LoadMethod(_) => 160,
+            OpCode::CallMethod(_) => 161,
         }
     }
 
@@ -133,7 +145,12 @@ impl OpCode {
             OpCode::LoadFast(v) |
             OpCode::StoreFast(v) |
             OpCode::CallFunction(v) |
-            OpCode::CompareOp(v) => {
+            OpCode::LoadAttr(v) |
+            OpCode::CompareOp(v) |
+            OpCode::ImportName(v) |
+            OpCode::ImportFrom(v) |
+            OpCode::LoadMethod(v) |
+            OpCode::CallMethod(v) => {
                 ByteCode {
                     operation: self.get_value(),
                     operand: v
@@ -155,7 +172,8 @@ impl OpCode {
             
             OpCode::UnaryNegative |
             OpCode::UnaryNot |
-            OpCode::UnaryInvert => 0,
+            OpCode::UnaryInvert |
+            OpCode::RotTwo => 0,
 
             OpCode::BinaryAdd |
             OpCode::BinaryMultiply |
@@ -179,6 +197,9 @@ impl OpCode {
             OpCode::InplaceOr |
             OpCode::CompareOp(_) => -1,
 
+            OpCode::ImportName(_) => -1,
+            OpCode::ImportFrom(_) => 1,
+
             OpCode::StoreGlobal(_) |
             OpCode::StoreFast(_) |
             OpCode::StoreName(_) => -1,
@@ -190,6 +211,7 @@ impl OpCode {
             OpCode::LoadFast(_) |
             OpCode::LoadGlobal(_) => 1,
             
+            OpCode::CallMethod(n) |
             OpCode::CallFunction(n) => -(n as i32),
 
             // OpCode::JumpForward(_) |
@@ -200,6 +222,9 @@ impl OpCode {
             OpCode::PopJumpIfTrue(_) => -1,
 
             OpCode::MakeFunction => -1,
+
+            OpCode::LoadAttr(_) |
+            OpCode::LoadMethod(_) => 0,
         }
     }
 }

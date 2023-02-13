@@ -7,6 +7,7 @@ use crate::executioncontext::{
     BlockContext, ExecutionContext, GlobalContext, PyContext, VariableScope,
 };
 use crate::{bytecode::OpCode, parser::Node, pyobject::PyObject};
+use crate::parser::{LibraryDeclaration, LibraryImport};
 
 pub struct ByteCompiler<'ctx, 'value> {
     pub byte_operations: RefCell<Vec<OpCode>>,
@@ -20,7 +21,7 @@ const PREDEFINED_VARIABLES: [&'static str; 1] = ["print"];
 
 pub fn run_root<'value>(
     file_name: &'value str,
-    root_node_list: &'value Vec<Box<Node>>,
+    root_node: &'value LibraryDeclaration,
     source: &'value str,
 ) -> PyObject<'value> {
     let mut global_context = GlobalContext {
@@ -38,10 +39,15 @@ pub fn run_root<'value>(
         source: source,
     };
 
+    // 0番目の定数にNoneを追加
     compiler.context.push_const(PyObject::None(false));
 
-    for node in root_node_list {
-        compiler.compile(node);
+    for node in &root_node.import_list {
+        compiler.compile_import(node);
+    }
+
+    for node in &root_node.top_level_declaration_list {
+        compiler.compile(&node);
     }
 
     // main関数を実行
@@ -172,6 +178,120 @@ pub fn run_function<'ctx, 'value, 'cpl>(
 }
 
 impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
+    fn compile_import(&mut self, node: &'value LibraryImport) {
+        let uri = self.span_to_str(&node.uri);
+        let len = uri.len();
+        let uri = &uri[1..len - 1];
+
+        let identifier = match &node.identifier {
+            Some(v) => {
+                if let Node::Identifier { span } = **v {
+                    Some(self.span_to_str(&span))
+                } else { None }
+            },
+            None => None
+        };
+
+        // uri形式
+        // import A.B as C
+        // → import "py:A/B" as C;
+        // from ..A.B import C as D
+        // → import "py:../A/B/C" as D;
+        if !uri.starts_with("py:") {
+            panic!("invalid import uri: {}", uri);
+        }
+
+        let mut splitted: Vec<&str> = uri.split(':').collect();
+        if splitted.len() != 2 {
+            panic!("invalid import uri: {}", uri);
+        }
+        let mut path_splitted: Vec<&str> = splitted[1].split("/").collect();
+
+        if splitted[1].starts_with(".") {
+            // 相対パスの場合
+
+            // ドットの数を積む
+            let dot_len = path_splitted[0].len();
+            let p = self.context.const_len() as u8;
+            self.context.push_const(PyObject::Int(dot_len as i32, false));
+            self.byte_operations.borrow_mut().push(OpCode::LoadConst(p));
+            splitted.remove(0);
+
+            // 最後尾のモジュールをタプルで積む
+            let import_mod = path_splitted.pop().unwrap();
+            let import_mod_p = self.context.const_len() as u8;
+            self.context.push_const(PyObject::SmallTuple { 
+                children: vec![PyObject::new_string(import_mod, false)], 
+                add_ref: false });
+            self.byte_operations.borrow_mut().push(OpCode::LoadConst(import_mod_p));
+
+            // 名前でインポート
+            let import_name = splitted[1];
+            let import_name = &import_name[(dot_len+1)..];
+            let p = self.context.register_or_get_name(&import_name);
+            self.byte_operations.borrow_mut().push(OpCode::ImportName(p));
+
+            // インポート先のモジュール
+            self.byte_operations.borrow_mut().push(OpCode::ImportFrom(import_mod_p));
+
+            // 格納先
+            let store_name = match identifier {
+                Some(v) => v,
+                None => import_mod
+            };
+            let store_name_p = self.context.declare_variable(store_name);
+            self.byte_operations.borrow_mut().push(OpCode::StoreName(store_name_p));
+            self.byte_operations.borrow_mut().push(OpCode::PopTop);
+        }
+        else {
+            // 0を積む
+            let p = self.context.const_len() as u8;
+            self.context.push_const(PyObject::Int(0, false));
+            self.byte_operations.borrow_mut().push(OpCode::LoadConst(p));
+            
+            // Noneを積む
+            let p = self.context.const_len() as u8;
+            self.context.push_const(PyObject::None(false));
+            self.byte_operations.borrow_mut().push(OpCode::LoadConst(p));
+
+            // 名前でインポート
+            let import_name = splitted[1];
+            let import_name_p = self.context.register_or_get_name(&import_name);
+            self.byte_operations.borrow_mut().push(OpCode::ImportName(import_name_p));
+
+            match identifier {
+                None => {
+                    // import A.B
+                    let store_name = path_splitted[0];
+                    let store_name_p = self.context.declare_variable(store_name);
+                    self.byte_operations.borrow_mut().push(OpCode::StoreName(store_name_p));
+                },
+                Some(v) => {
+                    if path_splitted.len() == 1 {
+                        // import A as B
+                        let p = self.context.declare_variable(v);
+                        self.byte_operations.borrow_mut().push(OpCode::StoreName(p));
+                    }
+                    else {
+                        // import A.B.C as D
+                        let second_name = path_splitted[1];
+                        let p = self.context.register_or_get_name(second_name);
+                        self.byte_operations.borrow_mut().push(OpCode::ImportFrom(p));
+                        for i in 2..path_splitted.len() {
+                            self.byte_operations.borrow_mut().push(OpCode::RotTwo);
+                            self.byte_operations.borrow_mut().push(OpCode::PopTop);
+                            let p = self.context.register_or_get_name(path_splitted[i]);
+                            self.byte_operations.borrow_mut().push(OpCode::ImportFrom(p));
+                        }
+                        let p = self.context.declare_variable(v);
+                        self.byte_operations.borrow_mut().push(OpCode::StoreName(p));
+                        self.byte_operations.borrow_mut().push(OpCode::PopTop);
+                    }
+                }
+            }
+        }        
+    }
+
     fn compile(&mut self, node: &'value Node) {
         match node {
             Node::BinaryExpression {
@@ -250,7 +370,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                                     }
                                 }
                                 VariableScope::Local => {
-                                    let p = self.context.register_or_get_name(value);
+                                    let p = self.context.get_local_variable(value);
                                     self.byte_operations.borrow_mut().push(OpCode::StoreFast(p));
                                 }
                                 VariableScope::NotDefined => {
@@ -273,6 +393,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                                     }
                                 }
                                 VariableScope::Local => {
+                                    let p = self.context.get_local_variable(value);
                                     self.byte_operations.borrow_mut().push(OpCode::LoadFast(p));
                                 }
                                 VariableScope::NotDefined => {
@@ -328,6 +449,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                                     }
                                 }
                                 VariableScope::Local => {
+                                    let p = self.context.get_local_variable(value);
                                     self.byte_operations.borrow_mut().push(OpCode::StoreFast(p));
                                 }
                                 VariableScope::NotDefined => {
@@ -383,6 +505,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                                     }
                                 }
                                 VariableScope::Local => {
+                                    let p = self.context.get_local_variable(value);
                                     self.byte_operations.borrow_mut().push(OpCode::LoadFast(p));
                                     let none_position = self.context.const_len() as u8;
                                     self.context.push_const(PyObject::None(false));
@@ -464,12 +587,41 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                         }
                     }
                     VariableScope::Local => {
-                        let p = self.context.register_or_get_name(value);
+                        let p = self.context.get_local_variable(value);
                         self.byte_operations.borrow_mut().push(OpCode::LoadFast(p));
                     }
                     VariableScope::NotDefined => {
                         panic!("{} is used before its declaration.", value);
                     }
+                }
+            }
+            Node::SelectorAttr { span: _, identifier } => {
+                if let Node::Identifier { span } = **identifier {
+                    let name = self.span_to_str(&span);
+                    let p = self.context.register_or_get_name(name);
+                    self.byte_operations.borrow_mut().push(OpCode::LoadAttr(p));
+                }
+                else {
+                    panic!("Invalid AST");
+                }
+            }
+            Node::SelectorMethod { span: _, identifier, arguments } => {
+                if let Node::Identifier { span } = **identifier {
+                    let name = self.span_to_str(&span);
+                    let p = self.context.register_or_get_name(name);
+                    self.byte_operations.borrow_mut().push(OpCode::LoadMethod(p));
+
+                    if let Node::Arguments { span:_, children } = &**arguments {
+                        for node in children {
+                            self.compile(node);
+                        }
+                        self.byte_operations
+                            .borrow_mut()
+                            .push(OpCode::CallMethod(children.len() as u8))
+                    }
+                }
+                else {
+                    panic!("Invalid AST");
                 }
             }
             Node::Arguments { span: _, children } => {
@@ -517,9 +669,10 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                                 .push(OpCode::StoreName(position));
                         } else {
                             // ローカル変数の場合
+                            let local_position = self.context.get_local_variable(value);
                             self.byte_operations
                                 .borrow_mut()
-                                .push(OpCode::StoreFast(position));
+                                .push(OpCode::StoreFast(local_position));
                         }
                     } else {
                         panic!("Invalid AST");

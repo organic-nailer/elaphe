@@ -1,9 +1,25 @@
 %start LibraryDeclaration
-%expect 1
+%expect 2
 %%
 
-LibraryDeclaration -> Result<Vec<Box<Node>>, ()>:
-    TopLevelDeclarationList { $1 }
+LibraryDeclaration -> Result<LibraryDeclaration, ()>:
+    LibraryImportList TopLevelDeclarationList { 
+        Ok(LibraryDeclaration { import_list: $1?, top_level_declaration_list: $2? })
+    }
+    ;
+
+LibraryImportList -> Result<Vec<LibraryImport>, ()>:
+      %empty { Ok(vec![]) }
+    | LibraryImportList LibraryImport { flatten($1, $2?) }
+    ;
+
+LibraryImport -> Result<LibraryImport, ()>:
+      "import" Uri ";" { Ok(LibraryImport { uri: $2?, identifier: None }) }
+    | "import" Uri "as" Identifier ";" { Ok(LibraryImport { uri: $2?, identifier: Some(Box::new($4?)) }) }
+    ;
+
+Uri -> Result<Span, ()>:
+    "STRING" { Ok($span) }
     ;
 
 TopLevelDeclarationList -> Result<Vec<Box<Node>>, ()>:
@@ -267,7 +283,12 @@ PostfixExpression -> Result<Node, ()>:
     ;
 
 Selector -> Result<Node, ()>:
-      Arguments { $1 };
+      Arguments { $1 }
+    | "." Identifier { Ok(Node::SelectorAttr { span: $span, identifier: Box::new($2?) }) }
+    | "." Identifier Arguments {
+        Ok(Node::SelectorMethod { span: $span, identifier: Box::new($2?), arguments: Box::new($3?) })
+    }
+    ;
 
 Arguments -> Result<Node, ()>:
       "(" ")" { Ok(Node::Arguments { span: $span, children: vec![] }) }
@@ -422,6 +443,27 @@ pub enum Node {
         parameters: Vec<FunctionParameter>,
         body: Box<Node>,
     },
+    SelectorAttr {
+        span: Span,
+        identifier: Box<Node>,
+    },
+    SelectorMethod {
+        span: Span,
+        identifier: Box<Node>,
+        arguments: Box<Node>,
+    }
+}
+
+#[derive(Debug)]
+pub struct LibraryDeclaration {
+    pub import_list: Vec<LibraryImport>,
+    pub top_level_declaration_list: Vec<Box<Node>>,
+}
+
+#[derive(Debug)]
+pub struct LibraryImport {
+    pub uri: Span,
+    pub identifier: Option<Box<Node>>,
 }
 
 #[derive(Debug)]

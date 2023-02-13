@@ -10,7 +10,7 @@ mod parser;
 mod pyobject;
 mod executioncontext;
 
-use crate::parser::Node;
+use crate::parser::LibraryDeclaration;
 
 pub fn run(output: &str, source: &str) -> Result<(),()> {
     let node = parser::parse(source);
@@ -55,9 +55,9 @@ fn write_header(file: &mut File) {
 fn write_root_py_code(
     file: &mut File,
     source: &str,
-    node_list: Vec<Box<Node>>,
+    node: LibraryDeclaration,
 ) {
-    let code = bytecompiler::run_root("main.py", &node_list, source);
+    let code = bytecompiler::run_root("main.py", &node, source);
 
     code.write(file);
 }
