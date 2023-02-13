@@ -23,7 +23,7 @@ pub fn run_root<'value>(
     file_name: &'value str,
     root_node: &'value LibraryDeclaration,
     source: &'value str,
-) -> PyObject<'value> {
+) -> PyObject {
     let mut global_context = GlobalContext {
         constant_list: vec![],
         name_list: vec![],
@@ -51,7 +51,7 @@ pub fn run_root<'value>(
     }
 
     // main関数を実行
-    let main_position = compiler.context.register_or_get_name("main");
+    let main_position = compiler.context.register_or_get_name("main".to_string());
     compiler
         .byte_operations
         .borrow_mut()
@@ -83,8 +83,8 @@ pub fn run_root<'value>(
     };
 
     PyObject::Code {
-        file_name: file_name,
-        code_name: "<module>",
+        file_name: file_name.to_string(),
+        code_name: "<module>".to_string(),
         num_args: 0,
         num_locals: 0,
         stack_size: stack_size,
@@ -103,7 +103,7 @@ pub fn run_function<'ctx, 'value, 'cpl>(
     outer_compiler: &'cpl ByteCompiler<'ctx, 'value>,
     body: &'value Node,
     source: &'value str,
-) -> PyObject<'value> {
+) -> PyObject {
     let mut py_context = PyContext {
         outer: outer_compiler.context,
         constant_list: vec![],
@@ -154,8 +154,8 @@ pub fn run_function<'ctx, 'value, 'cpl>(
     let operation_list = compiler.resolve_references();
 
     PyObject::Code {
-        file_name,
-        code_name,
+        file_name: file_name.to_string(),
+        code_name: code_name.to_string(),
         num_args,
         num_locals: py_context.local_variables.len() as u32,
         stack_size,
@@ -171,7 +171,7 @@ pub fn run_function<'ctx, 'value, 'cpl>(
         local_list: Box::new(PyObject::SmallTuple { children: py_context
             .local_variables
             .iter()
-            .map(|v| PyObject::new_string(v, false))
+            .map(|v| PyObject::new_string(v.to_string(), false))
             .collect(), add_ref: false }),
         add_ref: false,
     }
@@ -215,20 +215,18 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             let p = self.context.const_len() as u8;
             self.context.push_const(PyObject::Int(dot_len as i32, false));
             self.byte_operations.borrow_mut().push(OpCode::LoadConst(p));
-            splitted.remove(0);
+            path_splitted.remove(0);
 
             // 最後尾のモジュールをタプルで積む
             let import_mod = path_splitted.pop().unwrap();
             let import_mod_p = self.context.const_len() as u8;
             self.context.push_const(PyObject::SmallTuple { 
-                children: vec![PyObject::new_string(import_mod, false)], 
+                children: vec![PyObject::new_string(import_mod.to_string(), false)], 
                 add_ref: false });
             self.byte_operations.borrow_mut().push(OpCode::LoadConst(import_mod_p));
 
             // 名前でインポート
-            let import_name = splitted[1];
-            let import_name = &import_name[(dot_len+1)..];
-            let p = self.context.register_or_get_name(&import_name);
+            let p = self.context.register_or_get_name(path_splitted.join("."));
             self.byte_operations.borrow_mut().push(OpCode::ImportName(p));
 
             // インポート先のモジュール
@@ -255,8 +253,8 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             self.byte_operations.borrow_mut().push(OpCode::LoadConst(p));
 
             // 名前でインポート
-            let import_name = splitted[1];
-            let import_name_p = self.context.register_or_get_name(&import_name);
+            let import_name = path_splitted.join(".");
+            let import_name_p = self.context.register_or_get_name(import_name);
             self.byte_operations.borrow_mut().push(OpCode::ImportName(import_name_p));
 
             match identifier {
@@ -274,13 +272,13 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     }
                     else {
                         // import A.B.C as D
-                        let second_name = path_splitted[1];
+                        let second_name = path_splitted[1].to_string();
                         let p = self.context.register_or_get_name(second_name);
                         self.byte_operations.borrow_mut().push(OpCode::ImportFrom(p));
                         for i in 2..path_splitted.len() {
                             self.byte_operations.borrow_mut().push(OpCode::RotTwo);
                             self.byte_operations.borrow_mut().push(OpCode::PopTop);
-                            let p = self.context.register_or_get_name(path_splitted[i]);
+                            let p = self.context.register_or_get_name(path_splitted[i].to_string());
                             self.byte_operations.borrow_mut().push(OpCode::ImportFrom(p));
                         }
                         let p = self.context.declare_variable(v);
@@ -358,12 +356,12 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                             match self.context.check_variable_scope(value) {
                                 VariableScope::Global => {
                                     if self.context.is_global() {
-                                        let p = self.context.register_or_get_name(value);
+                                        let p = self.context.register_or_get_name(value.to_string());
                                         self.byte_operations
                                             .borrow_mut()
                                             .push(OpCode::StoreName(p));
                                     } else {
-                                        let p = self.context.register_or_get_name(value);
+                                        let p = self.context.register_or_get_name(value.to_string());
                                         self.byte_operations
                                             .borrow_mut()
                                             .push(OpCode::StoreGlobal(p));
@@ -380,7 +378,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                         }
                         "*=" | "/=" | "~/=" | "%=" | "+=" | "-=" | "<<=" | ">>=" | "&=" | "^="
                         | "|=" => {
-                            let p = self.context.register_or_get_name(value);
+                            let p = self.context.register_or_get_name(value.to_string());
                             let scope = self.context.check_variable_scope(value);
                             match scope {
                                 VariableScope::Global => {
@@ -458,7 +456,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                             }
                         }
                         "??=" => {
-                            let p = self.context.register_or_get_name(value);
+                            let p = self.context.register_or_get_name(value.to_string());
                             let scope = self.context.check_variable_scope(value);
                             match scope {
                                 VariableScope::Global => {
@@ -552,7 +550,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 let value = &value[1..len - 1];
 
                 let const_position = self.context.const_len() as u8;
-                self.context.push_const(PyObject::new_string(value, false));
+                self.context.push_const(PyObject::new_string(value.to_string(), false));
                 self.byte_operations
                     .borrow_mut()
                     .push(OpCode::LoadConst(const_position));
@@ -577,10 +575,10 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 match self.context.check_variable_scope(value) {
                     VariableScope::Global => {
                         if self.context.is_global() {
-                            let p = self.context.register_or_get_name(value);
+                            let p = self.context.register_or_get_name(value.to_string());
                             self.byte_operations.borrow_mut().push(OpCode::LoadName(p));
                         } else {
-                            let p = self.context.register_or_get_name(value);
+                            let p = self.context.register_or_get_name(value.to_string());
                             self.byte_operations
                                 .borrow_mut()
                                 .push(OpCode::LoadGlobal(p));
@@ -598,7 +596,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             Node::SelectorAttr { span: _, identifier } => {
                 if let Node::Identifier { span } = **identifier {
                     let name = self.span_to_str(&span);
-                    let p = self.context.register_or_get_name(name);
+                    let p = self.context.register_or_get_name(name.to_string());
                     self.byte_operations.borrow_mut().push(OpCode::LoadAttr(p));
                 }
                 else {
@@ -608,7 +606,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             Node::SelectorMethod { span: _, identifier, arguments } => {
                 if let Node::Identifier { span } = **identifier {
                     let name = self.span_to_str(&span);
-                    let p = self.context.register_or_get_name(name);
+                    let p = self.context.register_or_get_name(name.to_string());
                     self.byte_operations.borrow_mut().push(OpCode::LoadMethod(p));
 
                     if let Node::Arguments { span:_, children } = &**arguments {
@@ -720,7 +718,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
 
                     // 関数名の読み込み
                     let position = self.context.const_len() as u8;
-                    self.context.push_const(PyObject::new_string(name, false));
+                    self.context.push_const(PyObject::new_string(name.to_string(), false));
                     self.byte_operations
                         .borrow_mut()
                         .push(OpCode::LoadConst(position));

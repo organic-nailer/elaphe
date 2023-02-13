@@ -3,16 +3,16 @@ use std::collections::HashMap;
 use crate::pyobject::PyObject;
 
 pub struct GlobalContext<'value> {
-    pub constant_list: Vec<PyObject<'value>>,
-    pub name_list: Vec<PyObject<'value>>,
-    pub name_map: HashMap<&'value str, u8>,
+    pub constant_list: Vec<PyObject>,
+    pub name_list: Vec<PyObject>,
+    pub name_map: HashMap<String, u8>,
     pub global_variables: Vec<&'value str>,
 }
 pub struct PyContext<'ctx, 'value> {
     pub outer: &'ctx dyn ExecutionContext<'value>,
-    pub constant_list: Vec<PyObject<'value>>,
-    pub name_list: Vec<PyObject<'value>>,
-    pub name_map: HashMap<&'value str, u8>,
+    pub constant_list: Vec<PyObject>,
+    pub name_list: Vec<PyObject>,
+    pub name_map: HashMap<String, u8>,
     pub local_variables: Vec<&'value str>,
 }
 pub struct BlockContext<'ctx, 'value> {
@@ -21,18 +21,18 @@ pub struct BlockContext<'ctx, 'value> {
 }
 
 pub trait ExecutionContext<'value> {
-    fn push_const(&mut self, value: PyObject<'value>);
+    fn push_const(&mut self, value: PyObject);
     fn const_len(&self) -> usize;
     // return: (name_position, variable_position)
     fn declare_variable(&mut self, symbol: &'value str) -> u8;
     fn get_local_variable(&self, symbol: &'value str) -> u8;
     fn check_variable_scope(&self, symbol: &str) -> VariableScope;
-    fn register_or_get_name(&mut self, name: &'value str) -> u8;
+    fn register_or_get_name(&mut self, name: String) -> u8;
     fn is_global(&self) -> bool;
 }
 
 impl<'value> ExecutionContext<'value> for GlobalContext<'value> {
-    fn push_const(&mut self, value: PyObject<'value>) {
+    fn push_const(&mut self, value: PyObject) {
         self.constant_list.push(value);
     }
 
@@ -43,9 +43,9 @@ impl<'value> ExecutionContext<'value> for GlobalContext<'value> {
     fn declare_variable(&mut self, symbol: &'value str) -> u8 {
         // グローバル変数の定義
         let position = self.name_list.len() as u8;
-        let obj = PyObject::new_string(symbol, false);
+        let obj = PyObject::new_string(symbol.to_string(), false);
         self.name_list.push(obj);
-        self.name_map.insert(symbol, position);
+        self.name_map.insert(symbol.to_string(), position);
         self.global_variables.push(symbol);
         position
     }
@@ -62,12 +62,12 @@ impl<'value> ExecutionContext<'value> for GlobalContext<'value> {
         }
     }
 
-    fn register_or_get_name(&mut self, name: &'value str) -> u8 {
-        match self.name_map.get(name) {
+    fn register_or_get_name(&mut self, name: String) -> u8 {
+        match self.name_map.get(&name) {
             Some(v) => *v,
             None => {
                 let position = self.name_list.len() as u8;
-                let obj = PyObject::new_string(name, false);
+                let obj = PyObject::new_string(name.to_string(), false);
                 self.name_list.push(obj);
                 self.name_map.insert(name, position);
                 position
@@ -79,7 +79,7 @@ impl<'value> ExecutionContext<'value> for GlobalContext<'value> {
 }
 
 impl<'ctx, 'value> ExecutionContext<'value> for PyContext<'ctx, 'value> {
-    fn push_const(&mut self, value: PyObject<'value>) {
+    fn push_const(&mut self, value: PyObject) {
         self.constant_list.push(value);
     }
 
@@ -90,9 +90,9 @@ impl<'ctx, 'value> ExecutionContext<'value> for PyContext<'ctx, 'value> {
     fn declare_variable(&mut self, symbol: &'value str) -> u8 {
         // ローカル変数の定義
         let position = self.name_list.len() as u8;
-        let obj = PyObject::new_string(symbol, false);
+        let obj = PyObject::new_string(symbol.to_string(), false);
         self.name_list.push(obj);
-        self.name_map.insert(symbol, position);
+        self.name_map.insert(symbol.to_string(), position);
 
         self.local_variables.push(symbol);
         position
@@ -106,12 +106,12 @@ impl<'ctx, 'value> ExecutionContext<'value> for PyContext<'ctx, 'value> {
         self.outer.check_variable_scope(symbol)
     }
 
-    fn register_or_get_name(&mut self, name: &'value str) -> u8 {
-        match self.name_map.get(name) {
+    fn register_or_get_name(&mut self, name: String) -> u8 {
+        match self.name_map.get(&name) {
             Some(v) => *v,
             None => {
                 let position = self.name_list.len() as u8;
-                let obj = PyObject::new_string(name, false);
+                let obj = PyObject::new_string(name.to_string(), false);
                 self.name_list.push(obj);
                 self.name_map.insert(name, position);
                 position
@@ -123,7 +123,7 @@ impl<'ctx, 'value> ExecutionContext<'value> for PyContext<'ctx, 'value> {
 }
 
 impl<'ctx, 'value> ExecutionContext<'value> for BlockContext<'ctx, 'value> {
-    fn push_const(&mut self, value: PyObject<'value>) {
+    fn push_const(&mut self, value: PyObject) {
         self.outer.push_const(value);
     }
 
@@ -149,7 +149,7 @@ impl<'ctx, 'value> ExecutionContext<'value> for BlockContext<'ctx, 'value> {
         }
     }
 
-    fn register_or_get_name(&mut self, name: &'value str) -> u8 {
+    fn register_or_get_name(&mut self, name: String) -> u8 {
         self.outer.register_or_get_name(name)
     }
 

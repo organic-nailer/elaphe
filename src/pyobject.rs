@@ -3,35 +3,35 @@ use std::{fs::File, io::Write};
 use crate::bytecode::{self, ByteCode};
 
 #[allow(dead_code)]
-pub enum PyObject<'a> {
+pub enum PyObject {
     Int(i32, bool),
     Float(f64, bool),
-    String(&'a [u8], bool), // 文字列ではなくバイト列に利用
-    Ascii(&'a str, bool),
-    AsciiShort(&'a str, bool),
-    Unicode(&'a str, bool),
+    String(Vec<u8>, bool), // 文字列ではなくバイト列に利用
+    Ascii(String, bool),
+    AsciiShort(String, bool),
+    Unicode(String, bool),
     None(bool),
     True(bool),
     False(bool),
     SmallTuple {
-        children: Vec<PyObject<'a>>,
+        children: Vec<PyObject>,
         add_ref: bool,
     },
     Code {
-        file_name: &'a str,
-        code_name: &'a str,
+        file_name: String,
+        code_name: String,
         num_args: u32,
         num_locals: u32,
         stack_size: u32,
         operation_list: Vec<ByteCode>,
-        constant_list: Box<PyObject<'a>>,
-        name_list: Box<PyObject<'a>>,
-        local_list: Box<PyObject<'a>>,
+        constant_list: Box<PyObject>,
+        name_list: Box<PyObject>,
+        local_list: Box<PyObject>,
         add_ref: bool,
     },
 }
 
-impl PyObject<'_> {
+impl PyObject {
     pub fn new_numeric(value: &str, add_ref: bool) -> PyObject {
         if value.starts_with("0x") || value.starts_with("0X") {
             // 16進数の場合
@@ -52,11 +52,11 @@ impl PyObject<'_> {
         }
     }
 
-    pub fn new_bytes(value: &[u8], add_ref: bool) -> PyObject {
+    pub fn new_bytes(value: Vec<u8>, add_ref: bool) -> PyObject {
         PyObject::String(value, add_ref)
     }
 
-    pub fn new_string(value: &str, add_ref: bool) -> PyObject {
+    pub fn new_string(value: String, add_ref: bool) -> PyObject {
         if value.is_ascii() {
             if value.len() < 256 {
                 PyObject::AsciiShort(value, add_ref)
@@ -77,7 +77,7 @@ impl PyObject<'_> {
     }
 }
 
-impl PyObject<'_> {
+impl PyObject {
     pub fn write(&self, file: &mut File) {
         let object_type = self.get_object_type();
         file.write(&[object_type]).unwrap();
@@ -131,7 +131,7 @@ impl PyObject<'_> {
 
                 // コードをコンパイルして格納
                 let codes = bytecode::compile_code(&operation_list);
-                PyObject::new_bytes(&codes, false).write(file);
+                PyObject::new_bytes(codes, false).write(file);
 
                 // 定数一覧
                 constant_list.write(file);
@@ -157,17 +157,17 @@ impl PyObject<'_> {
                 .write(file);
 
                 // ファイル名
-                PyObject::new_string(file_name, true).write(file);
+                PyObject::new_string(file_name.to_string(), true).write(file);
 
                 // 名前
-                PyObject::new_string(code_name, true).write(file);
+                PyObject::new_string(code_name.to_string(), true).write(file);
 
                 // first line
                 file.write(&(1u32).to_le_bytes()).unwrap();
 
                 // line table
                 // StackTraceに使われるが、仕様が不明なので0埋め
-                PyObject::new_bytes(&(0u32).to_le_bytes(), true).write(file);
+                PyObject::new_bytes((0u32).to_le_bytes().to_vec(), true).write(file);
             }
             PyObject::None(_) | PyObject::True(_) | PyObject::False(_) => (),
         };
