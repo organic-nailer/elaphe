@@ -353,6 +353,8 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     match *operator {
                         "=" => {
                             self.compile(right);
+                            // DartではAssignment Expressionが代入先の最終的な値を残す
+                            self.byte_operations.borrow_mut().push(OpCode::DupTop);
                             match self.context.check_variable_scope(value) {
                                 VariableScope::Global => {
                                     if self.context.is_global() {
@@ -434,6 +436,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                                 "|=" => self.byte_operations.borrow_mut().push(OpCode::InplaceOr),
                                 _ => (),
                             }
+                            self.byte_operations.borrow_mut().push(OpCode::DupTop);
                             match scope {
                                 VariableScope::Global => {
                                     if self.context.is_global() {
@@ -462,6 +465,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                                 VariableScope::Global => {
                                     if self.context.is_global() {
                                         self.byte_operations.borrow_mut().push(OpCode::LoadName(p));
+                                        self.byte_operations.borrow_mut().push(OpCode::DupTop);
                                         let none_position = self.context.const_len() as u8;
                                         self.context.push_const(PyObject::None(false));
                                         self.byte_operations
@@ -474,7 +478,9 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                                         self.byte_operations
                                             .borrow_mut()
                                             .push(OpCode::PopJumpIfFalse(label_end));
+                                        self.byte_operations.borrow_mut().push(OpCode::PopTop);
                                         self.compile(right);
+                                        self.byte_operations.borrow_mut().push(OpCode::DupTop);
                                         self.byte_operations
                                             .borrow_mut()
                                             .push(OpCode::StoreName(p));
@@ -483,6 +489,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                                         self.byte_operations
                                             .borrow_mut()
                                             .push(OpCode::LoadGlobal(p));
+                                        self.byte_operations.borrow_mut().push(OpCode::DupTop);
                                         let none_position = self.context.const_len() as u8;
                                         self.context.push_const(PyObject::None(false));
                                         self.byte_operations
@@ -495,7 +502,9 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                                         self.byte_operations
                                             .borrow_mut()
                                             .push(OpCode::PopJumpIfFalse(label_end));
+                                        self.byte_operations.borrow_mut().push(OpCode::PopTop);
                                         self.compile(right);
+                                        self.byte_operations.borrow_mut().push(OpCode::DupTop);
                                         self.byte_operations
                                             .borrow_mut()
                                             .push(OpCode::StoreGlobal(p));
@@ -505,6 +514,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                                 VariableScope::Local => {
                                     let p = self.context.get_local_variable(value);
                                     self.byte_operations.borrow_mut().push(OpCode::LoadFast(p));
+                                    self.byte_operations.borrow_mut().push(OpCode::DupTop);
                                     let none_position = self.context.const_len() as u8;
                                     self.context.push_const(PyObject::None(false));
                                     self.byte_operations
@@ -517,7 +527,9 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                                     self.byte_operations
                                         .borrow_mut()
                                         .push(OpCode::PopJumpIfFalse(label_end));
+                                    self.byte_operations.borrow_mut().push(OpCode::PopTop);
                                     self.compile(right);
+                                    self.byte_operations.borrow_mut().push(OpCode::DupTop);
                                     self.byte_operations.borrow_mut().push(OpCode::StoreFast(p));
                                     self.set_jump_label_value(label_end);
                                 }
@@ -528,8 +540,6 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                         }
                         _ => panic!("Unknown assignment operator: {}", value),
                     }
-                    // Expressionはスタックになにか残しておきたいので積む
-                    self.byte_operations.borrow_mut().push(OpCode::LoadConst(0));
                 } else {
                     panic!("Invalid AST. Assignment lhs must be an identifier.");
                 }

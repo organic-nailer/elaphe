@@ -8,6 +8,7 @@ pub struct ByteCode {
 pub enum OpCode {
     PopTop,
     RotTwo,
+    DupTop,
     UnaryNegative,
     UnaryNot,
     UnaryInvert,
@@ -75,6 +76,7 @@ impl OpCode {
         match *self {
             OpCode::PopTop => 1,
             OpCode::RotTwo => 2,
+            OpCode::DupTop => 4,
             OpCode::UnaryNegative => 11,
             OpCode::UnaryNot => 12,
             OpCode::UnaryInvert => 15,
@@ -169,6 +171,8 @@ impl OpCode {
     pub fn stack_effect(&self, _jump: bool) -> i32 {
         match *self {
             OpCode::PopTop => -1,
+
+            OpCode::DupTop => 1,
             
             OpCode::UnaryNegative |
             OpCode::UnaryNot |
