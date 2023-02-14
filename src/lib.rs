@@ -6,13 +6,13 @@ use std::time::SystemTime;
 
 mod bytecode;
 mod bytecompiler;
+mod executioncontext;
 mod parser;
 mod pyobject;
-mod executioncontext;
 
 use crate::parser::LibraryDeclaration;
 
-pub fn run(output: &str, source: &str) -> Result<(),()> {
+pub fn run(output: &str, source: &str) -> Result<(), ()> {
     let node = parser::parse(source);
     if node.is_err() {
         println!("{:?}", node.err());
@@ -52,11 +52,7 @@ fn write_header(file: &mut File) {
     file.write(&(file_size.to_le_bytes())).unwrap();
 }
 
-fn write_root_py_code(
-    file: &mut File,
-    source: &str,
-    node: LibraryDeclaration,
-) {
+fn write_root_py_code(file: &mut File, source: &str, node: LibraryDeclaration) {
     let code = bytecompiler::run_root("main.py", &node, source);
 
     code.write(file);

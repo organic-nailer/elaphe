@@ -103,7 +103,10 @@ impl PyObject {
                 file.write(&[str_len]).unwrap();
                 file.write(v.as_bytes()).unwrap();
             }
-            PyObject::SmallTuple { children, add_ref:_ } => {
+            PyObject::SmallTuple {
+                children,
+                add_ref: _,
+            } => {
                 let tuple_len = children.len() as u8;
                 file.write(&[tuple_len]).unwrap();
                 for child in children {
@@ -120,7 +123,7 @@ impl PyObject {
                 constant_list,
                 name_list,
                 local_list,
-                add_ref:_,
+                add_ref: _,
             } => {
                 file.write(&(num_args.to_le_bytes())).unwrap(); // ArgCount
                 file.write(&(0u32.to_le_bytes())).unwrap(); // PosOnlyArgCount

@@ -23,7 +23,6 @@ pub struct BlockContext<'ctx, 'value> {
 pub trait ExecutionContext<'value> {
     fn push_const(&mut self, value: PyObject);
     fn const_len(&self) -> usize;
-    // return: (name_position, variable_position)
     fn declare_variable(&mut self, symbol: &'value str) -> u8;
     fn get_local_variable(&self, symbol: &'value str) -> u8;
     fn check_variable_scope(&self, symbol: &str) -> VariableScope;
@@ -50,7 +49,7 @@ impl<'value> ExecutionContext<'value> for GlobalContext<'value> {
         position
     }
 
-    fn get_local_variable(&self, symbol: &'value str) -> u8 {
+    fn get_local_variable(&self, _symbol: &'value str) -> u8 {
         panic!("Not Implemented");
     }
 
@@ -75,7 +74,9 @@ impl<'value> ExecutionContext<'value> for GlobalContext<'value> {
         }
     }
 
-    fn is_global(&self) -> bool { true }
+    fn is_global(&self) -> bool {
+        true
+    }
 }
 
 impl<'ctx, 'value> ExecutionContext<'value> for PyContext<'ctx, 'value> {
@@ -99,7 +100,10 @@ impl<'ctx, 'value> ExecutionContext<'value> for PyContext<'ctx, 'value> {
     }
 
     fn get_local_variable(&self, symbol: &'value str) -> u8 {
-        self.local_variables.iter().position(|v| *v == symbol).unwrap() as u8
+        self.local_variables
+            .iter()
+            .position(|v| *v == symbol)
+            .unwrap() as u8
     }
 
     fn check_variable_scope(&self, symbol: &str) -> VariableScope {
@@ -119,7 +123,9 @@ impl<'ctx, 'value> ExecutionContext<'value> for PyContext<'ctx, 'value> {
         }
     }
 
-    fn is_global(&self) -> bool { false }
+    fn is_global(&self) -> bool {
+        false
+    }
 }
 
 impl<'ctx, 'value> ExecutionContext<'value> for BlockContext<'ctx, 'value> {
@@ -153,7 +159,9 @@ impl<'ctx, 'value> ExecutionContext<'value> for BlockContext<'ctx, 'value> {
         self.outer.register_or_get_name(name)
     }
 
-    fn is_global(&self) -> bool { false }
+    fn is_global(&self) -> bool {
+        false
+    }
 }
 
 pub enum VariableScope {

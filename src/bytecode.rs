@@ -65,7 +65,7 @@ impl OpCode {
             "!=" => 3,
             ">" => 4,
             ">=" => 5,
-            _ => panic!("Unknown compare op: {}", op)
+            _ => panic!("Unknown compare op: {}", op),
         };
         OpCode::CompareOp(operand)
     }
@@ -125,45 +125,39 @@ impl OpCode {
         }
     }
 
-    pub fn resolve(&self, label_table: &HashMap<u32,u8>) -> ByteCode {
+    pub fn resolve(&self, label_table: &HashMap<u32, u8>) -> ByteCode {
         match *self {
             // OpCode::JumpForward(v) |
             // OpCode::JumpIfFalseOrPop(v) |
             // OpCode::JumpIfTrueOrPop(v) |
-            OpCode::JumpAbsolute(v) |
-            OpCode::PopJumpIfFalse(v) |
-            OpCode::PopJumpIfTrue(v) => {
+            OpCode::JumpAbsolute(v) | OpCode::PopJumpIfFalse(v) | OpCode::PopJumpIfTrue(v) => {
                 let operand = *label_table.get(&v).unwrap();
                 ByteCode {
                     operation: self.get_value(),
-                    operand: operand
-                }
-            },
-            OpCode::StoreName(v) |
-            OpCode::LoadConst(v) |
-            OpCode::LoadName(v) |
-            OpCode::LoadGlobal(v) |
-            OpCode::StoreGlobal(v) |
-            OpCode::LoadFast(v) |
-            OpCode::StoreFast(v) |
-            OpCode::CallFunction(v) |
-            OpCode::LoadAttr(v) |
-            OpCode::CompareOp(v) |
-            OpCode::ImportName(v) |
-            OpCode::ImportFrom(v) |
-            OpCode::LoadMethod(v) |
-            OpCode::CallMethod(v) => {
-                ByteCode {
-                    operation: self.get_value(),
-                    operand: v
-                }
-            },
-            _ => {
-                ByteCode {
-                    operation: self.get_value(),
-                    operand: 0
+                    operand: operand,
                 }
             }
+            OpCode::StoreName(v)
+            | OpCode::LoadConst(v)
+            | OpCode::LoadName(v)
+            | OpCode::LoadGlobal(v)
+            | OpCode::StoreGlobal(v)
+            | OpCode::LoadFast(v)
+            | OpCode::StoreFast(v)
+            | OpCode::CallFunction(v)
+            | OpCode::LoadAttr(v)
+            | OpCode::CompareOp(v)
+            | OpCode::ImportName(v)
+            | OpCode::ImportFrom(v)
+            | OpCode::LoadMethod(v)
+            | OpCode::CallMethod(v) => ByteCode {
+                operation: self.get_value(),
+                operand: v,
+            },
+            _ => ByteCode {
+                operation: self.get_value(),
+                operand: 0,
+            },
         }
     }
 
@@ -173,62 +167,54 @@ impl OpCode {
             OpCode::PopTop => -1,
 
             OpCode::DupTop => 1,
-            
-            OpCode::UnaryNegative |
-            OpCode::UnaryNot |
-            OpCode::UnaryInvert |
-            OpCode::RotTwo => 0,
 
-            OpCode::BinaryAdd |
-            OpCode::BinaryMultiply |
-            OpCode::BinarySubtract |
-            OpCode::BinaryTrueDivide |
-            OpCode::BinaryLShift |
-            OpCode::BinaryRShift |
-            OpCode::BinaryAnd |
-            OpCode::BinaryXor |
-            OpCode::BinaryOr |
-            OpCode::InplaceFloorDivide |
-            OpCode::InplaceTrueDivide |
-            OpCode::InplaceAdd |
-            OpCode::InplaceSubtract |
-            OpCode::InplaceMultiply |
-            OpCode::InplaceModulo |
-            OpCode::InplaceLShift |
-            OpCode::InplaceRShift |
-            OpCode::InplaceAnd |
-            OpCode::InplaceXor |
-            OpCode::InplaceOr |
-            OpCode::CompareOp(_) => -1,
+            OpCode::UnaryNegative | OpCode::UnaryNot | OpCode::UnaryInvert | OpCode::RotTwo => 0,
+
+            OpCode::BinaryAdd
+            | OpCode::BinaryMultiply
+            | OpCode::BinarySubtract
+            | OpCode::BinaryTrueDivide
+            | OpCode::BinaryLShift
+            | OpCode::BinaryRShift
+            | OpCode::BinaryAnd
+            | OpCode::BinaryXor
+            | OpCode::BinaryOr
+            | OpCode::InplaceFloorDivide
+            | OpCode::InplaceTrueDivide
+            | OpCode::InplaceAdd
+            | OpCode::InplaceSubtract
+            | OpCode::InplaceMultiply
+            | OpCode::InplaceModulo
+            | OpCode::InplaceLShift
+            | OpCode::InplaceRShift
+            | OpCode::InplaceAnd
+            | OpCode::InplaceXor
+            | OpCode::InplaceOr
+            | OpCode::CompareOp(_) => -1,
 
             OpCode::ImportName(_) => -1,
             OpCode::ImportFrom(_) => 1,
 
-            OpCode::StoreGlobal(_) |
-            OpCode::StoreFast(_) |
-            OpCode::StoreName(_) => -1,
+            OpCode::StoreGlobal(_) | OpCode::StoreFast(_) | OpCode::StoreName(_) => -1,
 
             OpCode::ReturnValue => -1,
 
-            OpCode::LoadConst(_) |
-            OpCode::LoadName(_) |
-            OpCode::LoadFast(_) |
-            OpCode::LoadGlobal(_) => 1,
-            
-            OpCode::CallMethod(n) |
-            OpCode::CallFunction(n) => -(n as i32),
+            OpCode::LoadConst(_)
+            | OpCode::LoadName(_)
+            | OpCode::LoadFast(_)
+            | OpCode::LoadGlobal(_) => 1,
+
+            OpCode::CallMethod(n) | OpCode::CallFunction(n) => -(n as i32),
 
             // OpCode::JumpForward(_) |
             OpCode::JumpAbsolute(_) => 0,
             // OpCode::JumpIfFalseOrPop(_) |
             // OpCode::JumpIfTrueOrPop(_) => if jump { 0 } else { -1 },
-            OpCode::PopJumpIfFalse(_) |
-            OpCode::PopJumpIfTrue(_) => -1,
+            OpCode::PopJumpIfFalse(_) | OpCode::PopJumpIfTrue(_) => -1,
 
             OpCode::MakeFunction => -1,
 
-            OpCode::LoadAttr(_) |
-            OpCode::LoadMethod(_) => 0,
+            OpCode::LoadAttr(_) | OpCode::LoadMethod(_) => 0,
         }
     }
 }
@@ -239,7 +225,7 @@ pub fn compile_code(operation_list: &[ByteCode]) -> Vec<u8> {
     let mut i = 0;
     for op in operation_list {
         result[i] = op.operation;
-        result[i+1] = op.operand;
+        result[i + 1] = op.operand;
         i += 2;
     }
     result
