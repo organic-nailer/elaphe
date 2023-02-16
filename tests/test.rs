@@ -394,3 +394,37 @@ fn import_libraries() {
         panic!("{:?}", result);
     }
 }
+
+#[test]
+fn conditional_expression() {
+    let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
+    let result = catch_unwind(|| {
+        elaphe::run(&output, "main() { var x = 1; print(x == 2 ? 10 : 20); }").expect("execution failed.");
+        exec_py_and_assert(&output, "20\n");
+        elaphe::run(&output, "main() { var x = 2; print(x == 2 ? 10 : 20); }").expect("execution failed.");
+        exec_py_and_assert(&output, "10\n");
+    });
+    clean(&output);
+    if result.is_err() {
+        panic!("{:?}", result);
+    }
+}
+
+#[test]
+fn logical_expression() {
+    let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
+    let result = catch_unwind(|| {
+        elaphe::run(&output, "main() { var x = 1; print(x == 1 && x == 2); }").expect("execution failed.");
+        exec_py_and_assert(&output, "False\n");
+        elaphe::run(&output, "main() { var x = 2; print(x == 1 || x == 2); }").expect("execution failed.");
+        exec_py_and_assert(&output, "True\n");
+        elaphe::run(&output, "main() { var x = null; print(x ?? 10); }").expect("execution failed.");
+        exec_py_and_assert(&output, "10\n");
+        elaphe::run(&output, "main() { var x = 1; print(x ?? 10); }").expect("execution failed.");
+        exec_py_and_assert(&output, "1\n");
+    });
+    clean(&output);
+    if result.is_err() {
+        panic!("{:?}", result);
+    }
+}

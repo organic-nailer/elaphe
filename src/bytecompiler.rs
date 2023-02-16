@@ -330,24 +330,70 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 left,
                 right,
             } => {
-                self.compile(left);
-                self.compile(right);
-                match *operator {
-                    "==" | "!=" | ">=" | ">" | "<=" | "<" => {
-                        self.push_op(OpCode::compare_op_from_str(operator))
-                    }
-                    "<<" => self.push_op(OpCode::BinaryLShift),
-                    ">>" => self.push_op(OpCode::BinaryRShift),
-                    "&" => self.push_op(OpCode::BinaryAnd),
-                    "^" => self.push_op(OpCode::BinaryXor),
-                    "|" => self.push_op(OpCode::BinaryOr),
-                    "+" => self.push_op(OpCode::BinaryAdd),
-                    "-" => self.push_op(OpCode::BinarySubtract),
-                    "*" => self.push_op(OpCode::BinaryMultiply),
-                    "/" => self.push_op(OpCode::BinaryTrueDivide),
-                    _ => panic!("unknown operator: {}", *operator),
+                if *operator == "??" {
+                    self.compile(left);
+                    self.push_op(OpCode::DupTop);
+                    let none_position = self.context_stack.last().unwrap().borrow().const_len() as u8;
+                    (**self.context_stack.last().unwrap())
+                        .borrow_mut()
+                        .push_const(PyObject::None(false));
+                    self.push_op(OpCode::LoadConst(none_position));
+                    self.push_op(OpCode::compare_op_from_str("=="));
+                    let label_end = self.gen_jump_label();
+                    self.push_op(OpCode::PopJumpIfFalse(label_end));
+                    self.push_op(OpCode::PopTop);
+                    self.compile(right);
+                    self.set_jump_label_value(label_end);
                 }
-            }
+                else if *operator == "||" {
+                    self.compile(left);
+                    self.push_op(OpCode::DupTop);
+                    let label_end = self.gen_jump_label();
+                    self.push_op(OpCode::PopJumpIfTrue(label_end));
+                    self.push_op(OpCode::PopTop);
+                    self.compile(right);
+                    self.set_jump_label_value(label_end);
+                }
+                else if *operator == "&&" {
+                    self.compile(left);
+                    self.push_op(OpCode::DupTop);
+                    let label_end = self.gen_jump_label();
+                    self.push_op(OpCode::PopJumpIfFalse(label_end));
+                    self.push_op(OpCode::PopTop);
+                    self.compile(right);
+                    self.set_jump_label_value(label_end);
+                }
+                else {
+                    self.compile(left);
+                    self.compile(right);
+                    match *operator {
+                        "==" | "!=" | ">=" | ">" | "<=" | "<" => {
+                            self.push_op(OpCode::compare_op_from_str(operator))
+                        }
+                        "<<" => self.push_op(OpCode::BinaryLShift),
+                        ">>" => self.push_op(OpCode::BinaryRShift),
+                        "&" => self.push_op(OpCode::BinaryAnd),
+                        "^" => self.push_op(OpCode::BinaryXor),
+                        "|" => self.push_op(OpCode::BinaryOr),
+                        "+" => self.push_op(OpCode::BinaryAdd),
+                        "-" => self.push_op(OpCode::BinarySubtract),
+                        "*" => self.push_op(OpCode::BinaryMultiply),
+                        "/" => self.push_op(OpCode::BinaryTrueDivide),
+                        _ => panic!("unknown operator: {}", *operator),
+                    }
+                }
+            },
+            Node::ConditionalExpression { span: _, condition, if_true_expr, if_false_expr } => {
+                let label_conditional_end = self.gen_jump_label();
+                let label_false_start = self.gen_jump_label();
+                self.compile(condition);
+                self.push_op(OpCode::PopJumpIfFalse(label_false_start));
+                self.compile(if_true_expr);
+                self.push_op(OpCode::JumpAbsolute(label_conditional_end));
+                self.set_jump_label_value(label_false_start);
+                self.compile(if_false_expr);
+                self.set_jump_label_value(label_conditional_end);
+            },
             Node::UnaryOpExpression {
                 span: _,
                 operator,

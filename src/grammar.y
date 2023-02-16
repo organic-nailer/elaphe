@@ -157,7 +157,7 @@ Expression -> Result<Node, ()>:
       AssignableExpression AssignmentOperator Expression {
         Ok(Node::AssignmentExpression { span: $span, operator: $2?, left: Box::new($1?), right: Box::new($3?) })
     }
-    | EqualityExpression { $1 }
+    | ConditionalExpression { $1 }
     ;
 
 AssignableExpression -> Result<Node, ()>:
@@ -183,6 +183,34 @@ AssignmentOperator -> Result<&'static str, ()>:
 ExpressionOpt -> Result<Option<Box<Node>>, ()>:
       %empty { Ok(None) }
     | Expression { Ok(Some(Box::new($1?))) }
+    ;
+
+ConditionalExpression -> Result<Node, ()>:
+      IfNullExpression { $1 }
+    | IfNullExpression "?" Expression ":" Expression {
+        Ok(Node::ConditionalExpression { span: $span, condition: Box::new($1?), if_true_expr: Box::new($3?), if_false_expr: Box::new($5?) })
+    }
+    ;
+
+IfNullExpression -> Result<Node, ()>:
+      LogicalOrExpression { $1 }
+    | IfNullExpression "??" LogicalOrExpression{
+        Ok(Node::BinaryExpression { span: $span, operator: "??", left: Box::new($1?), right: Box::new($3?) })
+    }
+    ;
+
+LogicalOrExpression -> Result<Node, ()>:
+      LogicalAndExpression { $1 }
+    | LogicalOrExpression "||" LogicalAndExpression{
+        Ok(Node::BinaryExpression { span: $span, operator: "||", left: Box::new($1?), right: Box::new($3?) })
+    }
+    ;
+
+LogicalAndExpression -> Result<Node, ()>:
+      EqualityExpression { $1 }
+    | LogicalAndExpression "&&" EqualityExpression{
+        Ok(Node::BinaryExpression { span: $span, operator: "&&", left: Box::new($1?), right: Box::new($3?) })
+    }
     ;
 
 EqualityExpression -> Result<Node, ()>:
@@ -361,6 +389,12 @@ pub enum Node {
         operator: &'static str,
         left: Box<Node>,
         right: Box<Node>,
+    },
+    ConditionalExpression {
+        span: Span,
+        condition: Box<Node>,
+        if_true_expr: Box<Node>,
+        if_false_expr: Box<Node>,
     },
     UnaryOpExpression {
         span: Span,
