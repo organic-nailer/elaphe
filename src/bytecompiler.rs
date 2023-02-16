@@ -1,3 +1,4 @@
+use std::rc::Rc;
 use std::{cell::RefCell, collections::HashMap};
 
 use cfgrammar::Span;
@@ -9,9 +10,9 @@ use crate::executioncontext::{
 use crate::parser::{LibraryDeclaration, LibraryImport};
 use crate::{bytecode::OpCode, parser::Node, pyobject::PyObject};
 
-pub struct ByteCompiler<'ctx, 'value> {
+pub struct ByteCompiler<'ctx, 'value: 'ctx> {
     pub byte_operations: RefCell<Vec<OpCode>>,
-    context: &'ctx mut dyn ExecutionContext<'value>,
+    context_stack: Vec<Rc<RefCell<dyn ExecutionContext<'value> + 'ctx>>>,
     jump_label_table: RefCell<HashMap<u32, u8>>,
     jump_label_key_index: RefCell<u32>,
     source: &'value str,
@@ -24,23 +25,23 @@ pub fn run_root<'value>(
     root_node: &'value LibraryDeclaration,
     source: &'value str,
 ) -> PyObject {
-    let mut global_context = GlobalContext {
+    let global_context = Rc::new(RefCell::new(GlobalContext {
         constant_list: vec![],
         name_list: vec![],
         name_map: HashMap::new(),
         global_variables: Vec::from(PREDEFINED_VARIABLES),
-    };
+    }));
 
     let mut compiler = ByteCompiler {
         byte_operations: RefCell::new(vec![]),
-        context: &mut global_context,
+        context_stack: vec![global_context.clone()],
         jump_label_table: RefCell::new(HashMap::new()),
         jump_label_key_index: RefCell::new(0),
         source,
     };
 
     // 0番目の定数にNoneを追加
-    compiler.context.push_const(PyObject::None(false));
+    (*global_context).borrow_mut().push_const(PyObject::None(false));
 
     for node in &root_node.import_list {
         compiler.compile_import(node);
@@ -51,7 +52,7 @@ pub fn run_root<'value>(
     }
 
     // main関数を実行
-    let main_position = compiler.context.register_or_get_name("main".to_string());
+    let main_position = (*global_context).borrow_mut().register_or_get_name("main".to_string());
     compiler.push_op(OpCode::LoadName(main_position));
     compiler.push_op(OpCode::CallFunction(0));
     compiler.push_op(OpCode::PopTop);
@@ -60,6 +61,11 @@ pub fn run_root<'value>(
 
     let stack_size = calc_stack_size(&compiler.byte_operations.borrow()) as u32;
     let operation_list = compiler.resolve_references();
+
+    compiler.context_stack.pop();
+    
+    // 所有が1箇所しかないはずなのでRcの外に出す
+    let global_context = Rc::try_unwrap(global_context).ok().unwrap().into_inner();
 
     let constant_list = PyObject::SmallTuple {
         children: global_context.constant_list,
@@ -95,27 +101,27 @@ pub fn run_function<'ctx, 'value, 'cpl>(
     body: &'value Node,
     source: &'value str,
 ) -> PyObject {
-    let mut py_context = PyContext {
-        outer: outer_compiler.context,
+    let py_context = Rc::new(RefCell::new(PyContext {
+        outer: outer_compiler.context_stack.last().unwrap().clone(),
         constant_list: vec![],
         name_list: vec![],
         name_map: HashMap::new(),
         local_variables: vec![],
-    };
+    }));
 
-    let mut block_context = BlockContext {
-        outer: &mut py_context,
+    let block_context = Rc::new(RefCell::new(BlockContext {
+        outer: py_context.clone(),
         variables: vec![],
-    };
+    }));
 
     let num_args = argument_list.len() as u32;
     for arg in argument_list {
-        block_context.declare_variable(arg);
+        (*block_context).borrow_mut().declare_variable(arg);
     }
 
     let mut compiler = ByteCompiler {
         byte_operations: RefCell::new(vec![]),
-        context: &mut block_context,
+        context_stack: vec![block_context.clone()],
         jump_label_table: RefCell::new(HashMap::new()),
         jump_label_key_index: RefCell::new(*outer_compiler.jump_label_key_index.borrow()),
         source,
@@ -126,10 +132,13 @@ pub fn run_function<'ctx, 'value, 'cpl>(
     // compiler.context_stack.borrow_mut().pop();
     // compiler.context_stack.borrow_mut().pop();
 
-    let none_position = compiler.context.const_len() as u8;
-    compiler.context.push_const(PyObject::None(false));
+    let none_position = block_context.borrow().const_len() as u8;
+    (*block_context).borrow_mut().push_const(PyObject::None(false));
     compiler.push_op(OpCode::LoadConst(none_position));
     compiler.push_op(OpCode::ReturnValue);
+
+    compiler.context_stack.pop();
+    drop(block_context);
 
     // outer_compilerへの情報の復帰
     *outer_compiler.jump_label_key_index.borrow_mut() = *compiler.jump_label_key_index.borrow();
@@ -137,6 +146,8 @@ pub fn run_function<'ctx, 'value, 'cpl>(
     // PyCodeの作成
     let stack_size = calc_stack_size(&compiler.byte_operations.borrow()) as u32;
     let operation_list = compiler.resolve_references();
+
+    let py_context = Rc::try_unwrap(py_context).ok().unwrap().into_inner();
 
     PyObject::Code {
         file_name: file_name.to_string(),
@@ -202,23 +213,24 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
 
             // ドットの数を積む
             let dot_len = path_splitted[0].len();
-            let p = self.context.const_len() as u8;
-            self.context
-                .push_const(PyObject::Int(dot_len as i32, false));
+            let p = self.context_stack.last().unwrap().borrow().const_len() as u8;
+            (**self.context_stack.last().unwrap()).borrow_mut().push_const(PyObject::Int(dot_len as i32, false));
+            // self.context_stack.last().unwrap().borrow()
+            //     .push_const(PyObject::Int(dot_len as i32, false));
             self.push_op(OpCode::LoadConst(p));
             path_splitted.remove(0);
 
             // 最後尾のモジュールをタプルで積む
             let import_mod = path_splitted.pop().unwrap();
-            let import_mod_p = self.context.const_len() as u8;
-            self.context.push_const(PyObject::SmallTuple {
+            let import_mod_p = self.context_stack.last().unwrap().borrow().const_len() as u8;
+            (**self.context_stack.last().unwrap()).borrow_mut().push_const(PyObject::SmallTuple {
                 children: vec![PyObject::new_string(import_mod.to_string(), false)],
                 add_ref: false,
             });
             self.push_op(OpCode::LoadConst(import_mod_p));
 
             // 名前でインポート
-            let p = self.context.register_or_get_name(path_splitted.join("."));
+            let p = (**self.context_stack.last().unwrap()).borrow_mut().register_or_get_name(path_splitted.join("."));
             self.push_op(OpCode::ImportName(p));
 
             // インポート先のモジュール
@@ -229,51 +241,50 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 Some(v) => v,
                 None => import_mod,
             };
-            let store_name_p = self.context.declare_variable(store_name);
+            let store_name_p = (**self.context_stack.last().unwrap()).borrow_mut().declare_variable(store_name);
             self.push_op(OpCode::StoreName(store_name_p));
             self.push_op(OpCode::PopTop);
         } else {
             // 0を積む
-            let p = self.context.const_len() as u8;
-            self.context.push_const(PyObject::Int(0, false));
+            let p = self.context_stack.last().unwrap().borrow().const_len() as u8;
+            (**self.context_stack.last().unwrap()).borrow_mut().push_const(PyObject::Int(0, false));
             self.push_op(OpCode::LoadConst(p));
 
             // Noneを積む
-            let p = self.context.const_len() as u8;
-            self.context.push_const(PyObject::None(false));
+            let p = self.context_stack.last().unwrap().borrow().const_len() as u8;
+            (**self.context_stack.last().unwrap()).borrow_mut().push_const(PyObject::None(false));
             self.push_op(OpCode::LoadConst(p));
 
             // 名前でインポート
             let import_name = path_splitted.join(".");
-            let import_name_p = self.context.register_or_get_name(import_name);
+            let import_name_p = (**self.context_stack.last().unwrap()).borrow_mut().register_or_get_name(import_name);
             self.push_op(OpCode::ImportName(import_name_p));
 
             match identifier {
                 None => {
                     // import A.B
                     let store_name = path_splitted[0];
-                    let store_name_p = self.context.declare_variable(store_name);
+                    let store_name_p = (**self.context_stack.last().unwrap()).borrow_mut().declare_variable(store_name);
                     self.push_op(OpCode::StoreName(store_name_p));
                 }
                 Some(v) => {
                     if path_splitted.len() == 1 {
                         // import A as B
-                        let p = self.context.declare_variable(v);
+                        let p = (**self.context_stack.last().unwrap()).borrow_mut().declare_variable(v);
                         self.push_op(OpCode::StoreName(p));
                     } else {
                         // import A.B.C as D
                         let second_name = path_splitted[1].to_string();
-                        let p = self.context.register_or_get_name(second_name);
+                        let p = (**self.context_stack.last().unwrap()).borrow_mut().register_or_get_name(second_name);
                         self.push_op(OpCode::ImportFrom(p));
                         for i in 2..path_splitted.len() {
                             self.push_op(OpCode::RotTwo);
                             self.push_op(OpCode::PopTop);
-                            let p = self
-                                .context
+                            let p = (**self.context_stack.last().unwrap()).borrow_mut()
                                 .register_or_get_name(path_splitted[i].to_string());
                             self.push_op(OpCode::ImportFrom(p));
                         }
-                        let p = self.context.declare_variable(v);
+                        let p = (**self.context_stack.last().unwrap()).borrow_mut().declare_variable(v);
                         self.push_op(OpCode::StoreName(p));
                         self.push_op(OpCode::PopTop);
                     }
@@ -334,20 +345,21 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                             self.compile(right);
                             // DartではAssignment Expressionが代入先の最終的な値を残す
                             self.push_op(OpCode::DupTop);
-                            match self.context.check_variable_scope(value) {
+                            let scope = self.context_stack.last().unwrap().borrow().check_variable_scope(value);
+                            match scope {
                                 VariableScope::Global => {
-                                    if self.context.is_global() {
+                                    if self.context_stack.last().unwrap().borrow().is_global() {
                                         let p =
-                                            self.context.register_or_get_name(value.to_string());
+                                            (**self.context_stack.last().unwrap()).borrow_mut().register_or_get_name(value.to_string());
                                         self.push_op(OpCode::StoreName(p));
                                     } else {
                                         let p =
-                                            self.context.register_or_get_name(value.to_string());
+                                            (**self.context_stack.last().unwrap()).borrow_mut().register_or_get_name(value.to_string());
                                         self.push_op(OpCode::StoreGlobal(p));
                                     }
                                 }
                                 VariableScope::Local => {
-                                    let p = self.context.get_local_variable(value);
+                                    let p = self.context_stack.last().unwrap().borrow().get_local_variable(value);
                                     self.push_op(OpCode::StoreFast(p));
                                 }
                                 VariableScope::NotDefined => {
@@ -357,18 +369,18 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                         }
                         "*=" | "/=" | "~/=" | "%=" | "+=" | "-=" | "<<=" | ">>=" | "&=" | "^="
                         | "|=" => {
-                            let p = self.context.register_or_get_name(value.to_string());
-                            let scope = self.context.check_variable_scope(value);
+                            let p = (**self.context_stack.last().unwrap()).borrow_mut().register_or_get_name(value.to_string());
+                            let scope = self.context_stack.last().unwrap().borrow().check_variable_scope(value);
                             match scope {
                                 VariableScope::Global => {
-                                    if self.context.is_global() {
+                                    if self.context_stack.last().unwrap().borrow().is_global() {
                                         self.push_op(OpCode::LoadName(p));
                                     } else {
                                         self.push_op(OpCode::LoadGlobal(p));
                                     }
                                 }
                                 VariableScope::Local => {
-                                    let p = self.context.get_local_variable(value);
+                                    let p = self.context_stack.last().unwrap().borrow().get_local_variable(value);
                                     self.push_op(OpCode::LoadFast(p));
                                 }
                                 VariableScope::NotDefined => {
@@ -393,14 +405,14 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                             self.push_op(OpCode::DupTop);
                             match scope {
                                 VariableScope::Global => {
-                                    if self.context.is_global() {
+                                    if self.context_stack.last().unwrap().borrow().is_global() {
                                         self.push_op(OpCode::StoreName(p));
                                     } else {
                                         self.push_op(OpCode::StoreGlobal(p));
                                     }
                                 }
                                 VariableScope::Local => {
-                                    let p = self.context.get_local_variable(value);
+                                    let p = self.context_stack.last().unwrap().borrow().get_local_variable(value);
                                     self.push_op(OpCode::StoreFast(p));
                                 }
                                 VariableScope::NotDefined => {
@@ -409,15 +421,15 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                             }
                         }
                         "??=" => {
-                            let p = self.context.register_or_get_name(value.to_string());
-                            let scope = self.context.check_variable_scope(value);
+                            let p = (**self.context_stack.last().unwrap()).borrow_mut().register_or_get_name(value.to_string());
+                            let scope = self.context_stack.last().unwrap().borrow().check_variable_scope(value);
                             match scope {
                                 VariableScope::Global => {
-                                    if self.context.is_global() {
+                                    if self.context_stack.last().unwrap().borrow().is_global() {
                                         self.push_op(OpCode::LoadName(p));
                                         self.push_op(OpCode::DupTop);
-                                        let none_position = self.context.const_len() as u8;
-                                        self.context.push_const(PyObject::None(false));
+                                        let none_position = self.context_stack.last().unwrap().borrow().const_len() as u8;
+                                        (**self.context_stack.last().unwrap()).borrow_mut().push_const(PyObject::None(false));
                                         self.push_op(OpCode::LoadConst(none_position));
                                         self.push_op(OpCode::compare_op_from_str("=="));
                                         let label_end = self.gen_jump_label();
@@ -430,8 +442,8 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                                     } else {
                                         self.push_op(OpCode::LoadGlobal(p));
                                         self.push_op(OpCode::DupTop);
-                                        let none_position = self.context.const_len() as u8;
-                                        self.context.push_const(PyObject::None(false));
+                                        let none_position = self.context_stack.last().unwrap().borrow().const_len() as u8;
+                                        (**self.context_stack.last().unwrap()).borrow_mut().push_const(PyObject::None(false));
                                         self.push_op(OpCode::LoadConst(none_position));
                                         self.push_op(OpCode::compare_op_from_str("=="));
                                         let label_end = self.gen_jump_label();
@@ -444,11 +456,11 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                                     }
                                 }
                                 VariableScope::Local => {
-                                    let p = self.context.get_local_variable(value);
+                                    let p = self.context_stack.last().unwrap().borrow().get_local_variable(value);
                                     self.push_op(OpCode::LoadFast(p));
                                     self.push_op(OpCode::DupTop);
-                                    let none_position = self.context.const_len() as u8;
-                                    self.context.push_const(PyObject::None(false));
+                                    let none_position = self.context_stack.last().unwrap().borrow().const_len() as u8;
+                                    (**self.context_stack.last().unwrap()).borrow_mut().push_const(PyObject::None(false));
                                     self.push_op(OpCode::LoadConst(none_position));
                                     self.push_op(OpCode::compare_op_from_str("=="));
                                     let label_end = self.gen_jump_label();
@@ -471,9 +483,9 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 }
             }
             Node::NumericLiteral { span } => {
-                let const_position = self.context.const_len() as u8;
+                let const_position = self.context_stack.last().unwrap().borrow().const_len() as u8;
                 let raw_value = self.span_to_str(span);
-                self.context
+                (**self.context_stack.last().unwrap()).borrow_mut()
                     .push_const(PyObject::new_numeric(raw_value, false));
                 self.push_op(OpCode::LoadConst(const_position));
             }
@@ -483,36 +495,37 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 let len = value.len();
                 let value = &value[1..len - 1];
 
-                let const_position = self.context.const_len() as u8;
-                self.context
+                let const_position = self.context_stack.last().unwrap().borrow().const_len() as u8;
+                (**self.context_stack.last().unwrap()).borrow_mut()
                     .push_const(PyObject::new_string(value.to_string(), false));
                 self.push_op(OpCode::LoadConst(const_position));
             }
             Node::BooleanLiteral { span } => {
                 let value = self.span_to_str(span);
-                let const_position = self.context.const_len() as u8;
-                self.context.push_const(PyObject::new_boolean(value, false));
+                let const_position = self.context_stack.last().unwrap().borrow().const_len() as u8;
+                (**self.context_stack.last().unwrap()).borrow_mut().push_const(PyObject::new_boolean(value, false));
                 self.push_op(OpCode::LoadConst(const_position));
             }
             Node::NullLiteral { span: _ } => {
-                let const_position = self.context.const_len() as u8;
-                self.context.push_const(PyObject::None(false));
+                let const_position = self.context_stack.last().unwrap().borrow().const_len() as u8;
+                (**self.context_stack.last().unwrap()).borrow_mut().push_const(PyObject::None(false));
                 self.push_op(OpCode::LoadConst(const_position));
             }
             Node::Identifier { span } => {
                 let value = self.span_to_str(span);
-                match self.context.check_variable_scope(value) {
+                let scope = self.context_stack.last().unwrap().borrow().check_variable_scope(value);
+                match scope {
                     VariableScope::Global => {
-                        if self.context.is_global() {
-                            let p = self.context.register_or_get_name(value.to_string());
+                        if self.context_stack.last().unwrap().borrow().is_global() {
+                            let p = (**self.context_stack.last().unwrap()).borrow_mut().register_or_get_name(value.to_string());
                             self.push_op(OpCode::LoadName(p));
                         } else {
-                            let p = self.context.register_or_get_name(value.to_string());
+                            let p = (**self.context_stack.last().unwrap()).borrow_mut().register_or_get_name(value.to_string());
                             self.push_op(OpCode::LoadGlobal(p));
                         }
                     }
                     VariableScope::Local => {
-                        let p = self.context.get_local_variable(value);
+                        let p = self.context_stack.last().unwrap().borrow().get_local_variable(value);
                         self.push_op(OpCode::LoadFast(p));
                     }
                     VariableScope::NotDefined => {
@@ -526,7 +539,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             } => {
                 if let Node::Identifier { span } = **identifier {
                     let name = self.span_to_str(&span);
-                    let p = self.context.register_or_get_name(name.to_string());
+                    let p = (**self.context_stack.last().unwrap()).borrow_mut().register_or_get_name(name.to_string());
                     self.push_op(OpCode::LoadAttr(p));
                 } else {
                     panic!("Invalid AST");
@@ -539,7 +552,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             } => {
                 if let Node::Identifier { span } = **identifier {
                     let name = self.span_to_str(&span);
-                    let p = self.context.register_or_get_name(name.to_string());
+                    let p = (**self.context_stack.last().unwrap()).borrow_mut().register_or_get_name(name.to_string());
                     self.push_op(OpCode::LoadMethod(p));
 
                     if let Node::Arguments { span: _, children } = &**arguments {
@@ -573,9 +586,14 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 self.push_op(OpCode::PopTop);
             }
             Node::BlockStatement { span: _, children } => {
+                self.context_stack.push(Rc::new(RefCell::new(BlockContext {
+                    outer: self.context_stack.last().unwrap().clone(),
+                    variables: vec![]
+                })));
                 for child in children {
                     self.compile(child);
                 }
+                self.context_stack.pop();
             }
 
             Node::VariableDeclaration {
@@ -587,13 +605,13 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     self.compile(e);
                     if let Node::Identifier { span: id_span } = **identifier {
                         let value = self.span_to_str(&id_span);
-                        let position = self.context.declare_variable(value);
-                        if self.context.is_global() {
+                        let position = (**self.context_stack.last().unwrap()).borrow_mut().declare_variable(value);
+                        if self.context_stack.last().unwrap().borrow().is_global() {
                             // トップレベル変数の場合
                             self.push_op(OpCode::StoreName(position));
                         } else {
                             // ローカル変数の場合
-                            let local_position = self.context.get_local_variable(value);
+                            let local_position = self.context_stack.last().unwrap().borrow().get_local_variable(value);
                             self.push_op(OpCode::StoreFast(local_position));
                         }
                     } else {
@@ -603,7 +621,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 None => {
                     if let Node::Identifier { span: id_span } = **identifier {
                         let value = &self.span_to_str(&id_span);
-                        self.context.declare_variable(value);
+                        (**self.context_stack.last().unwrap()).borrow_mut().declare_variable(value);
                     } else {
                         panic!("Invalid AST");
                     }
@@ -629,19 +647,19 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                         run_function("main.py", name, argument_list, self, body, self.source);
 
                     // コードオブジェクトの読み込み
-                    let position = self.context.const_len() as u8;
-                    self.context.push_const(py_code);
+                    let position = self.context_stack.last().unwrap().borrow().const_len() as u8;
+                    (**self.context_stack.last().unwrap()).borrow_mut().push_const(py_code);
                     self.push_op(OpCode::LoadConst(position));
 
                     // 関数名の読み込み
-                    let position = self.context.const_len() as u8;
-                    self.context
+                    let position = self.context_stack.last().unwrap().borrow().const_len() as u8;
+                    (**self.context_stack.last().unwrap()).borrow_mut()
                         .push_const(PyObject::new_string(name.to_string(), false));
                     self.push_op(OpCode::LoadConst(position));
 
                     // 関数作成と収納
                     self.push_op(OpCode::MakeFunction);
-                    let p = self.context.declare_variable(name);
+                    let p = (**self.context_stack.last().unwrap()).borrow_mut().declare_variable(name);
                     self.push_op(OpCode::StoreName(p));
                 } else {
                     panic!("Invalid AST");
@@ -660,13 +678,25 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                         self.compile(condition);
                         let label_false_starts = self.gen_jump_label();
                         self.push_op(OpCode::PopJumpIfFalse(label_false_starts));
+
+                        self.context_stack.push(Rc::new(RefCell::new(BlockContext {
+                            outer: self.context_stack.last().unwrap().clone(),
+                            variables: vec![]
+                        })));
                         self.compile(if_true_stmt);
+                        self.context_stack.pop();
 
                         let label_if_ends = self.gen_jump_label();
                         self.push_op(OpCode::JumpAbsolute(label_if_ends));
 
                         self.set_jump_label_value(label_false_starts);
+
+                        self.context_stack.push(Rc::new(RefCell::new(BlockContext {
+                            outer: self.context_stack.last().unwrap().clone(),
+                            variables: vec![]
+                        })));
                         self.compile(if_false_stmt);
+                        self.context_stack.pop();
 
                         self.set_jump_label_value(label_if_ends);
                     }
@@ -701,7 +731,14 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     self.compile(node);
                     self.push_op(OpCode::PopJumpIfFalse(label_for_end));
                 }
+
+                self.context_stack.push(Rc::new(RefCell::new(BlockContext {
+                    outer: self.context_stack.last().unwrap().clone(),
+                    variables: vec![]
+                })));
                 self.compile(stmt);
+                self.context_stack.pop();
+
                 if let Some(node_list) = update {
                     for node in node_list {
                         self.compile(node);
@@ -722,7 +759,13 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 self.compile(condition);
                 self.push_op(OpCode::PopJumpIfFalse(label_while_end));
 
+                self.context_stack.push(Rc::new(RefCell::new(BlockContext {
+                    outer: self.context_stack.last().unwrap().clone(),
+                    variables: vec![]
+                })));
                 self.compile(stmt);
+                self.context_stack.pop();
+
                 self.push_op(OpCode::JumpAbsolute(label_loop_start));
 
                 self.set_jump_label_value(label_while_end);
@@ -734,7 +777,13 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             } => {
                 let label_do_start = self.gen_jump_label();
                 self.set_jump_label_value(label_do_start);
+
+                self.context_stack.push(Rc::new(RefCell::new(BlockContext {
+                    outer: self.context_stack.last().unwrap().clone(),
+                    variables: vec![]
+                })));
                 self.compile(stmt);
+                self.context_stack.pop();
 
                 self.compile(condition);
                 self.push_op(OpCode::PopJumpIfTrue(label_do_start));

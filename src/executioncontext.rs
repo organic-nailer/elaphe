@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, rc::Rc, cell::RefCell};
 
 use crate::pyobject::PyObject;
 
@@ -8,15 +8,15 @@ pub struct GlobalContext<'value> {
     pub name_map: HashMap<String, u8>,
     pub global_variables: Vec<&'value str>,
 }
-pub struct PyContext<'ctx, 'value> {
-    pub outer: &'ctx dyn ExecutionContext<'value>,
+pub struct PyContext<'ctx,'value> {
+    pub outer: Rc<RefCell<dyn ExecutionContext<'value> + 'ctx>>,
     pub constant_list: Vec<PyObject>,
     pub name_list: Vec<PyObject>,
     pub name_map: HashMap<String, u8>,
     pub local_variables: Vec<&'value str>,
 }
-pub struct BlockContext<'ctx, 'value> {
-    pub outer: &'ctx mut dyn ExecutionContext<'value>,
+pub struct BlockContext<'ctx,'value> {
+    pub outer: Rc<RefCell<dyn ExecutionContext<'value> + 'ctx>>,
     pub variables: Vec<&'value str>,
 }
 
@@ -79,7 +79,7 @@ impl<'value> ExecutionContext<'value> for GlobalContext<'value> {
     }
 }
 
-impl<'ctx, 'value> ExecutionContext<'value> for PyContext<'ctx, 'value> {
+impl<'ctx, 'value> ExecutionContext<'value> for PyContext<'ctx,'value> {
     fn push_const(&mut self, value: PyObject) {
         self.constant_list.push(value);
     }
@@ -107,7 +107,7 @@ impl<'ctx, 'value> ExecutionContext<'value> for PyContext<'ctx, 'value> {
     }
 
     fn check_variable_scope(&self, symbol: &str) -> VariableScope {
-        self.outer.check_variable_scope(symbol)
+        self.outer.borrow().check_variable_scope(symbol)
     }
 
     fn register_or_get_name(&mut self, name: String) -> u8 {
@@ -128,35 +128,35 @@ impl<'ctx, 'value> ExecutionContext<'value> for PyContext<'ctx, 'value> {
     }
 }
 
-impl<'ctx, 'value> ExecutionContext<'value> for BlockContext<'ctx, 'value> {
+impl<'ctx, 'value> ExecutionContext<'value> for BlockContext<'ctx,'value> {
     fn push_const(&mut self, value: PyObject) {
-        self.outer.push_const(value);
+        self.outer.borrow_mut().push_const(value);
     }
 
     fn const_len(&self) -> usize {
-        self.outer.const_len()
+        self.outer.borrow().const_len()
     }
 
     fn declare_variable(&mut self, symbol: &'value str) -> u8 {
         // ブロック内ローカル変数の定義
         self.variables.push(symbol);
-        self.outer.declare_variable(symbol)
+        self.outer.borrow_mut().declare_variable(symbol)
     }
 
     fn get_local_variable(&self, symbol: &'value str) -> u8 {
-        self.outer.get_local_variable(symbol)
+        self.outer.borrow_mut().get_local_variable(symbol)
     }
 
     fn check_variable_scope(&self, symbol: &str) -> VariableScope {
         if self.variables.contains(&symbol) {
             VariableScope::Local
         } else {
-            self.outer.check_variable_scope(symbol)
+            self.outer.borrow().check_variable_scope(symbol)
         }
     }
 
     fn register_or_get_name(&mut self, name: String) -> u8 {
-        self.outer.register_or_get_name(name)
+        self.outer.borrow_mut().register_or_get_name(name)
     }
 
     fn is_global(&self) -> bool {
