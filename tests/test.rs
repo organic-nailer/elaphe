@@ -459,3 +459,27 @@ fn loop_label() {
         panic!("{:?}", result);
     }
 }
+
+#[test]
+fn comment() {
+    let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
+    let result = catch_unwind(|| {
+        elaphe::run(&output, "
+        main() { 
+            var x = 1;// single comment
+            var y /* inner comment */ = 1;
+            /*
+            multi
+            line
+            comment
+            print(x + y);
+            */ print(x * y); /* comment */
+        }
+        ").expect("execution failed.");
+        exec_py_and_assert(&output, "1\n");
+    });
+    clean(&output);
+    if result.is_err() {
+        panic!("{:?}", result);
+    }
+}
