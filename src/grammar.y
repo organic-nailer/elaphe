@@ -78,12 +78,21 @@ Statements -> Result<Vec<Box<Node>>, ()>:
     ;
 
 Statement -> Result<Node, ()>:
+      NonLabeledStatement { $1 }
+    | Label NonLabeledStatement {
+        Ok(Node::LabeledStatement { span: $span, label: $1?, stmt: Box::new($2?) })
+    }
+    ;
+
+NonLabeledStatement -> Result<Node, ()>:
       BlockStatement { $1 }
     | LocalVariableDeclaration { $1 }
     | IfStatement { $1 }
     | ForStatement { $1 }
     | WhileStatement { $1 }
     | DoStatement { $1 }
+    | BreakStatement { $1 }
+    | ContinueStatement { $1 }
     | ExpressionStatement { $1 }
     | ";" { Ok(Node::EmptyStatement { span: $span }) }
     ;
@@ -146,6 +155,28 @@ InitializedVariableDeclaration -> Result<Node, ()>:
 
 DeclaredIdentifier -> Result<Node, ()>:
     "var" Identifier { $2 }
+    ;
+
+Label -> Result<StatementLabel, ()>:
+    Identifier ":" { Ok(StatementLabel { identifier: Box::new($1?) }) }
+    ;
+
+BreakStatement -> Result<Node, ()>:
+      "break" ";" {
+        Ok(Node::BreakStatement { span: $span, label: None })
+    }
+    | "break" Identifier ";" {
+        Ok(Node::BreakStatement { span: $span, label: Some(Box::new($2?)) })
+    }
+    ;
+
+ContinueStatement -> Result<Node, ()>:
+      "continue" ";" {
+        Ok(Node::ContinueStatement { span: $span, label: None })
+    }
+    | "continue" Identifier ";" {
+        Ok(Node::ContinueStatement { span: $span, label: Some(Box::new($2?)) })
+    }
     ;
 
 
@@ -432,6 +463,11 @@ pub enum Node {
         selector: Box<Node>,
     },
 
+    LabeledStatement {
+        span: Span,
+        label: StatementLabel,
+        stmt: Box<Node>,
+    },
     BlockStatement {
         span: Span,
         children: Vec<Box<Node>>,
@@ -471,6 +507,14 @@ pub enum Node {
         condition: Box<Node>,
         stmt: Box<Node>,
     },
+    BreakStatement {
+        span: Span,
+        label: Option<Box<Node>>,
+    },
+    ContinueStatement {
+        span: Span,
+        label: Option<Box<Node>>,
+    },
     FunctionDeclaration {
         span: Span,
         identifier: Box<Node>,
@@ -502,5 +546,10 @@ pub struct LibraryImport {
 
 #[derive(Debug)]
 pub struct FunctionParameter {
+    pub identifier: Box<Node>,
+}
+
+#[derive(Debug)]
+pub struct StatementLabel {
     pub identifier: Box<Node>,
 }

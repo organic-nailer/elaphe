@@ -10,11 +10,19 @@ use crate::executioncontext::{
 use crate::parser::{LibraryDeclaration, LibraryImport};
 use crate::{bytecode::OpCode, parser::Node, pyobject::PyObject};
 
+struct DefaultScope {
+    break_label: u32,
+    continue_label: u32
+}
+
 pub struct ByteCompiler<'ctx, 'value: 'ctx> {
     pub byte_operations: RefCell<Vec<OpCode>>,
     context_stack: Vec<Rc<RefCell<dyn ExecutionContext<'value> + 'ctx>>>,
     jump_label_table: RefCell<HashMap<u32, u8>>,
     jump_label_key_index: RefCell<u32>,
+    default_scope_stack: Vec<DefaultScope>,
+    break_label_table: HashMap<&'value str, u32>,
+    continue_label_table: HashMap<&'value str, u32>,
     source: &'value str,
 }
 
@@ -37,6 +45,9 @@ pub fn run_root<'value>(
         context_stack: vec![global_context.clone()],
         jump_label_table: RefCell::new(HashMap::new()),
         jump_label_key_index: RefCell::new(0),
+        default_scope_stack: vec![],
+        break_label_table: HashMap::new(),
+        continue_label_table: HashMap::new(),
         source,
     };
 
@@ -50,7 +61,7 @@ pub fn run_root<'value>(
     }
 
     for node in &root_node.top_level_declaration_list {
-        compiler.compile(&node);
+        compiler.compile(&node, None);
     }
 
     // main関数を実行
@@ -128,10 +139,13 @@ pub fn run_function<'ctx, 'value, 'cpl>(
         context_stack: vec![block_context.clone()],
         jump_label_table: RefCell::new(HashMap::new()),
         jump_label_key_index: RefCell::new(*outer_compiler.jump_label_key_index.borrow()),
+        default_scope_stack: vec![],
+        break_label_table: HashMap::new(),
+        continue_label_table: HashMap::new(),
         source,
     };
 
-    compiler.compile(body);
+    compiler.compile(body, None);
 
     // compiler.context_stack.borrow_mut().pop();
     // compiler.context_stack.borrow_mut().pop();
@@ -322,7 +336,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
         }
     }
 
-    fn compile(&mut self, node: &'value Node) {
+    fn compile(&mut self, node: &'value Node, label: Option<&'value str>) {
         match node {
             Node::BinaryExpression {
                 span: _,
@@ -331,7 +345,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 right,
             } => {
                 if *operator == "??" {
-                    self.compile(left);
+                    self.compile(left, None);
                     self.push_op(OpCode::DupTop);
                     let none_position = self.context_stack.last().unwrap().borrow().const_len() as u8;
                     (**self.context_stack.last().unwrap())
@@ -342,30 +356,30 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     let label_end = self.gen_jump_label();
                     self.push_op(OpCode::PopJumpIfFalse(label_end));
                     self.push_op(OpCode::PopTop);
-                    self.compile(right);
+                    self.compile(right, None);
                     self.set_jump_label_value(label_end);
                 }
                 else if *operator == "||" {
-                    self.compile(left);
+                    self.compile(left, None);
                     self.push_op(OpCode::DupTop);
                     let label_end = self.gen_jump_label();
                     self.push_op(OpCode::PopJumpIfTrue(label_end));
                     self.push_op(OpCode::PopTop);
-                    self.compile(right);
+                    self.compile(right, None);
                     self.set_jump_label_value(label_end);
                 }
                 else if *operator == "&&" {
-                    self.compile(left);
+                    self.compile(left, None);
                     self.push_op(OpCode::DupTop);
                     let label_end = self.gen_jump_label();
                     self.push_op(OpCode::PopJumpIfFalse(label_end));
                     self.push_op(OpCode::PopTop);
-                    self.compile(right);
+                    self.compile(right, None);
                     self.set_jump_label_value(label_end);
                 }
                 else {
-                    self.compile(left);
-                    self.compile(right);
+                    self.compile(left, None);
+                    self.compile(right, None);
                     match *operator {
                         "==" | "!=" | ">=" | ">" | "<=" | "<" => {
                             self.push_op(OpCode::compare_op_from_str(operator))
@@ -386,12 +400,12 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             Node::ConditionalExpression { span: _, condition, if_true_expr, if_false_expr } => {
                 let label_conditional_end = self.gen_jump_label();
                 let label_false_start = self.gen_jump_label();
-                self.compile(condition);
+                self.compile(condition, None);
                 self.push_op(OpCode::PopJumpIfFalse(label_false_start));
-                self.compile(if_true_expr);
+                self.compile(if_true_expr, None);
                 self.push_op(OpCode::JumpAbsolute(label_conditional_end));
                 self.set_jump_label_value(label_false_start);
-                self.compile(if_false_expr);
+                self.compile(if_false_expr, None);
                 self.set_jump_label_value(label_conditional_end);
             },
             Node::UnaryOpExpression {
@@ -399,7 +413,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 operator,
                 child,
             } => {
-                self.compile(child);
+                self.compile(child, None);
                 match *operator {
                     "-" => self.push_op(OpCode::UnaryNegative),
                     "!" => self.push_op(OpCode::UnaryNot),
@@ -417,7 +431,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     let value = self.span_to_str(&span);
                     match *operator {
                         "=" => {
-                            self.compile(right);
+                            self.compile(right, None);
                             // DartではAssignment Expressionが代入先の最終的な値を残す
                             self.push_op(OpCode::DupTop);
                             let scope = self
@@ -486,7 +500,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                                     panic!("{} is used before its declaration.", value);
                                 }
                             }
-                            self.compile(right);
+                            self.compile(right, None);
                             match *operator {
                                 "*=" => self.push_op(OpCode::InplaceMultiply),
                                 "/=" => self.push_op(OpCode::InplaceTrueDivide),
@@ -550,7 +564,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                                         let label_end = self.gen_jump_label();
                                         self.push_op(OpCode::PopJumpIfFalse(label_end));
                                         self.push_op(OpCode::PopTop);
-                                        self.compile(right);
+                                        self.compile(right, None);
                                         self.push_op(OpCode::DupTop);
                                         self.push_op(OpCode::StoreName(p));
                                         self.set_jump_label_value(label_end);
@@ -568,7 +582,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                                         let label_end = self.gen_jump_label();
                                         self.push_op(OpCode::PopJumpIfFalse(label_end));
                                         self.push_op(OpCode::PopTop);
-                                        self.compile(right);
+                                        self.compile(right, None);
                                         self.push_op(OpCode::DupTop);
                                         self.push_op(OpCode::StoreGlobal(p));
                                         self.set_jump_label_value(label_end);
@@ -594,7 +608,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                                     let label_end = self.gen_jump_label();
                                     self.push_op(OpCode::PopJumpIfFalse(label_end));
                                     self.push_op(OpCode::PopTop);
-                                    self.compile(right);
+                                    self.compile(right, None);
                                     self.push_op(OpCode::DupTop);
                                     self.push_op(OpCode::StoreFast(p));
                                     self.set_jump_label_value(label_end);
@@ -709,7 +723,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
 
                     if let Node::Arguments { span: _, children } = &**arguments {
                         for node in children {
-                            self.compile(node);
+                            self.compile(node, None);
                         }
                         self.push_op(OpCode::CallMethod(children.len() as u8))
                     }
@@ -719,7 +733,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             }
             Node::Arguments { span: _, children } => {
                 for node in children {
-                    self.compile(node);
+                    self.compile(node, None);
                 }
                 self.push_op(OpCode::CallFunction(children.len() as u8))
             }
@@ -728,13 +742,74 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 child,
                 selector,
             } => {
-                self.compile(child);
-                self.compile(selector);
-            }
+                self.compile(child, None);
+                self.compile(selector, None);
+            },
 
+
+            Node::LabeledStatement { span: _, label, stmt } => {
+                let label_str = if let Node::Identifier { span } = *label.identifier {
+                    self.span_to_str(&span)
+                } else { panic!("Invalid AST") };
+                let label_id = self.gen_jump_label();
+
+                // break用のラベルはこの時点で用意する
+                self.break_label_table.insert(label_str, label_id);
+
+                self.compile(stmt, Some(label_str));
+
+                self.set_jump_label_value(label_id);
+                self.break_label_table.remove(label_str);
+            },
+            Node::BreakStatement { span: _, label } => {
+                match label {
+                    Some(identifier) => {
+                        if let Node::Identifier { span } = **identifier {
+                            let label_str = self.span_to_str(&span);
+                            match self.break_label_table.get(label_str) {
+                                Some(v) => {
+                                    self.push_op(OpCode::JumpAbsolute(*v));
+                                },
+                                None => panic!("label {} is not existing in this scope.", label_str)
+                            }
+                        } else { panic!("Invalid AST") }
+                    },
+                    None => {
+                        match self.default_scope_stack.last() {
+                            Some(v) => {
+                                self.push_op(OpCode::JumpAbsolute(v.break_label));
+                            },
+                            None => panic!("break statement is not available here")
+                        }
+                    }
+                }
+            },
+            Node::ContinueStatement { span: _, label } => {
+                match label {
+                    Some(identifier) => {
+                        if let Node::Identifier { span } = **identifier {
+                            let label_str = self.span_to_str(&span);
+                            match self.continue_label_table.get(label_str) {
+                                Some(v) => {
+                                    self.push_op(OpCode::JumpAbsolute(*v));
+                                },
+                                None => panic!("label {} is not existing in this scope.", label_str)
+                            }
+                        } else { panic!("Invalid AST") }
+                    },
+                    None => {
+                        match self.default_scope_stack.last() {
+                            Some(v) => {
+                                self.push_op(OpCode::JumpAbsolute(v.continue_label));
+                            },
+                            None => panic!("continue statement is not available here")
+                        }
+                    }
+                }
+            },
             Node::EmptyStatement { span: _ } => {}
             Node::ExpressionStatement { span: _, expr } => {
-                self.compile(expr);
+                self.compile(expr, None);
                 self.push_op(OpCode::PopTop);
             }
             Node::BlockStatement { span: _, children } => {
@@ -743,7 +818,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     variables: vec![],
                 })));
                 for child in children {
-                    self.compile(child);
+                    self.compile(child, None);
                 }
                 self.context_stack.pop();
             }
@@ -754,7 +829,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 expr,
             } => match expr {
                 Some(e) => {
-                    self.compile(e);
+                    self.compile(e, None);
                     if let Node::Identifier { span: id_span } = **identifier {
                         let value = self.span_to_str(&id_span);
                         let position = (**self.context_stack.last().unwrap())
@@ -841,7 +916,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 match if_false_stmt {
                     Some(if_false_stmt) => {
                         // if expr stmt else stmt
-                        self.compile(condition);
+                        self.compile(condition, None);
                         let label_false_starts = self.gen_jump_label();
                         self.push_op(OpCode::PopJumpIfFalse(label_false_starts));
 
@@ -849,7 +924,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                             outer: self.context_stack.last().unwrap().clone(),
                             variables: vec![],
                         })));
-                        self.compile(if_true_stmt);
+                        self.compile(if_true_stmt, None);
                         self.context_stack.pop();
 
                         let label_if_ends = self.gen_jump_label();
@@ -861,17 +936,17 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                             outer: self.context_stack.last().unwrap().clone(),
                             variables: vec![],
                         })));
-                        self.compile(if_false_stmt);
+                        self.compile(if_false_stmt, None);
                         self.context_stack.pop();
 
                         self.set_jump_label_value(label_if_ends);
                     }
                     None => {
                         // if expr stmt
-                        self.compile(condition);
+                        self.compile(condition, None);
                         let label_if_ends = self.gen_jump_label();
                         self.push_op(OpCode::PopJumpIfFalse(label_if_ends));
-                        self.compile(if_true_stmt);
+                        self.compile(if_true_stmt, None);
 
                         self.set_jump_label_value(label_if_ends);
                     }
@@ -889,12 +964,19 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 // update is expression list
                 let label_for_end = self.gen_jump_label();
                 let label_loop_start = self.gen_jump_label();
+                self.default_scope_stack.push(DefaultScope {
+                    break_label: label_for_end,
+                    continue_label: label_loop_start
+                });
+                if let Some(stmt_label) = label {
+                    self.continue_label_table.insert(stmt_label, label_loop_start);
+                }
                 if let Some(node) = init {
-                    self.compile(node);
+                    self.compile(node, None);
                 }
                 self.set_jump_label_value(label_loop_start);
                 if let Some(node) = condition {
-                    self.compile(node);
+                    self.compile(node, None);
                     self.push_op(OpCode::PopJumpIfFalse(label_for_end));
                 }
 
@@ -902,17 +984,21 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     outer: self.context_stack.last().unwrap().clone(),
                     variables: vec![],
                 })));
-                self.compile(stmt);
+                self.compile(stmt, None);
                 self.context_stack.pop();
 
                 if let Some(node_list) = update {
                     for node in node_list {
-                        self.compile(node);
+                        self.compile(node, None);
                         self.push_op(OpCode::PopTop);
                     }
                 }
                 self.push_op(OpCode::JumpAbsolute(label_loop_start));
                 self.set_jump_label_value(label_for_end);
+                self.default_scope_stack.pop();
+                if let Some(stmt_label) = label {
+                    self.continue_label_table.remove(stmt_label);
+                }
             }
             Node::WhileStatement {
                 span: _,
@@ -921,20 +1007,32 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             } => {
                 let label_while_end = self.gen_jump_label();
                 let label_loop_start = self.gen_jump_label();
+                self.default_scope_stack.push(DefaultScope {
+                    break_label: label_while_end,
+                    continue_label: label_loop_start
+                });
+                if let Some(stmt_label) = label {
+                    self.continue_label_table.insert(stmt_label, label_loop_start);
+                }
                 self.set_jump_label_value(label_loop_start);
-                self.compile(condition);
+                self.compile(condition, None);
                 self.push_op(OpCode::PopJumpIfFalse(label_while_end));
 
                 self.context_stack.push(Rc::new(RefCell::new(BlockContext {
                     outer: self.context_stack.last().unwrap().clone(),
                     variables: vec![],
                 })));
-                self.compile(stmt);
+                self.compile(stmt, None);
                 self.context_stack.pop();
 
                 self.push_op(OpCode::JumpAbsolute(label_loop_start));
 
                 self.set_jump_label_value(label_while_end);
+
+                self.default_scope_stack.pop();
+                if let Some(stmt_label) = label {
+                    self.continue_label_table.remove(stmt_label);
+                }
             }
             Node::DoStatement {
                 span: _,
@@ -942,17 +1040,31 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 stmt,
             } => {
                 let label_do_start = self.gen_jump_label();
+                let label_do_end = self.gen_jump_label();
+                self.default_scope_stack.push(DefaultScope {
+                    break_label: label_do_end,
+                    continue_label: label_do_start
+                });
+                if let Some(stmt_label) = label {
+                    self.continue_label_table.insert(stmt_label, label_do_start);
+                }
                 self.set_jump_label_value(label_do_start);
 
                 self.context_stack.push(Rc::new(RefCell::new(BlockContext {
                     outer: self.context_stack.last().unwrap().clone(),
                     variables: vec![],
                 })));
-                self.compile(stmt);
+                self.compile(stmt, None);
                 self.context_stack.pop();
 
-                self.compile(condition);
+                self.compile(condition, None);
                 self.push_op(OpCode::PopJumpIfTrue(label_do_start));
+                self.set_jump_label_value(label_do_end);
+
+                self.default_scope_stack.pop();
+                if let Some(stmt_label) = label {
+                    self.continue_label_table.remove(stmt_label);
+                }
             }
         }
     }

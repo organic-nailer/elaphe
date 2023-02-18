@@ -428,3 +428,34 @@ fn logical_expression() {
         panic!("{:?}", result);
     }
 }
+
+#[test]
+fn loop_label() {
+    let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
+    let result = catch_unwind(|| {
+        elaphe::run(&output, "
+        main() { 
+            outerloop:
+               
+            for (var i = 0; i < 5; i += 1) { 
+                print(i * 10); 
+                innerloop: 
+                for (var j = 0; j < 5; j += 1) { 
+                    if (j > 3 ) break ; 
+                     
+                    if (i == 2) break innerloop; 
+                    
+                    if (i == 4) break outerloop; 
+                     
+                    print(j); 
+                } 
+            } 
+        }
+        ").expect("execution failed.");
+        exec_py_and_assert(&output, "0\n0\n1\n2\n3\n10\n0\n1\n2\n3\n20\n30\n0\n1\n2\n3\n40\n");
+    });
+    clean(&output);
+    if result.is_err() {
+        panic!("{:?}", result);
+    }
+}
