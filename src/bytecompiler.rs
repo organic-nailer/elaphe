@@ -632,11 +632,11 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     .push_const(PyObject::new_numeric(raw_value, false));
                 self.push_op(OpCode::LoadConst(const_position));
             }
-            Node::StringLiteral { span } => {
-                // let value = self.span_to_str(span);
-                let value = &self.source[span.start()..span.end()];
-                let len = value.len();
-                let value = &value[1..len - 1];
+            Node::StringLiteral { span:_, literal_list } => {
+                let value = literal_list.iter().map(|v| { 
+                    let len = v.len();
+                    &self.span_to_str(v)[1..len-1] 
+                }).collect::<Vec<&'value str>>().join("");
 
                 let const_position = self.context_stack.last().unwrap().borrow().const_len() as u8;
                 (**self.context_stack.last().unwrap())

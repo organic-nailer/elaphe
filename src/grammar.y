@@ -383,9 +383,24 @@ Identifier -> Result<Node, ()>:
 
 Literal -> Result<Node, ()>:
       'NUMBER' { Ok(Node::NumericLiteral { span: $span }) }
-    | 'STRING' { Ok(Node::StringLiteral { span: $span }) }
+    | StringLiteralList { Ok(Node::StringLiteral { span: $span, literal_list: $1? }) }
     | 'BOOLEAN' { Ok(Node::BooleanLiteral { span: $span }) }
     | 'NULL' { Ok(Node::NullLiteral { span: $span }) }
+    ;
+
+StringLiteralList -> Result<Vec<Span>, ()>:
+      StringLiteralList "STRING" { 
+        match $2 {
+            Ok(v) => flatten($1, v.span()),
+            Err(_) => Err(())
+        }
+    }
+    | "STRING" { 
+        match $1 {
+            Ok(v) => Ok(vec![v.span()]),
+            Err(_) => Err(())
+        }
+    }
     ;
 %%
 // Any functions here are in scope for all the grammar actions above.
@@ -443,6 +458,7 @@ pub enum Node {
     },
     StringLiteral {
         span: Span,
+        literal_list: Vec<Span>,
     },
     BooleanLiteral {
         span: Span,

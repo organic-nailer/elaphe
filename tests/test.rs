@@ -77,11 +77,17 @@ fn calc_boolean() {
 }
 
 #[test]
-fn concat_string() {
+fn string_literal() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
         elaphe::run(&output, "main() { print('abc' + 'defg'); }").expect("execution failed.");
         exec_py_and_assert(&output, "abcdefg\n");
+        elaphe::run(&output, "main() { print('abc' 'defg'); }").expect("execution failed.");
+        exec_py_and_assert(&output, "abcdefg\n");
+        elaphe::run(&output, r#"main() { print('"world"'); }"#).expect("execution failed.");
+        exec_py_and_assert(&output, "\"world\"\n");
+        elaphe::run(&output, r#"main() { print("'world'"); }"#).expect("execution failed.");
+        exec_py_and_assert(&output, "'world'\n");
     });
     clean(&output);
     if result.is_err() {
