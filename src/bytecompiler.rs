@@ -807,6 +807,19 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     }
                 }
             },
+            Node::ReturnStatement { span: _, value } => {
+                match value {
+                    Some(v) => self.compile(v, None),
+                    None => {
+                        let p = self.context_stack.last().unwrap().borrow().const_len() as u8;
+                        (**self.context_stack.last().unwrap())
+                            .borrow_mut()
+                            .push_const(PyObject::None(false));
+                        self.push_op(OpCode::LoadConst(p));
+                    }
+                }
+                self.push_op(OpCode::ReturnValue);
+            },
             Node::EmptyStatement { span: _ } => {}
             Node::ExpressionStatement { span: _, expr } => {
                 self.compile(expr, None);

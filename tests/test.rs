@@ -489,3 +489,24 @@ fn comment() {
         panic!("{:?}", result);
     }
 }
+
+#[test]
+fn return_value() {
+    let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
+    let result = catch_unwind(|| {
+        elaphe::run(&output, "
+        add(x,y) {
+            return x+y;
+        }
+        
+        main() { 
+            print(add(10,20));
+        }
+        ").expect("execution failed.");
+        exec_py_and_assert(&output, "30\n");
+    });
+    clean(&output);
+    if result.is_err() {
+        panic!("{:?}", result);
+    }
+}

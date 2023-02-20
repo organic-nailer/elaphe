@@ -93,6 +93,7 @@ NonLabeledStatement -> Result<Node, ()>:
     | DoStatement { $1 }
     | BreakStatement { $1 }
     | ContinueStatement { $1 }
+    | ReturnStatement { $1 }
     | ExpressionStatement { $1 }
     | ";" { Ok(Node::EmptyStatement { span: $span }) }
     ;
@@ -176,6 +177,13 @@ ContinueStatement -> Result<Node, ()>:
     }
     | "continue" Identifier ";" {
         Ok(Node::ContinueStatement { span: $span, label: Some(Box::new($2?)) })
+    }
+    ;
+
+ReturnStatement -> Result<Node, ()>:
+      "return" ";" { Ok(Node::ReturnStatement { span: $span, value: None }) }
+    | "return" Expression ";" {
+        Ok(Node::ReturnStatement { span: $span, value: Some(Box::new($2?)) })
     }
     ;
 
@@ -530,6 +538,10 @@ pub enum Node {
     ContinueStatement {
         span: Span,
         label: Option<Box<Node>>,
+    },
+    ReturnStatement {
+        span: Span,
+        value: Option<Box<Node>>,
     },
     FunctionDeclaration {
         span: Span,

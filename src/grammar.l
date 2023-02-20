@@ -6,6 +6,7 @@
 (true)|(false) "BOOLEAN"
 continue "continue"
 import "import"
+return "return"
 break "break"
 while "while"
 null "NULL"
