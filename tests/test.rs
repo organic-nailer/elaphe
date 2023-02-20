@@ -510,3 +510,32 @@ fn return_value() {
         panic!("{:?}", result);
     }
 }
+
+#[test]
+fn switch_statement() {
+    let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
+    let result = catch_unwind(|| {
+        elaphe::run(&output, r#"
+        main() { 
+            var x = 1;
+            switch (x) {
+                case 0:
+                  print("zero");
+                  break;
+                case 1:
+                case 2:
+                  print("one or two");
+                  break;
+                default:
+                  print("more");
+                  break;
+            }
+        }
+        "#).expect("execution failed.");
+        exec_py_and_assert(&output, "one or two\n");
+    });
+    clean(&output);
+    if result.is_err() {
+        panic!("{:?}", result);
+    }
+}

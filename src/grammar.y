@@ -91,6 +91,7 @@ NonLabeledStatement -> Result<Node, ()>:
     | ForStatement { $1 }
     | WhileStatement { $1 }
     | DoStatement { $1 }
+    | SwitchStatement { $1 }
     | BreakStatement { $1 }
     | ContinueStatement { $1 }
     | ReturnStatement { $1 }
@@ -185,6 +186,34 @@ ReturnStatement -> Result<Node, ()>:
     | "return" Expression ";" {
         Ok(Node::ReturnStatement { span: $span, value: Some(Box::new($2?)) })
     }
+    ;
+
+SwitchStatement -> Result<Node, ()>:
+    "switch" "(" Expression ")" "{" SwitchCaseList DefaultCaseOpt "}" {
+        Ok(Node::SwitchStatement { span: $span, expr: Box::new($3?), case_list: $6?, default_case: $7? })
+    }
+    ;
+
+SwitchCaseList -> Result<Vec<SwitchCase>, ()>:
+      %empty { Ok(vec![]) }
+    | SwitchCaseList SwitchCase { flatten($1, $2?) }
+    ;
+
+SwitchCase -> Result<SwitchCase, ()>:
+      "case" Expression ":" Statements {
+        Ok(SwitchCase { label_list: vec![], expr: Box::new($2?), stmt_list: $4? })
+    }
+    ;
+
+DefaultCase -> Result<DefaultCase, ()>:
+      "default" ":" Statements {
+        Ok(DefaultCase { label_list: vec![], stmt_list: $3? })
+    }
+    ;
+
+DefaultCaseOpt -> Result<Option<DefaultCase>, ()>:
+      %empty { Ok(None) }
+    | DefaultCase { Ok(Some($1?)) }
     ;
 
 
@@ -543,6 +572,12 @@ pub enum Node {
         span: Span,
         value: Option<Box<Node>>,
     },
+    SwitchStatement {
+        span: Span,
+        expr: Box<Node>,
+        case_list: Vec<SwitchCase>,
+        default_case: Option<DefaultCase>,
+    },
     FunctionDeclaration {
         span: Span,
         identifier: Box<Node>,
@@ -580,4 +615,17 @@ pub struct FunctionParameter {
 #[derive(Debug)]
 pub struct StatementLabel {
     pub identifier: Box<Node>,
+}
+
+#[derive(Debug)]
+pub struct SwitchCase {
+    pub label_list: Vec<StatementLabel>,
+    pub expr: Box<Node>,
+    pub stmt_list: Vec<Box<Node>>,
+}
+
+#[derive(Debug)]
+pub struct DefaultCase {
+    pub label_list: Vec<StatementLabel>,
+    pub stmt_list: Vec<Box<Node>>,
 }
