@@ -147,14 +147,7 @@ pub fn run_function<'ctx, 'value, 'cpl>(
 
     compiler.compile(body, None);
 
-    // compiler.context_stack.borrow_mut().pop();
-    // compiler.context_stack.borrow_mut().pop();
-
-    let none_position = block_context.borrow().const_len() as u8;
-    (*block_context)
-        .borrow_mut()
-        .push_const(PyObject::None(false));
-    compiler.push_op(OpCode::LoadConst(none_position));
+    compiler.push_load_const(PyObject::None(false));
     compiler.push_op(OpCode::ReturnValue);
 
     compiler.context_stack.pop();
@@ -233,25 +226,15 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
 
             // ドットの数を積む
             let dot_len = path_splitted[0].len();
-            let p = self.context_stack.last().unwrap().borrow().const_len() as u8;
-            (**self.context_stack.last().unwrap())
-                .borrow_mut()
-                .push_const(PyObject::Int(dot_len as i32, false));
-            // self.context_stack.last().unwrap().borrow()
-            //     .push_const(PyObject::Int(dot_len as i32, false));
-            self.push_op(OpCode::LoadConst(p));
+            self.push_load_const(PyObject::Int(dot_len as i32, false));
             path_splitted.remove(0);
 
             // 最後尾のモジュールをタプルで積む
             let import_mod = path_splitted.pop().unwrap();
-            let import_mod_p = self.context_stack.last().unwrap().borrow().const_len() as u8;
-            (**self.context_stack.last().unwrap())
-                .borrow_mut()
-                .push_const(PyObject::SmallTuple {
+            let import_mod_p = self.push_load_const(PyObject::SmallTuple {
                     children: vec![PyObject::new_string(import_mod.to_string(), false)],
                     add_ref: false,
                 });
-            self.push_op(OpCode::LoadConst(import_mod_p));
 
             // 名前でインポート
             let p = (**self.context_stack.last().unwrap())
@@ -274,18 +257,10 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             self.push_op(OpCode::PopTop);
         } else {
             // 0を積む
-            let p = self.context_stack.last().unwrap().borrow().const_len() as u8;
-            (**self.context_stack.last().unwrap())
-                .borrow_mut()
-                .push_const(PyObject::Int(0, false));
-            self.push_op(OpCode::LoadConst(p));
+            self.push_load_const(PyObject::Int(0, false));
 
             // Noneを積む
-            let p = self.context_stack.last().unwrap().borrow().const_len() as u8;
-            (**self.context_stack.last().unwrap())
-                .borrow_mut()
-                .push_const(PyObject::None(false));
-            self.push_op(OpCode::LoadConst(p));
+            self.push_load_const(PyObject::None(false));
 
             // 名前でインポート
             let import_name = path_splitted.join(".");
@@ -347,12 +322,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 if *operator == "??" {
                     self.compile(left, None);
                     self.push_op(OpCode::DupTop);
-                    let none_position =
-                        self.context_stack.last().unwrap().borrow().const_len() as u8;
-                    (**self.context_stack.last().unwrap())
-                        .borrow_mut()
-                        .push_const(PyObject::None(false));
-                    self.push_op(OpCode::LoadConst(none_position));
+                    self.push_load_const(PyObject::None(false));
                     self.push_op(OpCode::compare_op_from_str("=="));
                     let label_end = self.gen_jump_label();
                     self.push_op(OpCode::PopJumpIfFalse(label_end));
@@ -466,12 +436,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                                 panic!("{} is used before its declaration.", value);
                             }
                         }
-                        let one_position =
-                            self.context_stack.last().unwrap().borrow().const_len() as u8;
-                        (**self.context_stack.last().unwrap())
-                            .borrow_mut()
-                            .push_const(PyObject::Int(1, false));
-                        self.push_op(OpCode::LoadConst(one_position));
+                        self.push_load_const(PyObject::Int(1, false));
                         match *operator {
                             "++" => self.push_op(OpCode::InplaceAdd),
                             "--" => self.push_op(OpCode::InplaceSubtract),
@@ -532,12 +497,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                             }
                         }
                         self.push_op(OpCode::DupTop);
-                        let one_position =
-                            self.context_stack.last().unwrap().borrow().const_len() as u8;
-                        (**self.context_stack.last().unwrap())
-                            .borrow_mut()
-                            .push_const(PyObject::Int(1, false));
-                        self.push_op(OpCode::LoadConst(one_position));
+                        self.push_load_const(PyObject::Int(1, false));
                         match *operator {
                             "++" => self.push_op(OpCode::InplaceAdd),
                             "--" => self.push_op(OpCode::InplaceSubtract),
@@ -701,13 +661,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                                     if self.context_stack.last().unwrap().borrow().is_global() {
                                         self.push_op(OpCode::LoadName(p));
                                         self.push_op(OpCode::DupTop);
-                                        let none_position =
-                                            self.context_stack.last().unwrap().borrow().const_len()
-                                                as u8;
-                                        (**self.context_stack.last().unwrap())
-                                            .borrow_mut()
-                                            .push_const(PyObject::None(false));
-                                        self.push_op(OpCode::LoadConst(none_position));
+                                        self.push_load_const(PyObject::None(false));
                                         self.push_op(OpCode::compare_op_from_str("=="));
                                         let label_end = self.gen_jump_label();
                                         self.push_op(OpCode::PopJumpIfFalse(label_end));
@@ -719,13 +673,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                                     } else {
                                         self.push_op(OpCode::LoadGlobal(p));
                                         self.push_op(OpCode::DupTop);
-                                        let none_position =
-                                            self.context_stack.last().unwrap().borrow().const_len()
-                                                as u8;
-                                        (**self.context_stack.last().unwrap())
-                                            .borrow_mut()
-                                            .push_const(PyObject::None(false));
-                                        self.push_op(OpCode::LoadConst(none_position));
+                                        self.push_load_const(PyObject::None(false));
                                         self.push_op(OpCode::compare_op_from_str("=="));
                                         let label_end = self.gen_jump_label();
                                         self.push_op(OpCode::PopJumpIfFalse(label_end));
@@ -745,13 +693,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                                         .get_local_variable(value);
                                     self.push_op(OpCode::LoadFast(p));
                                     self.push_op(OpCode::DupTop);
-                                    let none_position =
-                                        self.context_stack.last().unwrap().borrow().const_len()
-                                            as u8;
-                                    (**self.context_stack.last().unwrap())
-                                        .borrow_mut()
-                                        .push_const(PyObject::None(false));
-                                    self.push_op(OpCode::LoadConst(none_position));
+                                    self.push_load_const(PyObject::None(false));
                                     self.push_op(OpCode::compare_op_from_str("=="));
                                     let label_end = self.gen_jump_label();
                                     self.push_op(OpCode::PopJumpIfFalse(label_end));
@@ -773,12 +715,8 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 }
             }
             Node::NumericLiteral { span } => {
-                let const_position = self.context_stack.last().unwrap().borrow().const_len() as u8;
                 let raw_value = self.span_to_str(span);
-                (**self.context_stack.last().unwrap())
-                    .borrow_mut()
-                    .push_const(PyObject::new_numeric(raw_value, false));
-                self.push_op(OpCode::LoadConst(const_position));
+                self.push_load_const(PyObject::new_numeric(raw_value, false));
             }
             Node::StringLiteral {
                 span: _,
@@ -793,26 +731,14 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     .collect::<Vec<&'value str>>()
                     .join("");
 
-                let const_position = self.context_stack.last().unwrap().borrow().const_len() as u8;
-                (**self.context_stack.last().unwrap())
-                    .borrow_mut()
-                    .push_const(PyObject::new_string(value.to_string(), false));
-                self.push_op(OpCode::LoadConst(const_position));
+                self.push_load_const(PyObject::new_string(value.to_string(), false));
             }
             Node::BooleanLiteral { span } => {
                 let value = self.span_to_str(span);
-                let const_position = self.context_stack.last().unwrap().borrow().const_len() as u8;
-                (**self.context_stack.last().unwrap())
-                    .borrow_mut()
-                    .push_const(PyObject::new_boolean(value, false));
-                self.push_op(OpCode::LoadConst(const_position));
+                self.push_load_const(PyObject::new_boolean(value, false));
             }
             Node::NullLiteral { span: _ } => {
-                let const_position = self.context_stack.last().unwrap().borrow().const_len() as u8;
-                (**self.context_stack.last().unwrap())
-                    .borrow_mut()
-                    .push_const(PyObject::None(false));
-                self.push_op(OpCode::LoadConst(const_position));
+                self.push_load_const(PyObject::None(false));
             }
             Node::Identifier { span } => {
                 let value = self.span_to_str(span);
@@ -968,11 +894,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 match value {
                     Some(v) => self.compile(v, None),
                     None => {
-                        let p = self.context_stack.last().unwrap().borrow().const_len() as u8;
-                        (**self.context_stack.last().unwrap())
-                            .borrow_mut()
-                            .push_const(PyObject::None(false));
-                        self.push_op(OpCode::LoadConst(p));
+                        self.push_load_const(PyObject::None(false));
                     }
                 }
                 self.push_op(OpCode::ReturnValue);
@@ -1060,11 +982,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     self.push_op(OpCode::LoadConst(position));
 
                     // 関数名の読み込み
-                    let position = self.context_stack.last().unwrap().borrow().const_len() as u8;
-                    (**self.context_stack.last().unwrap())
-                        .borrow_mut()
-                        .push_const(PyObject::new_string(name.to_string(), false));
-                    self.push_op(OpCode::LoadConst(position));
+                    self.push_load_const(PyObject::new_string(name.to_string(), false));
 
                     // 関数作成と収納
                     self.push_op(OpCode::MakeFunction);
@@ -1293,6 +1211,15 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
 
     fn push_op(&self, op: OpCode) {
         self.byte_operations.borrow_mut().push(op);
+    }
+
+    fn push_load_const(&self, value: PyObject) -> u8 {
+        let position = self.context_stack.last().unwrap().borrow().const_len() as u8;
+        (**self.context_stack.last().unwrap())
+            .borrow_mut()
+            .push_const(value);
+        self.push_op(OpCode::LoadConst(position));
+        position
     }
 
     fn gen_jump_label(&self) -> u32 {
