@@ -355,6 +355,12 @@ MultiplicativeExpression -> Result<Node, ()>:
     | MultiplicativeExpression '/' Primary { 
         Ok(Node::BinaryExpression { span: $span, operator: "/", left: Box::new($1?), right: Box::new($3?) })
     }
+    | MultiplicativeExpression '%' Primary { 
+        Ok(Node::BinaryExpression { span: $span, operator: "%", left: Box::new($1?), right: Box::new($3?) })
+    }
+    | MultiplicativeExpression '~/' Primary { 
+        Ok(Node::BinaryExpression { span: $span, operator: "~/", left: Box::new($1?), right: Box::new($3?) })
+    }
     | UnaryExpression { $1 }
     ;
 

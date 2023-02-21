@@ -13,8 +13,10 @@ pub enum OpCode {
     UnaryNot,
     UnaryInvert,
     BinaryMultiply,
+    BinaryModulo,
     BinaryAdd,
     BinarySubtract,
+    BinaryFloorDivide,
     BinaryTrueDivide,
     InplaceFloorDivide,
     InplaceTrueDivide,
@@ -81,8 +83,10 @@ impl OpCode {
             OpCode::UnaryNot => 12,
             OpCode::UnaryInvert => 15,
             OpCode::BinaryMultiply => 20,
+            OpCode::BinaryModulo => 22,
             OpCode::BinaryAdd => 23,
             OpCode::BinarySubtract => 24,
+            OpCode::BinaryFloorDivide => 26,
             OpCode::BinaryTrueDivide => 27,
             OpCode::InplaceFloorDivide => 28,
             OpCode::InplaceTrueDivide => 29,
@@ -172,8 +176,10 @@ impl OpCode {
 
             OpCode::BinaryAdd
             | OpCode::BinaryMultiply
+            | OpCode::BinaryModulo
             | OpCode::BinarySubtract
             | OpCode::BinaryTrueDivide
+            | OpCode::BinaryFloorDivide
             | OpCode::BinaryLShift
             | OpCode::BinaryRShift
             | OpCode::BinaryAnd

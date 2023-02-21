@@ -391,6 +391,8 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                         "-" => self.push_op(OpCode::BinarySubtract),
                         "*" => self.push_op(OpCode::BinaryMultiply),
                         "/" => self.push_op(OpCode::BinaryTrueDivide),
+                        "%" => self.push_op(OpCode::BinaryModulo),
+                        "~/" => self.push_op(OpCode::BinaryFloorDivide),
                         _ => panic!("unknown operator: {}", *operator),
                     }
                 }

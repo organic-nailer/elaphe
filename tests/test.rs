@@ -132,6 +132,18 @@ fn binary_op() {
         exec_py_and_assert(&output, "7\n");
         elaphe::run(&output, "main() { print(3 ^ 6); }").expect("execution failed.");
         exec_py_and_assert(&output, "5\n");
+        elaphe::run(&output, "main() { print(5 + 2); }").expect("execution failed.");
+        exec_py_and_assert(&output, "7\n");
+        elaphe::run(&output, "main() { print(5 - 2); }").expect("execution failed.");
+        exec_py_and_assert(&output, "3\n");
+        elaphe::run(&output, "main() { print(5 * 2); }").expect("execution failed.");
+        exec_py_and_assert(&output, "10\n");
+        elaphe::run(&output, "main() { print(5 / 2); }").expect("execution failed.");
+        exec_py_and_assert(&output, "2.5\n");
+        elaphe::run(&output, "main() { print(5 ~/ 2); }").expect("execution failed.");
+        exec_py_and_assert(&output, "2\n");
+        elaphe::run(&output, "main() { print(5 % 2); }").expect("execution failed.");
+        exec_py_and_assert(&output, "1\n");
     });
     clean(&output);
     if result.is_err() {
