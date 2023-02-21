@@ -426,6 +426,149 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     _ => panic!("unknown unary operator: {}", *operator),
                 }
             }
+            Node::UpdateExpression {
+                span: _,
+                operator,
+                is_prefix,
+                child,
+            } => {
+                if let Node::Identifier { span } = **child {
+                    let value = self.span_to_str(&span);
+                    if *is_prefix {
+                        // 前置
+                        let p = (**self.context_stack.last().unwrap())
+                            .borrow_mut()
+                            .register_or_get_name(value.to_string());
+                        let scope = self
+                            .context_stack
+                            .last()
+                            .unwrap()
+                            .borrow()
+                            .check_variable_scope(value);
+                        match scope {
+                            VariableScope::Global => {
+                                if self.context_stack.last().unwrap().borrow().is_global() {
+                                    self.push_op(OpCode::LoadName(p));
+                                } else {
+                                    self.push_op(OpCode::LoadGlobal(p));
+                                }
+                            }
+                            VariableScope::Local => {
+                                let p = self
+                                    .context_stack
+                                    .last()
+                                    .unwrap()
+                                    .borrow()
+                                    .get_local_variable(value);
+                                self.push_op(OpCode::LoadFast(p));
+                            }
+                            VariableScope::NotDefined => {
+                                panic!("{} is used before its declaration.", value);
+                            }
+                        }
+                        let one_position =
+                            self.context_stack.last().unwrap().borrow().const_len() as u8;
+                        (**self.context_stack.last().unwrap())
+                            .borrow_mut()
+                            .push_const(PyObject::Int(1, false));
+                        self.push_op(OpCode::LoadConst(one_position));
+                        match *operator {
+                            "++" => self.push_op(OpCode::InplaceAdd),
+                            "--" => self.push_op(OpCode::InplaceSubtract),
+                            _ => (),
+                        }
+                        self.push_op(OpCode::DupTop);
+                        match scope {
+                            VariableScope::Global => {
+                                if self.context_stack.last().unwrap().borrow().is_global() {
+                                    self.push_op(OpCode::StoreName(p));
+                                } else {
+                                    self.push_op(OpCode::StoreGlobal(p));
+                                }
+                            }
+                            VariableScope::Local => {
+                                let p = self
+                                    .context_stack
+                                    .last()
+                                    .unwrap()
+                                    .borrow()
+                                    .get_local_variable(value);
+                                self.push_op(OpCode::StoreFast(p));
+                            }
+                            VariableScope::NotDefined => {
+                                panic!("{} is used before its declaration.", value);
+                            }
+                        }
+                    } else {
+                        // 後置
+                        let p = (**self.context_stack.last().unwrap())
+                            .borrow_mut()
+                            .register_or_get_name(value.to_string());
+                        let scope = self
+                            .context_stack
+                            .last()
+                            .unwrap()
+                            .borrow()
+                            .check_variable_scope(value);
+                        match scope {
+                            VariableScope::Global => {
+                                if self.context_stack.last().unwrap().borrow().is_global() {
+                                    self.push_op(OpCode::LoadName(p));
+                                } else {
+                                    self.push_op(OpCode::LoadGlobal(p));
+                                }
+                            }
+                            VariableScope::Local => {
+                                let p = self
+                                    .context_stack
+                                    .last()
+                                    .unwrap()
+                                    .borrow()
+                                    .get_local_variable(value);
+                                self.push_op(OpCode::LoadFast(p));
+                            }
+                            VariableScope::NotDefined => {
+                                panic!("{} is used before its declaration.", value);
+                            }
+                        }
+                        self.push_op(OpCode::DupTop);
+                        let one_position =
+                            self.context_stack.last().unwrap().borrow().const_len() as u8;
+                        (**self.context_stack.last().unwrap())
+                            .borrow_mut()
+                            .push_const(PyObject::Int(1, false));
+                        self.push_op(OpCode::LoadConst(one_position));
+                        match *operator {
+                            "++" => self.push_op(OpCode::InplaceAdd),
+                            "--" => self.push_op(OpCode::InplaceSubtract),
+                            _ => (),
+                        }
+                        match scope {
+                            VariableScope::Global => {
+                                if self.context_stack.last().unwrap().borrow().is_global() {
+                                    self.push_op(OpCode::StoreName(p));
+                                } else {
+                                    self.push_op(OpCode::StoreGlobal(p));
+                                }
+                            }
+                            VariableScope::Local => {
+                                let p = self
+                                    .context_stack
+                                    .last()
+                                    .unwrap()
+                                    .borrow()
+                                    .get_local_variable(value);
+                                self.push_op(OpCode::StoreFast(p));
+                            }
+                            VariableScope::NotDefined => {
+                                panic!("{} is used before its declaration.", value);
+                            }
+                        }
+                    }
+                } else {
+                    panic!("Invalid AST. Increment target must be an identifier.");
+                }
+            }
             Node::AssignmentExpression {
                 span: _,
                 operator,
@@ -1094,7 +1237,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 if let Some(stmt_label) = label {
                     self.continue_label_table.remove(stmt_label);
                 }
-            },
+            }
             Node::SwitchStatement {
                 span: _,
                 expr,
@@ -1110,7 +1253,8 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                         None => None,
                     },
                 });
-                let case_labels: Vec<u32> = case_list.iter().map(|_| { self.gen_jump_label() }).collect();
+                let case_labels: Vec<u32> =
+                    case_list.iter().map(|_| self.gen_jump_label()).collect();
                 for case_index in 0..case_list.len() {
                     let case = &case_list[case_index];
                     let case_label = case_labels[case_index];

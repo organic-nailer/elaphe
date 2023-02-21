@@ -374,12 +374,24 @@ UnaryExpression -> Result<Node, ()>:
     | "~" UnaryExpression {
         Ok(Node::UnaryOpExpression { span: $span, operator: "~", child: Box::new($2?) })
     }
+    | "++" UnaryExpression {
+        Ok(Node::UpdateExpression { span: $span, operator: "++", is_prefix: true, child: Box::new($2?) })
+    }
+    | "--" UnaryExpression {
+        Ok(Node::UpdateExpression { span: $span, operator: "--", is_prefix: true, child: Box::new($2?) })
+    }
     | PostfixExpression { $1 }
     ;
 
 PostfixExpression -> Result<Node, ()>:
       PostfixExpression Selector {
         Ok(Node::WithSelectorExpression { span: $span, child: Box::new($1?), selector: Box::new($2?) })
+    }
+    | PostfixExpression "++" {
+        Ok(Node::UpdateExpression { span: $span, operator: "++", is_prefix: false, child: Box::new($1?) })
+    }
+    | PostfixExpression "--" {
+        Ok(Node::UpdateExpression { span: $span, operator: "--", is_prefix: false, child: Box::new($1?) })
     }
     | Primary { $1 }
     ;
@@ -488,6 +500,12 @@ pub enum Node {
     UnaryOpExpression {
         span: Span,
         operator: &'static str,
+        child: Box<Node>,
+    },
+    UpdateExpression {
+        span: Span,
+        operator: &'static str,
+        is_prefix: bool,
         child: Box<Node>,
     },
     AssignmentExpression {

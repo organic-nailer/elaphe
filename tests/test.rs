@@ -551,3 +551,22 @@ fn switch_statement() {
         panic!("{:?}", result);
     }
 }
+
+#[test]
+fn update_expression() {
+    let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
+    let result = catch_unwind(|| {
+        elaphe::run(&output, "main() { var x = 1; print(x++); print(x); }").expect("execution failed.");
+        exec_py_and_assert(&output, "1\n2\n");
+        elaphe::run(&output, "main() { var x = 1; print(x--); print(x); }").expect("execution failed.");
+        exec_py_and_assert(&output, "1\n0\n");
+        elaphe::run(&output, "main() { var x = 1; print(++x); print(x); }").expect("execution failed.");
+        exec_py_and_assert(&output, "2\n2\n");
+        elaphe::run(&output, "main() { var x = 1; print(--x); print(x); }").expect("execution failed.");
+        exec_py_and_assert(&output, "0\n0\n");
+    });
+    clean(&output);
+    if result.is_err() {
+        panic!("{:?}", result);
+    }
+}
