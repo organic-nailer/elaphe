@@ -444,39 +444,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                             self.compile(right, None);
                             // DartではAssignment Expressionが代入先の最終的な値を残す
                             self.push_op(OpCode::DupTop);
-                            let scope = self
-                                .context_stack
-                                .last()
-                                .unwrap()
-                                .borrow()
-                                .check_variable_scope(value);
-                            match scope {
-                                VariableScope::Global => {
-                                    if self.context_stack.last().unwrap().borrow().is_global() {
-                                        let p = (**self.context_stack.last().unwrap())
-                                            .borrow_mut()
-                                            .register_or_get_name(value.to_string());
-                                        self.push_op(OpCode::StoreName(p));
-                                    } else {
-                                        let p = (**self.context_stack.last().unwrap())
-                                            .borrow_mut()
-                                            .register_or_get_name(value.to_string());
-                                        self.push_op(OpCode::StoreGlobal(p));
-                                    }
-                                }
-                                VariableScope::Local => {
-                                    let p = self
-                                        .context_stack
-                                        .last()
-                                        .unwrap()
-                                        .borrow()
-                                        .get_local_variable(value);
-                                    self.push_op(OpCode::StoreFast(p));
-                                }
-                                VariableScope::NotDefined => {
-                                    panic!("{} is used before its declaration.", value);
-                                }
-                            }
+                            self.push_store_var(value);
                         }
                         "*=" | "/=" | "~/=" | "%=" | "+=" | "-=" | "<<=" | ">>=" | "&=" | "^="
                         | "|=" => {
