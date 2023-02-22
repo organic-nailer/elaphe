@@ -406,36 +406,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     let value = self.span_to_str(&span);
                     if *is_prefix {
                         // 前置
-                        let p = (**self.context_stack.last().unwrap())
-                            .borrow_mut()
-                            .register_or_get_name(value.to_string());
-                        let scope = self
-                            .context_stack
-                            .last()
-                            .unwrap()
-                            .borrow()
-                            .check_variable_scope(value);
-                        match scope {
-                            VariableScope::Global => {
-                                if self.context_stack.last().unwrap().borrow().is_global() {
-                                    self.push_op(OpCode::LoadName(p));
-                                } else {
-                                    self.push_op(OpCode::LoadGlobal(p));
-                                }
-                            }
-                            VariableScope::Local => {
-                                let p = self
-                                    .context_stack
-                                    .last()
-                                    .unwrap()
-                                    .borrow()
-                                    .get_local_variable(value);
-                                self.push_op(OpCode::LoadFast(p));
-                            }
-                            VariableScope::NotDefined => {
-                                panic!("{} is used before its declaration.", value);
-                            }
-                        }
+                        self.push_load_var(value);
                         self.push_load_const(PyObject::Int(1, false));
                         match *operator {
                             "++" => self.push_op(OpCode::InplaceAdd),
@@ -443,59 +414,10 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                             _ => (),
                         }
                         self.push_op(OpCode::DupTop);
-                        match scope {
-                            VariableScope::Global => {
-                                if self.context_stack.last().unwrap().borrow().is_global() {
-                                    self.push_op(OpCode::StoreName(p));
-                                } else {
-                                    self.push_op(OpCode::StoreGlobal(p));
-                                }
-                            }
-                            VariableScope::Local => {
-                                let p = self
-                                    .context_stack
-                                    .last()
-                                    .unwrap()
-                                    .borrow()
-                                    .get_local_variable(value);
-                                self.push_op(OpCode::StoreFast(p));
-                            }
-                            VariableScope::NotDefined => {
-                                panic!("{} is used before its declaration.", value);
-                            }
-                        }
+                        self.push_store_var(value);
                     } else {
                         // 後置
-                        let p = (**self.context_stack.last().unwrap())
-                            .borrow_mut()
-                            .register_or_get_name(value.to_string());
-                        let scope = self
-                            .context_stack
-                            .last()
-                            .unwrap()
-                            .borrow()
-                            .check_variable_scope(value);
-                        match scope {
-                            VariableScope::Global => {
-                                if self.context_stack.last().unwrap().borrow().is_global() {
-                                    self.push_op(OpCode::LoadName(p));
-                                } else {
-                                    self.push_op(OpCode::LoadGlobal(p));
-                                }
-                            }
-                            VariableScope::Local => {
-                                let p = self
-                                    .context_stack
-                                    .last()
-                                    .unwrap()
-                                    .borrow()
-                                    .get_local_variable(value);
-                                self.push_op(OpCode::LoadFast(p));
-                            }
-                            VariableScope::NotDefined => {
-                                panic!("{} is used before its declaration.", value);
-                            }
-                        }
+                        self.push_load_var(value);
                         self.push_op(OpCode::DupTop);
                         self.push_load_const(PyObject::Int(1, false));
                         match *operator {
@@ -503,27 +425,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                             "--" => self.push_op(OpCode::InplaceSubtract),
                             _ => (),
                         }
-                        match scope {
-                            VariableScope::Global => {
-                                if self.context_stack.last().unwrap().borrow().is_global() {
-                                    self.push_op(OpCode::StoreName(p));
-                                } else {
-                                    self.push_op(OpCode::StoreGlobal(p));
-                                }
-                            }
-                            VariableScope::Local => {
-                                let p = self
-                                    .context_stack
-                                    .last()
-                                    .unwrap()
-                                    .borrow()
-                                    .get_local_variable(value);
-                                self.push_op(OpCode::StoreFast(p));
-                            }
-                            VariableScope::NotDefined => {
-                                panic!("{} is used before its declaration.", value);
-                            }
-                        }
+                        self.push_store_var(value);
                     }
                 } else {
                     panic!("Invalid AST. Increment target must be an identifier.");
@@ -578,36 +480,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                         }
                         "*=" | "/=" | "~/=" | "%=" | "+=" | "-=" | "<<=" | ">>=" | "&=" | "^="
                         | "|=" => {
-                            let p = (**self.context_stack.last().unwrap())
-                                .borrow_mut()
-                                .register_or_get_name(value.to_string());
-                            let scope = self
-                                .context_stack
-                                .last()
-                                .unwrap()
-                                .borrow()
-                                .check_variable_scope(value);
-                            match scope {
-                                VariableScope::Global => {
-                                    if self.context_stack.last().unwrap().borrow().is_global() {
-                                        self.push_op(OpCode::LoadName(p));
-                                    } else {
-                                        self.push_op(OpCode::LoadGlobal(p));
-                                    }
-                                }
-                                VariableScope::Local => {
-                                    let p = self
-                                        .context_stack
-                                        .last()
-                                        .unwrap()
-                                        .borrow()
-                                        .get_local_variable(value);
-                                    self.push_op(OpCode::LoadFast(p));
-                                }
-                                VariableScope::NotDefined => {
-                                    panic!("{} is used before its declaration.", value);
-                                }
-                            }
+                            self.push_load_var(value);
                             self.compile(right, None);
                             match *operator {
                                 "*=" => self.push_op(OpCode::InplaceMultiply),
@@ -624,89 +497,20 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                                 _ => (),
                             }
                             self.push_op(OpCode::DupTop);
-                            match scope {
-                                VariableScope::Global => {
-                                    if self.context_stack.last().unwrap().borrow().is_global() {
-                                        self.push_op(OpCode::StoreName(p));
-                                    } else {
-                                        self.push_op(OpCode::StoreGlobal(p));
-                                    }
-                                }
-                                VariableScope::Local => {
-                                    let p = self
-                                        .context_stack
-                                        .last()
-                                        .unwrap()
-                                        .borrow()
-                                        .get_local_variable(value);
-                                    self.push_op(OpCode::StoreFast(p));
-                                }
-                                VariableScope::NotDefined => {
-                                    panic!("{} is used before its declaration.", value);
-                                }
-                            }
+                            self.push_store_var(value);
                         }
                         "??=" => {
-                            let p = (**self.context_stack.last().unwrap())
-                                .borrow_mut()
-                                .register_or_get_name(value.to_string());
-                            let scope = self
-                                .context_stack
-                                .last()
-                                .unwrap()
-                                .borrow()
-                                .check_variable_scope(value);
-                            match scope {
-                                VariableScope::Global => {
-                                    if self.context_stack.last().unwrap().borrow().is_global() {
-                                        self.push_op(OpCode::LoadName(p));
-                                        self.push_op(OpCode::DupTop);
-                                        self.push_load_const(PyObject::None(false));
-                                        self.push_op(OpCode::compare_op_from_str("=="));
-                                        let label_end = self.gen_jump_label();
-                                        self.push_op(OpCode::PopJumpIfFalse(label_end));
-                                        self.push_op(OpCode::PopTop);
-                                        self.compile(right, None);
-                                        self.push_op(OpCode::DupTop);
-                                        self.push_op(OpCode::StoreName(p));
-                                        self.set_jump_label_value(label_end);
-                                    } else {
-                                        self.push_op(OpCode::LoadGlobal(p));
-                                        self.push_op(OpCode::DupTop);
-                                        self.push_load_const(PyObject::None(false));
-                                        self.push_op(OpCode::compare_op_from_str("=="));
-                                        let label_end = self.gen_jump_label();
-                                        self.push_op(OpCode::PopJumpIfFalse(label_end));
-                                        self.push_op(OpCode::PopTop);
-                                        self.compile(right, None);
-                                        self.push_op(OpCode::DupTop);
-                                        self.push_op(OpCode::StoreGlobal(p));
-                                        self.set_jump_label_value(label_end);
-                                    }
-                                }
-                                VariableScope::Local => {
-                                    let p = self
-                                        .context_stack
-                                        .last()
-                                        .unwrap()
-                                        .borrow()
-                                        .get_local_variable(value);
-                                    self.push_op(OpCode::LoadFast(p));
-                                    self.push_op(OpCode::DupTop);
-                                    self.push_load_const(PyObject::None(false));
-                                    self.push_op(OpCode::compare_op_from_str("=="));
-                                    let label_end = self.gen_jump_label();
-                                    self.push_op(OpCode::PopJumpIfFalse(label_end));
-                                    self.push_op(OpCode::PopTop);
-                                    self.compile(right, None);
-                                    self.push_op(OpCode::DupTop);
-                                    self.push_op(OpCode::StoreFast(p));
-                                    self.set_jump_label_value(label_end);
-                                }
-                                VariableScope::NotDefined => {
-                                    panic!("{} is used before its declaration.", value);
-                                }
-                            }
+                            self.push_load_var(value);
+                            self.push_op(OpCode::DupTop);
+                            self.push_load_const(PyObject::None(false));
+                            self.push_op(OpCode::compare_op_from_str("=="));
+                            let label_end = self.gen_jump_label();
+                            self.push_op(OpCode::PopJumpIfFalse(label_end));
+                            self.push_op(OpCode::PopTop);
+                            self.compile(right, None);
+                            self.push_op(OpCode::DupTop);
+                            self.push_store_var(value);
+                            self.set_jump_label_value(label_end);
                         }
                         _ => panic!("Unknown assignment operator: {}", value),
                     }
@@ -742,39 +546,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             }
             Node::Identifier { span } => {
                 let value = self.span_to_str(span);
-                let scope = self
-                    .context_stack
-                    .last()
-                    .unwrap()
-                    .borrow()
-                    .check_variable_scope(value);
-                match scope {
-                    VariableScope::Global => {
-                        if self.context_stack.last().unwrap().borrow().is_global() {
-                            let p = (**self.context_stack.last().unwrap())
-                                .borrow_mut()
-                                .register_or_get_name(value.to_string());
-                            self.push_op(OpCode::LoadName(p));
-                        } else {
-                            let p = (**self.context_stack.last().unwrap())
-                                .borrow_mut()
-                                .register_or_get_name(value.to_string());
-                            self.push_op(OpCode::LoadGlobal(p));
-                        }
-                    }
-                    VariableScope::Local => {
-                        let p = self
-                            .context_stack
-                            .last()
-                            .unwrap()
-                            .borrow()
-                            .get_local_variable(value);
-                        self.push_op(OpCode::LoadFast(p));
-                    }
-                    VariableScope::NotDefined => {
-                        panic!("{} is used before its declaration.", value);
-                    }
-                }
+                self.push_load_var(value);
             }
             Node::SelectorAttr {
                 span: _,
@@ -1220,6 +992,78 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             .push_const(value);
         self.push_op(OpCode::LoadConst(position));
         position
+    }
+
+    fn push_load_var(&self, value: &'value str) {
+        let scope = self
+            .context_stack
+            .last()
+            .unwrap()
+            .borrow()
+            .check_variable_scope(value);
+        match scope {
+            VariableScope::Global => {
+                if self.context_stack.last().unwrap().borrow().is_global() {
+                    let p = (**self.context_stack.last().unwrap())
+                        .borrow_mut()
+                        .register_or_get_name(value.to_string());
+                    self.push_op(OpCode::LoadName(p));
+                } else {
+                    let p = (**self.context_stack.last().unwrap())
+                        .borrow_mut()
+                        .register_or_get_name(value.to_string());
+                    self.push_op(OpCode::LoadGlobal(p));
+                }
+            }
+            VariableScope::Local => {
+                let p = self
+                    .context_stack
+                    .last()
+                    .unwrap()
+                    .borrow()
+                    .get_local_variable(value);
+                self.push_op(OpCode::LoadFast(p));
+            }
+            VariableScope::NotDefined => {
+                panic!("{} is used before its declaration.", value);
+            }
+        }
+    }
+
+    fn push_store_var(&self, value: &'value str) {
+        let scope = self
+            .context_stack
+            .last()
+            .unwrap()
+            .borrow()
+            .check_variable_scope(value);
+        match scope {
+            VariableScope::Global => {
+                if self.context_stack.last().unwrap().borrow().is_global() {
+                    let p = (**self.context_stack.last().unwrap())
+                        .borrow_mut()
+                        .register_or_get_name(value.to_string());
+                    self.push_op(OpCode::StoreName(p));
+                } else {
+                    let p = (**self.context_stack.last().unwrap())
+                        .borrow_mut()
+                        .register_or_get_name(value.to_string());
+                    self.push_op(OpCode::StoreGlobal(p));
+                }
+            }
+            VariableScope::Local => {
+                let p = self
+                    .context_stack
+                    .last()
+                    .unwrap()
+                    .borrow()
+                    .get_local_variable(value);
+                self.push_op(OpCode::StoreFast(p));
+            }
+            VariableScope::NotDefined => {
+                panic!("{} is used before its declaration.", value);
+            }
+        }
     }
 
     fn gen_jump_label(&self) -> u32 {
