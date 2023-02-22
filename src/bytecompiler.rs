@@ -26,7 +26,7 @@ pub struct ByteCompiler<'ctx, 'value: 'ctx> {
     source: &'value str,
 }
 
-const PREDEFINED_VARIABLES: [&'static str; 1] = ["print"];
+const PREDEFINED_VARIABLES: [&'static str; 3] = ["print", "IOError", "KeyboardInterrupt"];
 
 pub fn run_root<'value>(
     file_name: &'value str,
@@ -232,9 +232,9 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             // 最後尾のモジュールをタプルで積む
             let import_mod = path_splitted.pop().unwrap();
             let import_mod_p = self.push_load_const(PyObject::SmallTuple {
-                    children: vec![PyObject::new_string(import_mod.to_string(), false)],
-                    add_ref: false,
-                });
+                children: vec![PyObject::new_string(import_mod.to_string(), false)],
+                add_ref: false,
+            });
 
             // 名前でインポート
             let p = (**self.context_stack.last().unwrap())
@@ -566,6 +566,10 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 self.compile(child, None);
                 self.compile(selector, None);
             }
+            Node::ThrowExpression { span: _, expr } => {
+                self.compile(expr, None);
+                self.push_op(OpCode::RaiseVarargs(1));
+            }
 
             Node::LabeledStatement {
                 span: _,
@@ -653,6 +657,9 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     self.compile(child, None);
                 }
                 self.context_stack.pop();
+            }
+            Node::RethrowStatement { span: _ } => {
+                self.push_op(OpCode::Reraise);
             }
 
             Node::VariableDeclaration {
@@ -779,6 +786,130 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                         self.set_jump_label_value(label_if_ends);
                     }
                 }
+            }
+            // try S1 on EX catch(E1) S2 catch(E2) S3 finally S4
+            // は以下に分解する
+            // try {
+            //   try S1
+            //   on EX catch(E1) S2
+            //   catch(E2) S3
+            // }
+            // finally S4
+            //
+            Node::TryFinallyStatement {
+                span: _,
+                block_try,
+                block_finally,
+            } => {
+                let label_finally = self.gen_jump_label();
+                let label_end = self.gen_jump_label();
+
+                self.push_op(OpCode::SetupFinally(label_finally));
+                let label_finally_zero = self.byte_operations.borrow().len() as u8;
+
+                // 通常フロー
+                self.compile(block_try, None);
+                self.push_op(OpCode::PopBlock);
+                self.compile(block_finally, None);
+                self.push_op(OpCode::JumpAbsolute(label_end));
+
+                // 例外が起きたときのフロー
+                self.set_jump_label_value_offset(label_finally, label_finally_zero);
+                self.compile(block_finally, None);
+                self.push_op(OpCode::Reraise);
+
+                self.set_jump_label_value(label_end);
+            }
+            Node::TryOnStatement {
+                span: _,
+                block_try,
+                on_part_list,
+            } => {
+                let label_finally = self.gen_jump_label();
+                let label_end = self.gen_jump_label();
+
+                self.push_op(OpCode::SetupFinally(label_finally));
+                let label_finally_zero = self.byte_operations.borrow().len() as u8;
+
+                // 通常のフロー
+                self.compile(block_try, None);
+                self.push_op(OpCode::PopBlock);
+                self.push_op(OpCode::JumpAbsolute(label_end));
+
+                // 例外時のフロー
+                self.set_jump_label_value_offset(label_finally, label_finally_zero);
+                for on_part in on_part_list {
+                    let label_next = self.gen_jump_label();
+
+                    self.context_stack.push(Rc::new(RefCell::new(BlockContext {
+                        outer: self.context_stack.last().unwrap().clone(),
+                        variables: vec![],
+                    })));
+
+                    // catchする型の指定がある場合はloadして検証する
+                    match &on_part.exc_type {
+                        Some(v) => {
+                            let name = self.id_to_str(v);
+                            let p = (**self.context_stack.last().unwrap())
+                                .borrow_mut()
+                                .register_or_get_name(name.to_string());
+                            self.push_op(OpCode::LoadName(p));
+                            self.push_op(OpCode::JumpIfNotExcMatch(label_next));
+                        }
+                        None => (),
+                    }
+
+                    // スタックの状態:
+                    // [trace_back, value, exception] -> TOP
+                    match &on_part.catch_part {
+                        Some(catch_part) => {
+                            // on E catch() { }
+                            // self.push_op(OpCode::PopTop);
+                            // 実行してみると最初にpopしたものがexception、
+                            // 2番目がtraceback objectになっている
+                            // なぜ？
+
+                            let name = self.id_to_str(&catch_part.id_error);
+                            (**self.context_stack.last().unwrap())
+                                .borrow_mut()
+                                .declare_variable(name);
+                            self.push_store_var(name);
+
+                            match &catch_part.id_trace {
+                                Some(id_trace) => {
+                                    let name = self.id_to_str(id_trace);
+                                    (**self.context_stack.last().unwrap())
+                                        .borrow_mut()
+                                        .declare_variable(name);
+                                    self.push_store_var(name);
+                                }
+                                None => {
+                                    self.push_op(OpCode::PopTop);
+                                }
+                            }
+                            
+                            self.push_op(OpCode::PopTop);
+                        }
+                        None => {
+                            // on E { }
+                            self.push_op(OpCode::PopTop);
+                            self.push_op(OpCode::PopTop);
+                            self.push_op(OpCode::PopTop);
+                        }
+                    }
+
+                    self.compile(&on_part.block, None);
+                    self.push_op(OpCode::PopExcept);
+                    self.push_op(OpCode::JumpAbsolute(label_end));
+
+                    self.set_jump_label_value(label_next);
+
+                    self.context_stack.pop();
+                }
+
+                self.push_op(OpCode::Reraise);
+
+                self.set_jump_label_value(label_end);
             }
             Node::ForStatement {
                 span: _,
@@ -949,6 +1080,14 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
         return &self.source[span.start()..span.end()];
     }
 
+    fn id_to_str(&self, identifier: &Box<Node>) -> &'value str {
+        if let Node::Identifier { span } = **identifier {
+            self.span_to_str(&span)
+        } else {
+            panic!("Invalid AST")
+        }
+    }
+
     fn push_op(&self, op: OpCode) {
         self.byte_operations.borrow_mut().push(op);
     }
@@ -1043,6 +1182,12 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
     // 今の次の位置にラベル位置を合わせる
     fn set_jump_label_value(&self, key: u32) {
         let index = self.byte_operations.borrow().len() as u8;
+        // 1命令あたり2バイトなので2倍
+        self.jump_label_table.borrow_mut().insert(key, index * 2);
+    }
+
+    fn set_jump_label_value_offset(&self, key: u32, offset: u8) {
+        let index = (self.byte_operations.borrow().len() as u8) - offset;
         // 1命令あたり2バイトなので2倍
         self.jump_label_table.borrow_mut().insert(key, index * 2);
     }

@@ -20,6 +20,7 @@ pub enum OpCode {
     BinaryTrueDivide,
     InplaceFloorDivide,
     InplaceTrueDivide,
+    Reraise,
     InplaceAdd,
     InplaceSubtract,
     InplaceMultiply,
@@ -35,6 +36,8 @@ pub enum OpCode {
     InplaceXor,
     InplaceOr,
     ReturnValue,
+    PopBlock,
+    PopExcept,
     StoreName(u8),
     StoreGlobal(u8),
     LoadConst(u8),
@@ -49,8 +52,11 @@ pub enum OpCode {
     JumpAbsolute(u32),
     PopJumpIfFalse(u32),
     LoadGlobal(u8),
+    JumpIfNotExcMatch(u32),
+    SetupFinally(u32),
     LoadFast(u8),
     StoreFast(u8),
+    RaiseVarargs(u8),
     PopJumpIfTrue(u32),
     CallFunction(u8),
     MakeFunction, // フラグを持つらしい
@@ -90,6 +96,7 @@ impl OpCode {
             OpCode::BinaryTrueDivide => 27,
             OpCode::InplaceFloorDivide => 28,
             OpCode::InplaceTrueDivide => 29,
+            OpCode::Reraise => 48,
             OpCode::InplaceAdd => 55,
             OpCode::InplaceSubtract => 56,
             OpCode::InplaceMultiply => 57,
@@ -105,6 +112,8 @@ impl OpCode {
             OpCode::InplaceXor => 78,
             OpCode::InplaceOr => 79,
             OpCode::ReturnValue => 83,
+            OpCode::PopBlock => 87,
+            OpCode::PopExcept => 89,
             OpCode::StoreName(_) => 90,
             OpCode::StoreGlobal(_) => 97,
             OpCode::LoadConst(_) => 100,
@@ -120,8 +129,11 @@ impl OpCode {
             OpCode::PopJumpIfFalse(_) => 114,
             OpCode::PopJumpIfTrue(_) => 115,
             OpCode::LoadGlobal(_) => 116,
+            OpCode::JumpIfNotExcMatch(_) => 121,
+            OpCode::SetupFinally(_) => 122,
             OpCode::LoadFast(_) => 124,
             OpCode::StoreFast(_) => 125,
+            OpCode::RaiseVarargs(_) => 130,
             OpCode::CallFunction(_) => 131,
             OpCode::MakeFunction => 132,
             OpCode::LoadMethod(_) => 160,
@@ -134,7 +146,11 @@ impl OpCode {
             // OpCode::JumpForward(v) |
             // OpCode::JumpIfFalseOrPop(v) |
             // OpCode::JumpIfTrueOrPop(v) |
-            OpCode::JumpAbsolute(v) | OpCode::PopJumpIfFalse(v) | OpCode::PopJumpIfTrue(v) => {
+            OpCode::JumpAbsolute(v) 
+            | OpCode::PopJumpIfFalse(v) 
+            | OpCode::PopJumpIfTrue(v) 
+            | OpCode::JumpIfNotExcMatch(v)
+            | OpCode::SetupFinally(v) => {
                 let operand = *label_table.get(&v).unwrap();
                 ByteCode {
                     operation: self.get_value(),
@@ -154,7 +170,8 @@ impl OpCode {
             | OpCode::ImportName(v)
             | OpCode::ImportFrom(v)
             | OpCode::LoadMethod(v)
-            | OpCode::CallMethod(v) => ByteCode {
+            | OpCode::CallMethod(v)
+            | OpCode::RaiseVarargs(v) => ByteCode {
                 operation: self.get_value(),
                 operand: v,
             },
@@ -166,7 +183,7 @@ impl OpCode {
     }
 
     // https://github.com/python/cpython/blob/b2b85b5db9cfdb24f966b61757536a898abc3830/Python/compile.c#L1075
-    pub fn stack_effect(&self, _jump: bool) -> i32 {
+    pub fn stack_effect(&self, jump: bool) -> i32 {
         match *self {
             OpCode::PopTop => -1,
 
@@ -204,6 +221,8 @@ impl OpCode {
             OpCode::StoreGlobal(_) | OpCode::StoreFast(_) | OpCode::StoreName(_) => -1,
 
             OpCode::ReturnValue => -1,
+            OpCode::PopBlock => 0,
+            OpCode::PopExcept => -1,
 
             OpCode::LoadConst(_)
             | OpCode::LoadName(_)
@@ -212,11 +231,17 @@ impl OpCode {
 
             OpCode::CallMethod(n) | OpCode::CallFunction(n) => -(n as i32),
 
+            OpCode::SetupFinally(_) => if jump { 1 } else { 0 },
+
+            OpCode::Reraise => -1,
+            OpCode::RaiseVarargs(v) => -(v as i32),
+
             // OpCode::JumpForward(_) |
             OpCode::JumpAbsolute(_) => 0,
             // OpCode::JumpIfFalseOrPop(_) |
             // OpCode::JumpIfTrueOrPop(_) => if jump { 0 } else { -1 },
             OpCode::PopJumpIfFalse(_) | OpCode::PopJumpIfTrue(_) => -1,
+            OpCode::JumpIfNotExcMatch(_) => 0,
 
             OpCode::MakeFunction => -1,
 

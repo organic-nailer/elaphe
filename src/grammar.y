@@ -88,6 +88,8 @@ NonLabeledStatement -> Result<Node, ()>:
       BlockStatement { $1 }
     | LocalVariableDeclaration { $1 }
     | IfStatement { $1 }
+    | RethrowStatement { $1 }
+    | TryStatement { $1 }
     | ForStatement { $1 }
     | WhileStatement { $1 }
     | DoStatement { $1 }
@@ -113,6 +115,62 @@ ExpressionStatement -> Result<Node, ()>:
 IfStatement -> Result<Node, ()>:
       "if" "(" Expression ")" Statement { Ok(Node::IfStatement { span: $span, condition: Box::new($3?), if_true_stmt: Box::new($5?), if_false_stmt: None }) }
     | "if" "(" Expression ")" Statement "else" Statement { Ok(Node::IfStatement { span: $span, condition: Box::new($3?), if_true_stmt: Box::new($5?), if_false_stmt: Some(Box::new($7?)) }) }
+    ;
+
+RethrowStatement -> Result<Node, ()>:
+    "rethrow" ";" {
+        Ok(Node::RethrowStatement { span: $span })
+    }
+    ;
+
+TryStatement -> Result<Node, ()>:
+      "try" BlockStatement FinallyPart {
+        Ok(Node::TryFinallyStatement { span: $span, block_try: Box::new($2?), block_finally: Box::new($3?) })
+    }
+    | "try" BlockStatement OnPartList {
+        Ok(Node::TryOnStatement { span: $span, block_try: Box::new($2?), on_part_list: $3? })
+    }
+    | "try" BlockStatement OnPartList FinallyPart {
+        Ok(Node::TryFinallyStatement { 
+            span: $span, 
+            block_try: Box::new(Node::TryOnStatement {
+                span: $span,
+                block_try: Box::new($2?),
+                on_part_list: $3?,
+            }),
+            block_finally: Box::new($4?), 
+        })
+    }
+    ;
+
+OnPartList -> Result<Vec<TryOnPart>, ()>:
+      OnPart { Ok(vec![$1?]) }
+    | OnPartList OnPart { flatten($1, $2?) }
+    ;
+
+OnPart -> Result<TryOnPart, ()>:
+      CatchPart BlockStatement {
+        Ok(TryOnPart { catch_part: Some($1?), exc_type: None, block: Box::new($2?) })
+    }
+    | "on" TypeNotVoid BlockStatement {
+        Ok(TryOnPart { catch_part: None, exc_type: Some(Box::new($2?)), block: Box::new($3?) })
+    }
+    | "on" TypeNotVoid CatchPart BlockStatement {
+        Ok(TryOnPart { catch_part: Some($3?), exc_type: Some(Box::new($2?)), block: Box::new($4?) })
+    }
+    ;
+
+CatchPart -> Result<TryCatchPart, ()>:
+      "catch" "(" Identifier ")" {
+        Ok(TryCatchPart { id_error: Box::new($3?), id_trace: None })
+    }
+    | "catch" "(" Identifier "," Identifier ")" {
+        Ok(TryCatchPart { id_error: Box::new($3?), id_trace: Some(Box::new($5?)) })
+    }
+    ;
+
+FinallyPart -> Result<Node, ()>:
+    "finally" BlockStatement { $2 }
     ;
 
 ForStatement -> Result<Node, ()>:
@@ -225,6 +283,7 @@ Expression -> Result<Node, ()>:
       AssignableExpression AssignmentOperator Expression {
         Ok(Node::AssignmentExpression { span: $span, operator: $2?, left: Box::new($1?), right: Box::new($3?) })
     }
+    | ThrowExpression { $1 }
     | ConditionalExpression { $1 }
     ;
 
@@ -246,6 +305,12 @@ AssignmentOperator -> Result<&'static str, ()>:
     | "^=" { Ok("^=") }
     | "|=" { Ok("|=") }
     | "??=" { Ok("??=") }
+    ;
+
+ThrowExpression -> Result<Node, ()>:
+    "throw" Expression {
+        Ok(Node::ThrowExpression { span: $span, expr: Box::new($2?) })
+    }
     ;
 
 ExpressionOpt -> Result<Option<Box<Node>>, ()>:
@@ -457,6 +522,11 @@ StringLiteralList -> Result<Vec<Span>, ()>:
         }
     }
     ;
+
+
+TypeNotVoid -> Result<Node, ()>:
+    Identifier { $1 }
+    ;
 %%
 // Any functions here are in scope for all the grammar actions above.
 
@@ -539,6 +609,10 @@ pub enum Node {
         child: Box<Node>,
         selector: Box<Node>,
     },
+    ThrowExpression {
+        span: Span,
+        expr: Box<Node>,
+    },
 
     LabeledStatement {
         span: Span,
@@ -566,6 +640,19 @@ pub enum Node {
         condition: Box<Node>,
         if_true_stmt: Box<Node>,
         if_false_stmt: Option<Box<Node>>,
+    },
+    RethrowStatement {
+        span: Span,
+    },
+    TryFinallyStatement {
+        span: Span,
+        block_try: Box<Node>,
+        block_finally: Box<Node>,
+    },
+    TryOnStatement {
+        span: Span,
+        block_try: Box<Node>,
+        on_part_list: Vec<TryOnPart>,
     },
     ForStatement {
         span: Span,
@@ -652,4 +739,17 @@ pub struct SwitchCase {
 pub struct DefaultCase {
     pub label_list: Vec<StatementLabel>,
     pub stmt_list: Vec<Box<Node>>,
+}
+
+#[derive(Debug)]
+pub struct TryOnPart {
+    pub catch_part: Option<TryCatchPart>,
+    pub exc_type: Option<Box<Node>>,
+    pub block: Box<Node>,
+}
+
+#[derive(Debug)]
+pub struct TryCatchPart {
+    pub id_error: Box<Node>,
+    pub id_trace: Option<Box<Node>>,
 }

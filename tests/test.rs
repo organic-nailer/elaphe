@@ -570,3 +570,50 @@ fn update_expression() {
         panic!("{:?}", result);
     }
 }
+
+#[test]
+fn try_statement() {
+    let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
+    let result = catch_unwind(|| {
+        elaphe::run(&output, r#"
+        main() {
+            try {
+              print("try");
+              throw IOError;
+            }
+            on IOError catch(e,t) {
+              print("IOError");
+            }
+            catch(e) {
+              print("Unknown");
+            }
+            finally {
+              print("finally");
+            }
+        }
+        "#).expect("execution failed.");
+        exec_py_and_assert(&output, "try\nIOError\nfinally\n");
+        elaphe::run(&output, r#"
+        main() {
+            try {
+              print("try");
+              throw KeyboardInterrupt;
+            }
+            on IOError {
+              print("IOError");
+            }
+            catch(e) {
+              print("Unknown");
+            }
+            finally {
+              print("finally");
+            }
+        }
+        "#).expect("execution failed.");
+        exec_py_and_assert(&output, "try\nUnknown\nfinally\n");
+    });
+    clean(&output);
+    if result.is_err() {
+        panic!("{:?}", result);
+    }
+}
