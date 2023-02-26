@@ -109,7 +109,7 @@ LocalVariableDeclaration -> Result<Node, ()>:
     InitializedVariableDeclaration ";" { $1 };
 
 ExpressionStatement -> Result<Node, ()>:
-    Expression ";" { Ok(Node::ExpressionStatement { span: $span, expr: Box::new($1?) }) }
+    ExpressionNotBrace ";" { Ok(Node::ExpressionStatement { span: $span, expr: Box::new($1?) }) }
     ;
 
 IfStatement -> Result<Node, ()>:
@@ -287,6 +287,14 @@ Expression -> Result<Node, ()>:
     | ConditionalExpression { $1 }
     ;
 
+ExpressionNotBrace -> Result<Node, ()>:
+      AssignableExpression AssignmentOperator Expression {
+        Ok(Node::AssignmentExpression { span: $span, operator: $2?, left: Box::new($1?), right: Box::new($3?) })
+    }
+    | ThrowExpression { $1 }
+    | ConditionalExpressionNotBrace { $1 }
+    ;
+
 AssignableExpression -> Result<Node, ()>:
       Identifier { $1 }
     ;
@@ -325,9 +333,23 @@ ConditionalExpression -> Result<Node, ()>:
     }
     ;
 
+ConditionalExpressionNotBrace -> Result<Node, ()>:
+      IfNullExpressionNotBrace { $1 }
+    | IfNullExpressionNotBrace "?" Expression ":" Expression {
+        Ok(Node::ConditionalExpression { span: $span, condition: Box::new($1?), if_true_expr: Box::new($3?), if_false_expr: Box::new($5?) })
+    }
+    ;
+
 IfNullExpression -> Result<Node, ()>:
       LogicalOrExpression { $1 }
     | IfNullExpression "??" LogicalOrExpression{
+        Ok(Node::BinaryExpression { span: $span, operator: "??", left: Box::new($1?), right: Box::new($3?) })
+    }
+    ;
+
+IfNullExpressionNotBrace -> Result<Node, ()>:
+      LogicalOrExpressionNotBrace { $1 }
+    | IfNullExpressionNotBrace "??" LogicalOrExpression{
         Ok(Node::BinaryExpression { span: $span, operator: "??", left: Box::new($1?), right: Box::new($3?) })
     }
     ;
@@ -339,9 +361,23 @@ LogicalOrExpression -> Result<Node, ()>:
     }
     ;
 
+LogicalOrExpressionNotBrace -> Result<Node, ()>:
+      LogicalAndExpressionNotBrace { $1 }
+    | LogicalOrExpressionNotBrace "||" LogicalAndExpression{
+        Ok(Node::BinaryExpression { span: $span, operator: "||", left: Box::new($1?), right: Box::new($3?) })
+    }
+    ;
+
 LogicalAndExpression -> Result<Node, ()>:
       EqualityExpression { $1 }
     | LogicalAndExpression "&&" EqualityExpression{
+        Ok(Node::BinaryExpression { span: $span, operator: "&&", left: Box::new($1?), right: Box::new($3?) })
+    }
+    ;
+
+LogicalAndExpressionNotBrace -> Result<Node, ()>:
+      EqualityExpressionNotBrace { $1 }
+    | LogicalAndExpressionNotBrace "&&" EqualityExpression{
         Ok(Node::BinaryExpression { span: $span, operator: "&&", left: Box::new($1?), right: Box::new($3?) })
     }
     ;
@@ -354,6 +390,16 @@ EqualityExpression -> Result<Node, ()>:
         Ok(Node::BinaryExpression { span: $span, operator: "!=", left: Box::new($1?), right: Box::new($3?) })
     }
     | RelationalExpression { $1 }
+    ;
+
+EqualityExpressionNotBrace -> Result<Node, ()>:
+      RelationalExpressionNotBrace "==" RelationalExpression {
+        Ok(Node::BinaryExpression { span: $span, operator: "==", left: Box::new($1?), right: Box::new($3?) })
+    }
+    | RelationalExpressionNotBrace "!=" RelationalExpression {
+        Ok(Node::BinaryExpression { span: $span, operator: "!=", left: Box::new($1?), right: Box::new($3?) })
+    }
+    | RelationalExpressionNotBrace { $1 }
     ;
 
 RelationalExpression -> Result<Node, ()>:
@@ -372,11 +418,34 @@ RelationalExpression -> Result<Node, ()>:
     | BitwiseOrExpression { $1 }
     ;
 
+RelationalExpressionNotBrace -> Result<Node, ()>:
+      BitwiseOrExpressionNotBrace ">=" BitwiseOrExpression {
+        Ok(Node::BinaryExpression { span: $span, operator: ">=", left: Box::new($1?), right: Box::new($3?) })
+    }
+    | BitwiseOrExpressionNotBrace ">" BitwiseOrExpression {
+        Ok(Node::BinaryExpression { span: $span, operator: ">", left: Box::new($1?), right: Box::new($3?) })
+    }
+    | BitwiseOrExpressionNotBrace "<=" BitwiseOrExpression {
+        Ok(Node::BinaryExpression { span: $span, operator: "<=", left: Box::new($1?), right: Box::new($3?) })
+    }
+    | BitwiseOrExpressionNotBrace "<" BitwiseOrExpression {
+        Ok(Node::BinaryExpression { span: $span, operator: "<", left: Box::new($1?), right: Box::new($3?) })
+    }
+    | BitwiseOrExpressionNotBrace { $1 }
+    ;
+
 BitwiseOrExpression -> Result<Node, ()>:
       BitwiseOrExpression "|" BitwiseXorExpression {
         Ok(Node::BinaryExpression { span: $span, operator: "|", left: Box::new($1?), right: Box::new($3?) })
     }
     | BitwiseXorExpression { $1 }
+    ;
+
+BitwiseOrExpressionNotBrace -> Result<Node, ()>:
+      BitwiseOrExpressionNotBrace "|" BitwiseXorExpression {
+        Ok(Node::BinaryExpression { span: $span, operator: "|", left: Box::new($1?), right: Box::new($3?) })
+    }
+    | BitwiseXorExpressionNotBrace { $1 }
     ;
 
 BitwiseXorExpression -> Result<Node, ()>:
@@ -386,11 +455,25 @@ BitwiseXorExpression -> Result<Node, ()>:
     | BitwiseAndExpression { $1 }
     ;
 
+BitwiseXorExpressionNotBrace -> Result<Node, ()>:
+      BitwiseXorExpressionNotBrace "^" BitwiseAndExpression {
+        Ok(Node::BinaryExpression { span: $span, operator: "^", left: Box::new($1?), right: Box::new($3?) })
+    }
+    | BitwiseAndExpressionNotBrace { $1 }
+    ;
+
 BitwiseAndExpression -> Result<Node, ()>:
       BitwiseAndExpression "&" ShiftExpression {
         Ok(Node::BinaryExpression { span: $span, operator: "&", left: Box::new($1?), right: Box::new($3?) })
     }
     | ShiftExpression { $1 }
+    ;
+
+BitwiseAndExpressionNotBrace -> Result<Node, ()>:
+      BitwiseAndExpressionNotBrace "&" ShiftExpression {
+        Ok(Node::BinaryExpression { span: $span, operator: "&", left: Box::new($1?), right: Box::new($3?) })
+    }
+    | ShiftExpressionNotBrace { $1 }
     ;
 
 ShiftExpression -> Result<Node, ()>:
@@ -403,6 +486,16 @@ ShiftExpression -> Result<Node, ()>:
     | AdditiveExpression { $1 }
     ;
 
+ShiftExpressionNotBrace -> Result<Node, ()>:
+      ShiftExpressionNotBrace "<<" AdditiveExpression {
+        Ok(Node::BinaryExpression { span: $span, operator: "<<", left: Box::new($1?), right: Box::new($3?) })
+    }
+    | ShiftExpressionNotBrace ">>" AdditiveExpression {
+        Ok(Node::BinaryExpression { span: $span, operator: ">>", left: Box::new($1?), right: Box::new($3?) })
+    }
+    | AdditiveExpressionNotBrace { $1 }
+    ;
+
 AdditiveExpression -> Result<Node, ()>:
       AdditiveExpression '+' MultiplicativeExpression { 
         Ok(Node::BinaryExpression { span: $span, operator: "+", left: Box::new($1?), right: Box::new($3?) })
@@ -411,6 +504,16 @@ AdditiveExpression -> Result<Node, ()>:
         Ok(Node::BinaryExpression { span: $span, operator: "-", left: Box::new($1?), right: Box::new($3?) })
     }
     | MultiplicativeExpression { $1 }
+    ;
+
+AdditiveExpressionNotBrace -> Result<Node, ()>:
+      AdditiveExpressionNotBrace '+' MultiplicativeExpression { 
+        Ok(Node::BinaryExpression { span: $span, operator: "+", left: Box::new($1?), right: Box::new($3?) })
+    }
+    | AdditiveExpressionNotBrace '-' MultiplicativeExpression { 
+        Ok(Node::BinaryExpression { span: $span, operator: "-", left: Box::new($1?), right: Box::new($3?) })
+    }
+    | MultiplicativeExpressionNotBrace { $1 }
     ;
 
 MultiplicativeExpression -> Result<Node, ()>:
@@ -427,6 +530,22 @@ MultiplicativeExpression -> Result<Node, ()>:
         Ok(Node::BinaryExpression { span: $span, operator: "~/", left: Box::new($1?), right: Box::new($3?) })
     }
     | UnaryExpression { $1 }
+    ;
+
+MultiplicativeExpressionNotBrace -> Result<Node, ()>:
+      MultiplicativeExpressionNotBrace '*' Primary { 
+        Ok(Node::BinaryExpression { span: $span, operator: "*", left: Box::new($1?), right: Box::new($3?) })
+    }
+    | MultiplicativeExpressionNotBrace '/' Primary { 
+        Ok(Node::BinaryExpression { span: $span, operator: "/", left: Box::new($1?), right: Box::new($3?) })
+    }
+    | MultiplicativeExpressionNotBrace '%' Primary { 
+        Ok(Node::BinaryExpression { span: $span, operator: "%", left: Box::new($1?), right: Box::new($3?) })
+    }
+    | MultiplicativeExpressionNotBrace '~/' Primary { 
+        Ok(Node::BinaryExpression { span: $span, operator: "~/", left: Box::new($1?), right: Box::new($3?) })
+    }
+    | UnaryExpressionNotBrace { $1 }
     ;
 
 UnaryExpression -> Result<Node, ()>:
@@ -448,6 +567,25 @@ UnaryExpression -> Result<Node, ()>:
     | PostfixExpression { $1 }
     ;
 
+UnaryExpressionNotBrace -> Result<Node, ()>:
+      "-" UnaryExpression {
+        Ok(Node::UnaryOpExpression { span: $span, operator: "-", child: Box::new($2?) })
+    }
+    | "!" UnaryExpression {
+        Ok(Node::UnaryOpExpression { span: $span, operator: "!", child: Box::new($2?) })
+    }
+    | "~" UnaryExpression {
+        Ok(Node::UnaryOpExpression { span: $span, operator: "~", child: Box::new($2?) })
+    }
+    | "++" UnaryExpression {
+        Ok(Node::UpdateExpression { span: $span, operator: "++", is_prefix: true, child: Box::new($2?) })
+    }
+    | "--" UnaryExpression {
+        Ok(Node::UpdateExpression { span: $span, operator: "--", is_prefix: true, child: Box::new($2?) })
+    }
+    | PostfixExpressionNotBrace { $1 }
+    ;
+
 PostfixExpression -> Result<Node, ()>:
       PostfixExpression Selector {
         Ok(Node::WithSelectorExpression { span: $span, child: Box::new($1?), selector: Box::new($2?) })
@@ -459,6 +597,19 @@ PostfixExpression -> Result<Node, ()>:
         Ok(Node::UpdateExpression { span: $span, operator: "--", is_prefix: false, child: Box::new($1?) })
     }
     | Primary { $1 }
+    ;
+
+PostfixExpressionNotBrace -> Result<Node, ()>:
+      PostfixExpressionNotBrace Selector {
+        Ok(Node::WithSelectorExpression { span: $span, child: Box::new($1?), selector: Box::new($2?) })
+    }
+    | PostfixExpressionNotBrace "++" {
+        Ok(Node::UpdateExpression { span: $span, operator: "++", is_prefix: false, child: Box::new($1?) })
+    }
+    | PostfixExpressionNotBrace "--" {
+        Ok(Node::UpdateExpression { span: $span, operator: "--", is_prefix: false, child: Box::new($1?) })
+    }
+    | PrimaryNotBrace { $1 }
     ;
 
 Selector -> Result<Node, ()>:
@@ -497,6 +648,12 @@ Primary -> Result<Node, ()>:
     | Identifier { $1 }
     ;
 
+PrimaryNotBrace -> Result<Node, ()>:
+      '(' Expression ')' { $2 }
+    | LiteralNotBrace { $1 }
+    | Identifier { $1 }
+    ;
+
 Identifier -> Result<Node, ()>:
     'IDENTIFIER' { Ok(Node::Identifier { span: $span }) }
     ;
@@ -504,6 +661,16 @@ Identifier -> Result<Node, ()>:
 Literal -> Result<Node, ()>:
       'NUMBER' { Ok(Node::NumericLiteral { span: $span }) }
     | StringLiteralList { Ok(Node::StringLiteral { span: $span, literal_list: $1? }) }
+    | ListLiteral { $1 }
+    | SetOrMapLiteral { $1 }
+    | 'BOOLEAN' { Ok(Node::BooleanLiteral { span: $span }) }
+    | 'NULL' { Ok(Node::NullLiteral { span: $span }) }
+    ;
+
+LiteralNotBrace -> Result<Node, ()>:
+      'NUMBER' { Ok(Node::NumericLiteral { span: $span }) }
+    | StringLiteralList { Ok(Node::StringLiteral { span: $span, literal_list: $1? }) }
+    | ListLiteral { $1 }
     | 'BOOLEAN' { Ok(Node::BooleanLiteral { span: $span }) }
     | 'NULL' { Ok(Node::NullLiteral { span: $span }) }
     ;
@@ -520,6 +687,46 @@ StringLiteralList -> Result<Vec<Span>, ()>:
             Ok(v) => Ok(vec![v.span()]),
             Err(_) => Err(())
         }
+    }
+    ;
+
+ListLiteral -> Result<Node, ()>:
+      "[" "]" {
+        Ok(Node::ListLiteral { span: $span, element_list: vec![] })
+    }
+    | "[" ElementList CommaOpt "]" {
+        Ok(Node::ListLiteral { span: $span, element_list: $2? })
+    }
+    ;
+
+SetOrMapLiteral -> Result<Node, ()>:
+      "{" "}" {
+        Ok(Node::SetOrMapLiteral { span: $span, element_list: vec![] })
+    }
+    | "{" ElementList CommaOpt "}" {
+        Ok(Node::SetOrMapLiteral { span: $span, element_list: $2? })
+    }
+    ;
+
+ElementList -> Result<Vec<CollectionElement>, ()>:
+      Element { Ok(vec![$1?]) }
+    | ElementList "," Element { flatten($1, $3?) }
+    ;
+
+Element -> Result<CollectionElement, ()>:
+      ExpressionElement { $1 }
+    | MapElement { $1 }
+    ;
+
+ExpressionElement -> Result<CollectionElement, ()>:
+    Expression {
+        Ok(CollectionElement::ExpressionElement { expr: Box::new($1?) })
+    }
+    ;
+
+MapElement -> Result<CollectionElement, ()>:
+    Expression ":" Expression {
+        Ok(CollectionElement::MapElement { key_expr: Box::new($1?), value_expr: Box::new($3?) })
     }
     ;
 
@@ -596,6 +803,14 @@ pub enum Node {
     },
     NullLiteral {
         span: Span,
+    },
+    ListLiteral {
+        span: Span,
+        element_list: Vec<CollectionElement>,
+    },
+    SetOrMapLiteral {
+        span: Span,
+        element_list: Vec<CollectionElement>,
     },
     Identifier {
         span: Span,
@@ -752,4 +967,15 @@ pub struct TryOnPart {
 pub struct TryCatchPart {
     pub id_error: Box<Node>,
     pub id_trace: Option<Box<Node>>,
+}
+
+#[derive(Debug)]
+pub enum CollectionElement {
+    ExpressionElement {
+        expr: Box<Node>,
+    },
+    MapElement {
+        key_expr: Box<Node>,
+        value_expr: Box<Node>,
+    },
 }

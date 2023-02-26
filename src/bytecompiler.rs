@@ -8,7 +8,7 @@ use crate::executioncontext::{
     BlockContext, ExecutionContext, GlobalContext, PyContext, VariableScope,
 };
 use crate::parser::{LibraryDeclaration, LibraryImport};
-use crate::{bytecode::OpCode, parser::Node, pyobject::PyObject};
+use crate::{bytecode::OpCode, parser::Node, pyobject::PyObject, parser::CollectionElement};
 
 struct DefaultScope {
     break_label: u32,
@@ -511,7 +511,60 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             }
             Node::NullLiteral { span: _ } => {
                 self.push_load_const(PyObject::None(false));
-            }
+            },
+            Node::ListLiteral { span: _, element_list } => {
+                let size = element_list.len() as u8;
+                for elem in element_list {
+                    match elem {
+                        CollectionElement::ExpressionElement { expr } => {
+                            self.compile(expr, None);
+                        },
+                        CollectionElement::MapElement { key_expr:_, value_expr:_ } => {
+                            panic!("Invalid List Literal");
+                        }
+                    }
+                }
+                self.push_op(OpCode::BuildList(size));
+            },
+            Node::SetOrMapLiteral { span: _, element_list } => {
+                let first_elem = element_list.first();
+                let is_map = if let Some(elem) = first_elem {
+                    match elem {
+                        CollectionElement::ExpressionElement { expr:_ } => { false },
+                        CollectionElement::MapElement { key_expr:_, value_expr:_ } => { true }
+                    }
+                } else { true };
+
+                if is_map {
+                    let size = element_list.len() as u8;
+                    for elem in element_list {
+                        match elem {
+                            CollectionElement::ExpressionElement { expr:_ } => {
+                                panic!("Invalid Map Literal");
+                            },
+                            CollectionElement::MapElement { key_expr, value_expr } => {
+                                self.compile(key_expr, None);
+                                self.compile(value_expr, None);
+                            }
+                        }
+                    }
+                    self.push_op(OpCode::BuildMap(size));
+                }
+                else {
+                    let size = element_list.len() as u8;
+                    for elem in element_list {
+                        match elem {
+                            CollectionElement::ExpressionElement { expr } => {
+                                self.compile(expr, None);
+                            },
+                            CollectionElement::MapElement { key_expr:_, value_expr:_ } => {
+                                panic!("Invalid Set Literal");
+                            }
+                        }
+                    }
+                    self.push_op(OpCode::BuildSet(size));
+                }
+            },
             Node::Identifier { span } => {
                 let value = self.span_to_str(span);
                 self.push_load_var(value);

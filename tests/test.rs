@@ -617,3 +617,20 @@ fn try_statement() {
         panic!("{:?}", result);
     }
 }
+
+#[test]
+fn collection_literal() {
+    let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
+    let result = catch_unwind(|| {
+        elaphe::run(&output, "main() { print([1,2,3]); }").expect("execution failed.");
+        exec_py_and_assert(&output, "[1, 2, 3]\n");
+        elaphe::run(&output, "main() { print({1,2,3}); }").expect("execution failed.");
+        exec_py_and_assert(&output, "{1, 2, 3}\n");
+        elaphe::run(&output, "main() { print({'a':1, 'b':2}); }").expect("execution failed.");
+        exec_py_and_assert(&output, "{'a': 1, 'b': 2}\n");
+    });
+    clean(&output);
+    if result.is_err() {
+        panic!("{:?}", result);
+    }
+}

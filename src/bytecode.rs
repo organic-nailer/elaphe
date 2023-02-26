@@ -42,6 +42,9 @@ pub enum OpCode {
     StoreGlobal(u8),
     LoadConst(u8),
     LoadName(u8),
+    BuildList(u8),
+    BuildSet(u8),
+    BuildMap(u8),
     LoadAttr(u8),
     CompareOp(u8),
     ImportName(u8),
@@ -118,6 +121,9 @@ impl OpCode {
             OpCode::StoreGlobal(_) => 97,
             OpCode::LoadConst(_) => 100,
             OpCode::LoadName(_) => 101,
+            OpCode::BuildList(_) => 103,
+            OpCode::BuildSet(_) => 104,
+            OpCode::BuildMap(_) => 105,
             OpCode::LoadAttr(_) => 106,
             OpCode::CompareOp(_) => 107,
             OpCode::ImportName(_) => 108,
@@ -160,6 +166,9 @@ impl OpCode {
             OpCode::StoreName(v)
             | OpCode::LoadConst(v)
             | OpCode::LoadName(v)
+            | OpCode::BuildList(v)
+            | OpCode::BuildSet(v)
+            | OpCode::BuildMap(v)
             | OpCode::LoadGlobal(v)
             | OpCode::StoreGlobal(v)
             | OpCode::LoadFast(v)
@@ -214,6 +223,11 @@ impl OpCode {
             | OpCode::InplaceXor
             | OpCode::InplaceOr
             | OpCode::CompareOp(_) => -1,
+
+            OpCode::BuildList(v)
+            | OpCode::BuildSet(v) => 1 - (v as i32),
+
+            OpCode::BuildMap(v) => 1 - 2 * (v as i32),
 
             OpCode::ImportName(_) => -1,
             OpCode::ImportFrom(_) => 1,
