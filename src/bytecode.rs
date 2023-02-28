@@ -8,7 +8,10 @@ pub struct ByteCode {
 pub enum OpCode {
     PopTop,
     RotTwo,
+    RotThree,
     DupTop,
+    DupTopTwo,
+    RotFour,
     UnaryNegative,
     UnaryNot,
     UnaryInvert,
@@ -16,6 +19,7 @@ pub enum OpCode {
     BinaryModulo,
     BinaryAdd,
     BinarySubtract,
+    BinarySubScr,
     BinaryFloorDivide,
     BinaryTrueDivide,
     InplaceFloorDivide,
@@ -25,6 +29,7 @@ pub enum OpCode {
     InplaceSubtract,
     InplaceMultiply,
     InplaceModulo,
+    StoreSubScr,
     BinaryLShift,
     BinaryRShift,
     BinaryAnd,
@@ -39,6 +44,7 @@ pub enum OpCode {
     PopBlock,
     PopExcept,
     StoreName(u8),
+    StoreAttr(u8),
     StoreGlobal(u8),
     LoadConst(u8),
     LoadName(u8),
@@ -87,7 +93,10 @@ impl OpCode {
         match *self {
             OpCode::PopTop => 1,
             OpCode::RotTwo => 2,
+            OpCode::RotThree => 3,
             OpCode::DupTop => 4,
+            OpCode::DupTopTwo => 5,
+            OpCode::RotFour => 6,
             OpCode::UnaryNegative => 11,
             OpCode::UnaryNot => 12,
             OpCode::UnaryInvert => 15,
@@ -95,6 +104,7 @@ impl OpCode {
             OpCode::BinaryModulo => 22,
             OpCode::BinaryAdd => 23,
             OpCode::BinarySubtract => 24,
+            OpCode::BinarySubScr => 25,
             OpCode::BinaryFloorDivide => 26,
             OpCode::BinaryTrueDivide => 27,
             OpCode::InplaceFloorDivide => 28,
@@ -104,6 +114,7 @@ impl OpCode {
             OpCode::InplaceSubtract => 56,
             OpCode::InplaceMultiply => 57,
             OpCode::InplaceModulo => 59,
+            OpCode::StoreSubScr => 60,
             OpCode::BinaryLShift => 62,
             OpCode::BinaryRShift => 63,
             OpCode::BinaryAnd => 64,
@@ -118,6 +129,7 @@ impl OpCode {
             OpCode::PopBlock => 87,
             OpCode::PopExcept => 89,
             OpCode::StoreName(_) => 90,
+            OpCode::StoreAttr(_) => 95,
             OpCode::StoreGlobal(_) => 97,
             OpCode::LoadConst(_) => 100,
             OpCode::LoadName(_) => 101,
@@ -152,9 +164,9 @@ impl OpCode {
             // OpCode::JumpForward(v) |
             // OpCode::JumpIfFalseOrPop(v) |
             // OpCode::JumpIfTrueOrPop(v) |
-            OpCode::JumpAbsolute(v) 
-            | OpCode::PopJumpIfFalse(v) 
-            | OpCode::PopJumpIfTrue(v) 
+            OpCode::JumpAbsolute(v)
+            | OpCode::PopJumpIfFalse(v)
+            | OpCode::PopJumpIfTrue(v)
             | OpCode::JumpIfNotExcMatch(v)
             | OpCode::SetupFinally(v) => {
                 let operand = *label_table.get(&v).unwrap();
@@ -164,6 +176,7 @@ impl OpCode {
                 }
             }
             OpCode::StoreName(v)
+            | OpCode::StoreAttr(v)
             | OpCode::LoadConst(v)
             | OpCode::LoadName(v)
             | OpCode::BuildList(v)
@@ -197,8 +210,14 @@ impl OpCode {
             OpCode::PopTop => -1,
 
             OpCode::DupTop => 1,
+            OpCode::DupTopTwo => 2,
 
-            OpCode::UnaryNegative | OpCode::UnaryNot | OpCode::UnaryInvert | OpCode::RotTwo => 0,
+            OpCode::UnaryNegative
+            | OpCode::UnaryNot
+            | OpCode::UnaryInvert
+            | OpCode::RotTwo
+            | OpCode::RotThree
+            | OpCode::RotFour => 0,
 
             OpCode::BinaryAdd
             | OpCode::BinaryMultiply
@@ -224,8 +243,10 @@ impl OpCode {
             | OpCode::InplaceOr
             | OpCode::CompareOp(_) => -1,
 
-            OpCode::BuildList(v)
-            | OpCode::BuildSet(v) => 1 - (v as i32),
+            OpCode::BinarySubScr => -1,
+            OpCode::StoreSubScr => -3,
+
+            OpCode::BuildList(v) | OpCode::BuildSet(v) => 1 - (v as i32),
 
             OpCode::BuildMap(v) => 1 - 2 * (v as i32),
 
@@ -245,7 +266,13 @@ impl OpCode {
 
             OpCode::CallMethod(n) | OpCode::CallFunction(n) => -(n as i32),
 
-            OpCode::SetupFinally(_) => if jump { 1 } else { 0 },
+            OpCode::SetupFinally(_) => {
+                if jump {
+                    1
+                } else {
+                    0
+                }
+            }
 
             OpCode::Reraise => -1,
             OpCode::RaiseVarargs(v) => -(v as i32),
@@ -260,6 +287,7 @@ impl OpCode {
             OpCode::MakeFunction => -1,
 
             OpCode::LoadAttr(_) | OpCode::LoadMethod(_) => 0,
+            OpCode::StoreAttr(_) => -2,
         }
     }
 }

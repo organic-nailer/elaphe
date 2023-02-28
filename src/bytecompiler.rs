@@ -8,7 +8,7 @@ use crate::executioncontext::{
     BlockContext, ExecutionContext, GlobalContext, PyContext, VariableScope,
 };
 use crate::parser::{LibraryDeclaration, LibraryImport};
-use crate::{bytecode::OpCode, parser::Node, pyobject::PyObject, parser::CollectionElement};
+use crate::{bytecode::OpCode, parser::Node, pyobject::PyObject, parser::CollectionElement, parser::Selector};
 
 struct DefaultScope {
     break_label: u32,
@@ -437,53 +437,216 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 left,
                 right,
             } => {
-                if let Node::Identifier { span } = **left {
-                    let value = self.span_to_str(&span);
-                    match *operator {
-                        "=" => {
-                            self.compile(right, None);
-                            // DartではAssignment Expressionが代入先の最終的な値を残す
-                            self.push_op(OpCode::DupTop);
-                            self.push_store_var(value);
+                match *operator {
+                    "=" => {
+                        self.compile(right, None);
+                        // DartではAssignment Expressionが代入先の最終的な値を残す
+                        self.push_op(OpCode::DupTop);
+
+                        match &**left {
+                            Node::Identifier { span } => {
+                                let value = self.span_to_str(&span);
+                                self.push_store_var(value);
+                            },
+                            Node::SelectorExpression { span:_, child, selector } => {
+                                self.compile(child, None);
+
+                                match selector {
+                                    Selector::Args { span:_, args:_ } => panic!("Invalid lhs value."),
+                                    Selector::Method { span:_, identifier:_, arguments:_ } => panic!("Invalid lhs value."),
+                                    Selector::Attr { span:_, identifier } => {
+                                        let name = self.id_to_str(identifier);
+                                        let p = (**self.context_stack.last().unwrap())
+                                            .borrow_mut()
+                                            .register_or_get_name(name.to_string());
+                                        self.push_op(OpCode::StoreAttr(p));
+                                    },
+                                    Selector::Index { span:_, expr } => {
+                                        self.compile(expr, None);
+                                        self.push_op(OpCode::StoreSubScr);
+                                    }
+                                }
+                            },
+                            _ => panic!("Invalid lhs value.")
                         }
-                        "*=" | "/=" | "~/=" | "%=" | "+=" | "-=" | "<<=" | ">>=" | "&=" | "^="
+                    },
+                    "*=" | "/=" | "~/=" | "%=" | "+=" | "-=" | "<<=" | ">>=" | "&=" | "^="
                         | "|=" => {
-                            self.push_load_var(value);
-                            self.compile(right, None);
-                            match *operator {
-                                "*=" => self.push_op(OpCode::InplaceMultiply),
-                                "/=" => self.push_op(OpCode::InplaceTrueDivide),
-                                "~/=" => self.push_op(OpCode::InplaceFloorDivide),
-                                "%=" => self.push_op(OpCode::InplaceModulo),
-                                "+=" => self.push_op(OpCode::InplaceAdd),
-                                "-=" => self.push_op(OpCode::InplaceSubtract),
-                                "<<=" => self.push_op(OpCode::InplaceLShift),
-                                ">>=" => self.push_op(OpCode::InplaceRShift),
-                                "&=" => self.push_op(OpCode::InplaceAnd),
-                                "^=" => self.push_op(OpCode::InplaceXor),
-                                "|=" => self.push_op(OpCode::InplaceOr),
-                                _ => (),
-                            }
-                            self.push_op(OpCode::DupTop);
-                            self.push_store_var(value);
+                        match &**left {
+                            Node::Identifier { span } => {
+                                let value = self.span_to_str(&span);
+                                self.push_load_var(value);
+
+                                self.compile(right, None);
+                                match *operator {
+                                    "*=" => self.push_op(OpCode::InplaceMultiply),
+                                    "/=" => self.push_op(OpCode::InplaceTrueDivide),
+                                    "~/=" => self.push_op(OpCode::InplaceFloorDivide),
+                                    "%=" => self.push_op(OpCode::InplaceModulo),
+                                    "+=" => self.push_op(OpCode::InplaceAdd),
+                                    "-=" => self.push_op(OpCode::InplaceSubtract),
+                                    "<<=" => self.push_op(OpCode::InplaceLShift),
+                                    ">>=" => self.push_op(OpCode::InplaceRShift),
+                                    "&=" => self.push_op(OpCode::InplaceAnd),
+                                    "^=" => self.push_op(OpCode::InplaceXor),
+                                    "|=" => self.push_op(OpCode::InplaceOr),
+                                    _ => (),
+                                }
+                                self.push_op(OpCode::DupTop);
+
+                                self.push_store_var(value);
+                            },
+                            Node::SelectorExpression { span:_, child, selector } => {
+                                self.compile(child, None);
+                                match selector {
+                                    Selector::Args { span:_, args:_ } => panic!("Invalid lhs value."),
+                                    Selector::Method { span:_, identifier:_, arguments:_ } => panic!("Invalid lhs value."),
+                                    Selector::Attr { span:_, identifier } => {
+                                        let name = self.id_to_str(identifier);
+                                        let p = (**self.context_stack.last().unwrap())
+                                            .borrow_mut()
+                                            .register_or_get_name(name.to_string());
+
+                                        self.push_op(OpCode::DupTop);
+                                        self.push_op(OpCode::LoadAttr(p));
+
+                                        self.compile(right, None);
+                                        match *operator {
+                                            "*=" => self.push_op(OpCode::InplaceMultiply),
+                                            "/=" => self.push_op(OpCode::InplaceTrueDivide),
+                                            "~/=" => self.push_op(OpCode::InplaceFloorDivide),
+                                            "%=" => self.push_op(OpCode::InplaceModulo),
+                                            "+=" => self.push_op(OpCode::InplaceAdd),
+                                            "-=" => self.push_op(OpCode::InplaceSubtract),
+                                            "<<=" => self.push_op(OpCode::InplaceLShift),
+                                            ">>=" => self.push_op(OpCode::InplaceRShift),
+                                            "&=" => self.push_op(OpCode::InplaceAnd),
+                                            "^=" => self.push_op(OpCode::InplaceXor),
+                                            "|=" => self.push_op(OpCode::InplaceOr),
+                                            _ => (),
+                                        }
+                                        self.push_op(OpCode::DupTop);
+                                        
+                                        self.push_op(OpCode::RotThree);
+                                        self.push_op(OpCode::StoreAttr(p));
+                                    },
+                                    Selector::Index { span:_, expr } => {
+                                        self.compile(expr, None);
+                                        self.push_op(OpCode::DupTopTwo);
+                                        self.push_op(OpCode::BinarySubScr);
+
+                                        self.compile(right, None);
+                                        match *operator {
+                                            "*=" => self.push_op(OpCode::InplaceMultiply),
+                                            "/=" => self.push_op(OpCode::InplaceTrueDivide),
+                                            "~/=" => self.push_op(OpCode::InplaceFloorDivide),
+                                            "%=" => self.push_op(OpCode::InplaceModulo),
+                                            "+=" => self.push_op(OpCode::InplaceAdd),
+                                            "-=" => self.push_op(OpCode::InplaceSubtract),
+                                            "<<=" => self.push_op(OpCode::InplaceLShift),
+                                            ">>=" => self.push_op(OpCode::InplaceRShift),
+                                            "&=" => self.push_op(OpCode::InplaceAnd),
+                                            "^=" => self.push_op(OpCode::InplaceXor),
+                                            "|=" => self.push_op(OpCode::InplaceOr),
+                                            _ => (),
+                                        }
+                                        self.push_op(OpCode::DupTop);
+                                        self.push_op(OpCode::RotFour);
+                                        
+                                        self.push_op(OpCode::RotFour);
+                                        self.push_op(OpCode::StoreSubScr);
+                                    }
+                                }
+                            },
+                            _ => panic!("Invalid lhs value.")
                         }
-                        "??=" => {
-                            self.push_load_var(value);
-                            self.push_op(OpCode::DupTop);
-                            self.push_load_const(PyObject::None(false));
-                            self.push_op(OpCode::compare_op_from_str("=="));
-                            let label_end = self.gen_jump_label();
-                            self.push_op(OpCode::PopJumpIfFalse(label_end));
-                            self.push_op(OpCode::PopTop);
-                            self.compile(right, None);
-                            self.push_op(OpCode::DupTop);
-                            self.push_store_var(value);
-                            self.set_jump_label_value(label_end);
+                    },
+                    "??=" => {
+                        match &**left {
+                            Node::Identifier { span } => {
+                                let value = self.span_to_str(&span);
+
+                                self.push_load_var(value);
+                                self.push_op(OpCode::DupTop);
+                                self.push_load_const(PyObject::None(false));
+                                self.push_op(OpCode::compare_op_from_str("=="));
+                                let label_end = self.gen_jump_label();
+                                self.push_op(OpCode::PopJumpIfFalse(label_end));
+
+                                self.push_op(OpCode::PopTop);
+                                self.compile(right, None);
+                                self.push_op(OpCode::DupTop);
+                                self.push_store_var(value);
+                                self.set_jump_label_value(label_end);
+                            },
+                            Node::SelectorExpression { span:_, child, selector } => {
+                                self.compile(child, None);
+                                match selector {
+                                    Selector::Args { span:_, args:_ } => panic!("Invalid lhs value."),
+                                    Selector::Method { span:_, identifier:_, arguments:_ } => panic!("Invalid lhs value."),
+                                    Selector::Attr { span:_, identifier } => {
+                                        let name = self.id_to_str(identifier);
+                                        let p = (**self.context_stack.last().unwrap())
+                                            .borrow_mut()
+                                            .register_or_get_name(name.to_string());
+
+                                        self.push_op(OpCode::DupTop);
+                                        self.push_op(OpCode::LoadAttr(p));
+
+                                        self.push_op(OpCode::DupTop);
+                                        self.push_load_const(PyObject::None(false));
+                                        self.push_op(OpCode::compare_op_from_str("=="));
+                                        let label_false = self.gen_jump_label();
+                                        self.push_op(OpCode::PopJumpIfFalse(label_false));
+
+                                        self.push_op(OpCode::PopTop);
+                                        self.compile(right, None);
+                                        self.push_op(OpCode::DupTop);
+                                        self.push_op(OpCode::RotThree);
+                                        self.push_op(OpCode::RotThree);
+                                        self.push_op(OpCode::StoreAttr(p));
+                                        let label_end = self.gen_jump_label();
+                                        self.push_op(OpCode::JumpAbsolute(label_end));
+
+                                        self.set_jump_label_value(label_false);
+                                        self.push_op(OpCode::RotTwo);
+                                        self.push_op(OpCode::PopTop);
+
+                                        self.set_jump_label_value(label_end);
+                                    },
+                                    Selector::Index { span:_, expr } => {
+                                        self.compile(expr, None);
+                                        self.push_op(OpCode::DupTopTwo);
+                                        self.push_op(OpCode::BinarySubScr);
+
+                                        self.push_op(OpCode::DupTop);
+                                        self.push_load_const(PyObject::None(false));
+                                        self.push_op(OpCode::compare_op_from_str("=="));
+                                        let label_false = self.gen_jump_label();
+                                        self.push_op(OpCode::PopJumpIfFalse(label_false));
+
+                                        self.push_op(OpCode::PopTop);
+                                        self.compile(right, None);
+                                        self.push_op(OpCode::DupTop);
+                                        self.push_op(OpCode::RotFour);
+                                        self.push_op(OpCode::RotFour);
+                                        self.push_op(OpCode::StoreSubScr);
+                                        let label_end = self.gen_jump_label();
+                                        self.push_op(OpCode::JumpAbsolute(label_end));
+
+                                        self.set_jump_label_value(label_false);
+                                        self.push_op(OpCode::RotThree);
+                                        self.push_op(OpCode::PopTop);
+                                        self.push_op(OpCode::PopTop);
+
+                                        self.set_jump_label_value(label_end);
+                                    }
+                                }
+                            },
+                            _ => panic!("Invalid lhs value.")
                         }
-                        _ => panic!("Unknown assignment operator: {}", value),
                     }
-                } else {
-                    panic!("Invalid AST. Assignment lhs must be an identifier.");
+                    _ => panic!("Unknown assignment operator: {}", operator),
                 }
             }
             Node::NumericLiteral { span } => {
@@ -568,57 +731,58 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             Node::Identifier { span } => {
                 let value = self.span_to_str(span);
                 self.push_load_var(value);
-            }
-            Node::SelectorAttr {
-                span: _,
-                identifier,
-            } => {
-                if let Node::Identifier { span } = **identifier {
-                    let name = self.span_to_str(&span);
-                    let p = (**self.context_stack.last().unwrap())
-                        .borrow_mut()
-                        .register_or_get_name(name.to_string());
-                    self.push_op(OpCode::LoadAttr(p));
-                } else {
-                    panic!("Invalid AST");
-                }
-            }
-            Node::SelectorMethod {
-                span: _,
-                identifier,
-                arguments,
-            } => {
-                if let Node::Identifier { span } = **identifier {
-                    let name = self.span_to_str(&span);
-                    let p = (**self.context_stack.last().unwrap())
-                        .borrow_mut()
-                        .register_or_get_name(name.to_string());
-                    self.push_op(OpCode::LoadMethod(p));
-
-                    if let Node::Arguments { span: _, children } = &**arguments {
-                        for node in children {
-                            self.compile(node, None);
-                        }
-                        self.push_op(OpCode::CallMethod(children.len() as u8))
-                    }
-                } else {
-                    panic!("Invalid AST");
-                }
-            }
+            },
             Node::Arguments { span: _, children } => {
                 for node in children {
                     self.compile(node, None);
                 }
                 self.push_op(OpCode::CallFunction(children.len() as u8))
-            }
-            Node::WithSelectorExpression {
-                span: _,
-                child,
-                selector,
-            } => {
+            },
+            Node::SelectorExpression { span:_, child, selector } => {
+                // 右辺値として処理される場合
                 self.compile(child, None);
-                self.compile(selector, None);
-            }
+
+                match selector {
+                    Selector::Args { span:_, args } => {
+                        // Node::Argumentsがどうにかしてくれる
+                        self.compile(args, None);
+                    },
+                    Selector::Attr { span:_, identifier } => {
+                        if let Node::Identifier { span } = **identifier {
+                            let name = self.span_to_str(&span);
+                            let p = (**self.context_stack.last().unwrap())
+                                .borrow_mut()
+                                .register_or_get_name(name.to_string());
+                            self.push_op(OpCode::LoadAttr(p));
+                        } else {
+                            panic!("Invalid AST");
+                        }
+                    },
+                    Selector::Index { span:_, expr } => {
+                        self.compile(expr, None);
+
+                        self.push_op(OpCode::BinarySubScr);
+                    },
+                    Selector::Method { span:_, identifier, arguments } => {
+                        if let Node::Identifier { span } = **identifier {
+                            let name = self.span_to_str(&span);
+                            let p = (**self.context_stack.last().unwrap())
+                                .borrow_mut()
+                                .register_or_get_name(name.to_string());
+                            self.push_op(OpCode::LoadMethod(p));
+        
+                            if let Node::Arguments { span: _, children } = &**arguments {
+                                for node in children {
+                                    self.compile(node, None);
+                                }
+                                self.push_op(OpCode::CallMethod(children.len() as u8))
+                            }
+                        } else {
+                            panic!("Invalid AST");
+                        }
+                    }
+                }
+            },
             Node::ThrowExpression { span: _, expr } => {
                 self.compile(expr, None);
                 self.push_op(OpCode::RaiseVarargs(1));

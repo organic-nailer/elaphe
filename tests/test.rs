@@ -634,3 +634,24 @@ fn collection_literal() {
         panic!("{:?}", result);
     }
 }
+
+#[test]
+fn subscr() {
+    let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
+    let result = catch_unwind(|| {
+        elaphe::run(&output, "main() { var x = [0,1,2]; print(x[2]); }").expect("execution failed.");
+        exec_py_and_assert(&output, "2\n");
+        elaphe::run(&output, "main() { var x = [0,1,2]; print(x[2] = 10); print(x); }").expect("execution failed.");
+        exec_py_and_assert(&output, "10\n[0, 1, 10]\n");
+        elaphe::run(&output, "main() { var x = [0,1,2]; print(x[2] += 10); print(x); }").expect("execution failed.");
+        exec_py_and_assert(&output, "12\n[0, 1, 12]\n");
+        elaphe::run(&output, "main() { var x = [0,1,null]; print(x[2] ??= 10); print(x); }").expect("execution failed.");
+        exec_py_and_assert(&output, "10\n[0, 1, 10]\n");
+        elaphe::run(&output, "main() { var x = [0,1,2]; print(x[2] ??= 10); print(x); }").expect("execution failed.");
+        exec_py_and_assert(&output, "2\n[0, 1, 2]\n");
+    });
+    clean(&output);
+    if result.is_err() {
+        panic!("{:?}", result);
+    }
+}

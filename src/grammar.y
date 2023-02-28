@@ -280,7 +280,7 @@ DefaultCaseOpt -> Result<Option<DefaultCase>, ()>:
 
 
 Expression -> Result<Node, ()>:
-      AssignableExpression AssignmentOperator Expression {
+      SelectorExpression AssignmentOperator Expression {
         Ok(Node::AssignmentExpression { span: $span, operator: $2?, left: Box::new($1?), right: Box::new($3?) })
     }
     | ThrowExpression { $1 }
@@ -288,15 +288,11 @@ Expression -> Result<Node, ()>:
     ;
 
 ExpressionNotBrace -> Result<Node, ()>:
-      AssignableExpression AssignmentOperator Expression {
+      SelectorExpressionNotBrace AssignmentOperator Expression {
         Ok(Node::AssignmentExpression { span: $span, operator: $2?, left: Box::new($1?), right: Box::new($3?) })
     }
     | ThrowExpression { $1 }
     | ConditionalExpressionNotBrace { $1 }
-    ;
-
-AssignableExpression -> Result<Node, ()>:
-      Identifier { $1 }
     ;
 
 AssignmentOperator -> Result<&'static str, ()>:
@@ -558,10 +554,10 @@ UnaryExpression -> Result<Node, ()>:
     | "~" UnaryExpression {
         Ok(Node::UnaryOpExpression { span: $span, operator: "~", child: Box::new($2?) })
     }
-    | "++" UnaryExpression {
+    | "++" SelectorExpression {
         Ok(Node::UpdateExpression { span: $span, operator: "++", is_prefix: true, child: Box::new($2?) })
     }
-    | "--" UnaryExpression {
+    | "--" SelectorExpression {
         Ok(Node::UpdateExpression { span: $span, operator: "--", is_prefix: true, child: Box::new($2?) })
     }
     | PostfixExpression { $1 }
@@ -577,46 +573,61 @@ UnaryExpressionNotBrace -> Result<Node, ()>:
     | "~" UnaryExpression {
         Ok(Node::UnaryOpExpression { span: $span, operator: "~", child: Box::new($2?) })
     }
-    | "++" UnaryExpression {
+    | "++" SelectorExpression {
         Ok(Node::UpdateExpression { span: $span, operator: "++", is_prefix: true, child: Box::new($2?) })
     }
-    | "--" UnaryExpression {
+    | "--" SelectorExpression {
         Ok(Node::UpdateExpression { span: $span, operator: "--", is_prefix: true, child: Box::new($2?) })
     }
     | PostfixExpressionNotBrace { $1 }
     ;
 
 PostfixExpression -> Result<Node, ()>:
-      PostfixExpression Selector {
-        Ok(Node::WithSelectorExpression { span: $span, child: Box::new($1?), selector: Box::new($2?) })
-    }
-    | PostfixExpression "++" {
+      SelectorExpression { $1 }
+    | Primary "++" {
         Ok(Node::UpdateExpression { span: $span, operator: "++", is_prefix: false, child: Box::new($1?) })
     }
-    | PostfixExpression "--" {
+    | Primary "--" {
         Ok(Node::UpdateExpression { span: $span, operator: "--", is_prefix: false, child: Box::new($1?) })
     }
-    | Primary { $1 }
     ;
 
 PostfixExpressionNotBrace -> Result<Node, ()>:
-      PostfixExpressionNotBrace Selector {
-        Ok(Node::WithSelectorExpression { span: $span, child: Box::new($1?), selector: Box::new($2?) })
-    }
-    | PostfixExpressionNotBrace "++" {
+      SelectorExpressionNotBrace { $1 }
+    | PrimaryNotBrace "++" {
         Ok(Node::UpdateExpression { span: $span, operator: "++", is_prefix: false, child: Box::new($1?) })
     }
-    | PostfixExpressionNotBrace "--" {
+    | PrimaryNotBrace "--" {
         Ok(Node::UpdateExpression { span: $span, operator: "--", is_prefix: false, child: Box::new($1?) })
     }
-    | PrimaryNotBrace { $1 }
     ;
 
-Selector -> Result<Node, ()>:
-      Arguments { $1 }
-    | "." Identifier { Ok(Node::SelectorAttr { span: $span, identifier: Box::new($2?) }) }
+SelectorExpression -> Result<Node, ()>:
+      Primary { $1 }
+    | SelectorExpression Selector {
+        Ok(Node::SelectorExpression { span: $span, child: Box::new($1?), selector: $2? })
+    }
+    ;
+
+SelectorExpressionNotBrace -> Result<Node, ()>:
+      PrimaryNotBrace { $1 }
+    | SelectorExpressionNotBrace Selector {
+        Ok(Node::SelectorExpression { span: $span, child: Box::new($1?), selector: $2? })
+    }
+    ;
+
+Selector -> Result<Selector, ()>:
+      Arguments { 
+        Ok(Selector::Args { span: $span, args: Box::new($1?) })
+    }
+    | "." Identifier { 
+        Ok(Selector::Attr { span: $span, identifier: Box::new($2?) }) 
+    }
     | "." Identifier Arguments {
-        Ok(Node::SelectorMethod { span: $span, identifier: Box::new($2?), arguments: Box::new($3?) })
+        Ok(Selector::Method { span: $span, identifier: Box::new($2?), arguments: Box::new($3?) })
+    }
+    | "[" Expression "]" {
+        Ok(Selector::Index { span: $span, expr: Box::new($2?) })
     }
     ;
 
@@ -819,10 +830,10 @@ pub enum Node {
         span: Span,
         children: Vec<Box<Node>>
     },
-    WithSelectorExpression {
+    SelectorExpression {
         span: Span,
         child: Box<Node>,
-        selector: Box<Node>,
+        selector: Selector,
     },
     ThrowExpression {
         span: Span,
@@ -909,15 +920,6 @@ pub enum Node {
         identifier: Box<Node>,
         parameters: Vec<FunctionParameter>,
         body: Box<Node>,
-    },
-    SelectorAttr {
-        span: Span,
-        identifier: Box<Node>,
-    },
-    SelectorMethod {
-        span: Span,
-        identifier: Box<Node>,
-        arguments: Box<Node>,
     }
 }
 
@@ -978,4 +980,25 @@ pub enum CollectionElement {
         key_expr: Box<Node>,
         value_expr: Box<Node>,
     },
+}
+
+#[derive(Debug)]
+pub enum Selector {
+    Index {
+        span: Span,
+        expr: Box<Node>,
+    },
+    Attr {
+        span: Span,
+        identifier: Box<Node>,
+    },
+    Method {
+        span: Span,
+        identifier: Box<Node>,
+        arguments: Box<Node>,
+    },
+    Args {
+        span: Span,
+        args: Box<Node>,
+    }
 }
