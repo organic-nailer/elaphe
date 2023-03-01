@@ -6,7 +6,7 @@ use lrpar::lrpar_mod;
 lrlex_mod!("grammar.l");
 lrpar_mod!("grammar.y");
 
-pub use grammar_y::{CollectionElement, LibraryDeclaration, LibraryImport, Node, Selector};
+pub use grammar_y::{CollectionElement, LibraryDeclaration, LibraryImport, Node, Selector, DartType};
 
 pub fn parse(source: &str) -> Result<LibraryDeclaration, Box<dyn Error>> {
     let lexerdef = grammar_l::lexerdef();

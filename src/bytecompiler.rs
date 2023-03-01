@@ -8,7 +8,7 @@ use crate::executioncontext::{
     BlockContext, ExecutionContext, GlobalContext, PyContext, VariableScope,
 };
 use crate::parser::{LibraryDeclaration, LibraryImport};
-use crate::{bytecode::OpCode, parser::Node, pyobject::PyObject, parser::CollectionElement, parser::Selector};
+use crate::{bytecode::OpCode, parser::Node, pyobject::PyObject, parser::CollectionElement, parser::Selector, parser::DartType};
 
 struct DefaultScope {
     break_label: u32,
@@ -26,7 +26,7 @@ pub struct ByteCompiler<'ctx, 'value: 'ctx> {
     source: &'value str,
 }
 
-const PREDEFINED_VARIABLES: [&'static str; 3] = ["print", "IOError", "KeyboardInterrupt"];
+const PREDEFINED_VARIABLES: [&'static str; 4] = ["print", "isinstance", "IOError", "KeyboardInterrupt"];
 
 pub fn run_root<'value>(
     file_name: &'value str,
@@ -430,7 +430,30 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 } else {
                     panic!("Invalid AST. Increment target must be an identifier.");
                 }
-            }
+            },
+            Node::TypeTestExpression { span:_, child, type_test } => {
+                // isinstance(child, type_test.)
+                self.push_load_var("isinstance");
+                self.compile(child, None);
+                if let DartType::Named { span:_, type_name, type_arguments:_, is_nullable:_ } = &type_test.dart_type {
+                    let name = self.id_to_str(&type_name.identifier);
+                    let p = (**self.context_stack.last().unwrap())
+                        .borrow_mut()
+                        .register_or_get_name(name.to_string());
+                    self.push_op(OpCode::LoadName(p));
+                }
+                else {
+                    panic!("Invalid Test Expression");
+                }
+                self.push_op(OpCode::CallFunction(2));
+                if !type_test.check_matching {
+                    self.push_op(OpCode::UnaryNot);
+                }
+            },
+            Node::TypeCastExpression { span:_, child, type_cast:_ } => {
+                // 実行時には型がないので無視
+                self.compile(child, None);
+            },
             Node::AssignmentExpression {
                 span: _,
                 operator,
@@ -921,11 +944,12 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             },
             Node::FunctionDeclaration {
                 span: _,
-                identifier,
-                parameters,
+                signature,
                 body,
             } => {
                 let mut argument_list: Vec<&str> = vec![];
+                let parameters = &signature.parameters;
+                let identifier = &signature.name;
                 for p in parameters {
                     if let Node::Identifier { span } = *p.identifier {
                         let name = self.span_to_str(&span);
@@ -1066,12 +1090,14 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     // catchする型の指定がある場合はloadして検証する
                     match &on_part.exc_type {
                         Some(v) => {
-                            let name = self.id_to_str(v);
-                            let p = (**self.context_stack.last().unwrap())
-                                .borrow_mut()
-                                .register_or_get_name(name.to_string());
-                            self.push_op(OpCode::LoadName(p));
-                            self.push_op(OpCode::JumpIfNotExcMatch(label_next));
+                            if let DartType::Named { span:_, type_name, type_arguments:_, is_nullable:_ } = v {
+                                let name = self.id_to_str(&type_name.identifier);
+                                let p = (**self.context_stack.last().unwrap())
+                                    .borrow_mut()
+                                    .register_or_get_name(name.to_string());
+                                self.push_op(OpCode::LoadName(p));
+                                self.push_op(OpCode::JumpIfNotExcMatch(label_next));
+                            }
                         }
                         None => (),
                     }

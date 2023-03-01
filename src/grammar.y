@@ -1,6 +1,10 @@
 %start LibraryDeclaration
-%expect 2
+%expect 5
 %%
+// シフト還元競合:
+// IfStatement (if(Expression)Statementとif(Expression)Statement else Statement)
+// Selector (.Identifierと.identifier())
+// FinalConstVarOrTypeのType周りに3つ
 
 LibraryDeclaration -> Result<LibraryDeclaration, ()>:
     LibraryImportList TopLevelDeclarationList { 
@@ -33,8 +37,17 @@ TopLevelDeclaration -> Result<Node, ()>:
     ;
 
 TopFunctionDeclaration -> Result<Node, ()>:
-      Identifier FormalParameterList FunctionBody {
-        Ok(Node::FunctionDeclaration { span: $span, identifier: Box::new($1?), parameters: $2?, body: Box::new($3?) })
+    FunctionSignature FunctionBody {
+        Ok(Node::FunctionDeclaration { span: $span, signature: $1?, body: Box::new($2?) })
+    }
+    ;
+
+FunctionSignature -> Result<FunctionSignature, ()>:
+      Identifier FormalParameterList {
+        Ok(FunctionSignature { return_type: None, name: Box::new($1?), parameters: $2? })
+    }
+    | Type Identifier FormalParameterList {
+        Ok(FunctionSignature { return_type: Some($1?), name: Box::new($2?), parameters: $3? })
     }
     ;
 
@@ -59,8 +72,28 @@ FunctionBody -> Result<Node, ()>:
 
 TopVariableDeclaration -> Result<Node, ()>:
       "var" Identifier ";" { Ok(Node::VariableDeclaration { span: $span, identifier: Box::new($2?), expr: None }) }
+    | Type Identifier ";" { Ok(Node::VariableDeclaration { span: $span, identifier: Box::new($2?), expr: None }) }
     | "var" Identifier "=" Expression ";" {
         Ok(Node::VariableDeclaration { span: $span, identifier: Box::new($2?), expr: Some(Box::new($4?)) })
+    }
+    | Type Identifier "=" Expression ";" {
+        Ok(Node::VariableDeclaration { span: $span, identifier: Box::new($2?), expr: Some(Box::new($4?)) })
+    }  
+    | "late" "var" Identifier ";" { Ok(Node::VariableDeclaration { span: $span, identifier: Box::new($3?), expr: None }) }
+    | "late" Type Identifier ";" { Ok(Node::VariableDeclaration { span: $span, identifier: Box::new($3?), expr: None }) }
+    | "late" "var" Identifier "=" Expression ";" {
+        Ok(Node::VariableDeclaration { span: $span, identifier: Box::new($3?), expr: Some(Box::new($5?)) })
+    }
+    | "late" Type Identifier "=" Expression ";" {
+        Ok(Node::VariableDeclaration { span: $span, identifier: Box::new($3?), expr: Some(Box::new($5?)) })
+    }
+    | "late" "final" Identifier ";" { Ok(Node::VariableDeclaration { span: $span, identifier: Box::new($3?), expr: None }) }
+    | "late" "final" Identifier "=" Expression ";" {
+        Ok(Node::VariableDeclaration { span: $span, identifier: Box::new($3?), expr: Some(Box::new($5?)) })
+    }
+    | "late" "final" Type Identifier ";" { Ok(Node::VariableDeclaration { span: $span, identifier: Box::new($4?), expr: None }) }
+    | "late" "final" Type Identifier "=" Expression ";" {
+        Ok(Node::VariableDeclaration { span: $span, identifier: Box::new($4?), expr: Some(Box::new($6?)) })
     }
     ;
 
@@ -153,10 +186,10 @@ OnPart -> Result<TryOnPart, ()>:
         Ok(TryOnPart { catch_part: Some($1?), exc_type: None, block: Box::new($2?) })
     }
     | "on" TypeNotVoid BlockStatement {
-        Ok(TryOnPart { catch_part: None, exc_type: Some(Box::new($2?)), block: Box::new($3?) })
+        Ok(TryOnPart { catch_part: None, exc_type: Some($2?), block: Box::new($3?) })
     }
     | "on" TypeNotVoid CatchPart BlockStatement {
-        Ok(TryOnPart { catch_part: Some($3?), exc_type: Some(Box::new($2?)), block: Box::new($4?) })
+        Ok(TryOnPart { catch_part: Some($3?), exc_type: Some($2?), block: Box::new($4?) })
     }
     ;
 
@@ -214,7 +247,16 @@ InitializedVariableDeclaration -> Result<Node, ()>:
     ;
 
 DeclaredIdentifier -> Result<Node, ()>:
-    "var" Identifier { $2 }
+      "var" Identifier { $2 }
+    | Type Identifier { $2 }
+    | "late" "var" Identifier { $3 }
+    | "late" Type Identifier { $3 }
+    | "const" Identifier { $2 }
+    | "const" Type Identifier { $3 }
+    | "final" Identifier { $2 }
+    | "final" Type Identifier { $3 }
+    | "late" "final" Identifier { $3 }
+    | "late" "final" Type Identifier { $4 }
     ;
 
 Label -> Result<StatementLabel, ()>:
@@ -411,6 +453,12 @@ RelationalExpression -> Result<Node, ()>:
     | BitwiseOrExpression "<" BitwiseOrExpression {
         Ok(Node::BinaryExpression { span: $span, operator: "<", left: Box::new($1?), right: Box::new($3?) })
     }
+    | BitwiseOrExpression TypeTest {
+        Ok(Node::TypeTestExpression { span: $span, child: Box::new($1?), type_test: $2? })
+    }
+    | BitwiseOrExpression TypeCast {
+        Ok(Node::TypeCastExpression { span: $span, child: Box::new($1?), type_cast: $2? })
+    }
     | BitwiseOrExpression { $1 }
     ;
 
@@ -426,6 +474,12 @@ RelationalExpressionNotBrace -> Result<Node, ()>:
     }
     | BitwiseOrExpressionNotBrace "<" BitwiseOrExpression {
         Ok(Node::BinaryExpression { span: $span, operator: "<", left: Box::new($1?), right: Box::new($3?) })
+    }
+    | BitwiseOrExpressionNotBrace TypeTest {
+        Ok(Node::TypeTestExpression { span: $span, child: Box::new($1?), type_test: $2? })
+    }
+    | BitwiseOrExpressionNotBrace TypeCast {
+        Ok(Node::TypeCastExpression { span: $span, child: Box::new($1?), type_cast: $2? })
     }
     | BitwiseOrExpressionNotBrace { $1 }
     ;
@@ -631,6 +685,11 @@ Selector -> Result<Selector, ()>:
     }
     ;
 
+//ArgumentPart -> Result<Node, ()>:
+//      Arguments { $1 }
+//    | TypeArguments Arguments { $2 }
+//    ;
+
 Arguments -> Result<Node, ()>:
       "(" ")" { Ok(Node::Arguments { span: $span, children: vec![] }) }
     | "(" ExpressionList CommaOpt ")" { Ok(Node::Arguments { span: $span, children: $2? }) }
@@ -705,8 +764,26 @@ ListLiteral -> Result<Node, ()>:
       "[" "]" {
         Ok(Node::ListLiteral { span: $span, element_list: vec![] })
     }
+    | "const" "[" "]" {
+        Ok(Node::ListLiteral { span: $span, element_list: vec![] })
+    }
     | "[" ElementList CommaOpt "]" {
         Ok(Node::ListLiteral { span: $span, element_list: $2? })
+    }
+    | "const" "[" ElementList CommaOpt "]" {
+        Ok(Node::ListLiteral { span: $span, element_list: $3? })
+    }
+    | TypeArguments "[" "]" {
+        Ok(Node::ListLiteral { span: $span, element_list: vec![] })
+    }
+    | "const" TypeArguments "[" "]" {
+        Ok(Node::ListLiteral { span: $span, element_list: vec![] })
+    }
+    | TypeArguments "[" ElementList CommaOpt "]" {
+        Ok(Node::ListLiteral { span: $span, element_list: $3? })
+    }
+    | "const" TypeArguments "[" ElementList CommaOpt "]" {
+        Ok(Node::ListLiteral { span: $span, element_list: $4? })
     }
     ;
 
@@ -714,8 +791,26 @@ SetOrMapLiteral -> Result<Node, ()>:
       "{" "}" {
         Ok(Node::SetOrMapLiteral { span: $span, element_list: vec![] })
     }
+    | "const" "{" "}" {
+        Ok(Node::SetOrMapLiteral { span: $span, element_list: vec![] })
+    }
     | "{" ElementList CommaOpt "}" {
         Ok(Node::SetOrMapLiteral { span: $span, element_list: $2? })
+    }
+    | "const" "{" ElementList CommaOpt "}" {
+        Ok(Node::SetOrMapLiteral { span: $span, element_list: $3? })
+    }
+    | TypeArguments "{" "}" {
+        Ok(Node::SetOrMapLiteral { span: $span, element_list: vec![] })
+    }
+    | "const" TypeArguments "{" "}" {
+        Ok(Node::SetOrMapLiteral { span: $span, element_list: vec![] })
+    }
+    | TypeArguments "{" ElementList CommaOpt "}" {
+        Ok(Node::SetOrMapLiteral { span: $span, element_list: $3? })
+    }
+    | "const" TypeArguments "{" ElementList CommaOpt "}" {
+        Ok(Node::SetOrMapLiteral { span: $span, element_list: $4? })
     }
     ;
 
@@ -742,9 +837,107 @@ MapElement -> Result<CollectionElement, ()>:
     ;
 
 
-TypeNotVoid -> Result<Node, ()>:
-    Identifier { $1 }
+
+
+//LateOpt -> Result<(), ()>:
+//      %empty { Ok(()) }
+//    | "late" { Ok(()) }
+//    ;
+//
+//TypeOpt -> Result<(), ()>:
+//      %empty { Ok(()) }
+//    | Type { Ok(()) }
+//    ;
+
+// TypeParameter ::=
+//     | Identifier
+//     | Identifier extends TypeNotVoid
+// 
+// TypeParameters ::= < TypeParametersInternal >
+// TypeParametersInternal ::=
+//     | TypeParameter
+//     | TypeParametersInternal , TypeParameter
+
+TypeTest -> Result<TypeTest, ()>:
+      "is" TypeNotVoid { Ok(TypeTest { dart_type: $2?, check_matching: true }) }
+    | "is" "!" TypeNotVoid { Ok(TypeTest { dart_type: $3?, check_matching: false }) }
     ;
+
+TypeCast -> Result<DartType, ()>:
+    "as" TypeNotVoid { $2 }
+    ;
+
+Type -> Result<DartType, ()>:
+    TypeNotFunction { $1 }
+    ;
+
+TypeNotVoid -> Result<DartType, ()>:
+    TypeNotVoidNotFunction { $1 }
+    ;
+
+TypeNotFunction -> Result<DartType, ()>:
+      "void" { Ok(DartType::Void { span: $span }) }
+    | TypeNotVoidNotFunction { $1 }
+    ;
+
+TypeNotVoidNotFunction -> Result<DartType, ()>:
+      TypeName { 
+        Ok(DartType::Named { span: $span, type_name: $1?, type_arguments: vec![], is_nullable: false }) }
+    ;
+
+TypeName -> Result<DartTypeName, ()>:
+      Identifier {
+        Ok(DartTypeName { identifier: Box::new($1?), module: None })
+    }
+    | Identifier "." Identifier {
+        Ok(DartTypeName { identifier: Box::new($3?), module: Some(Box::new($1?)) })
+    }
+    ;
+
+TypeArguments -> Result<Vec<DartType>, ()>:
+    "<" TypeList ">" { $2 }
+    ;
+TypeList -> Result<Vec<DartType>, ()>:
+      Type { Ok(vec![$1?]) }
+    | TypeList "," Type { flatten($1, $3?) }
+    ;
+
+// FunctionType ::=
+//     | FunctionTypeTails
+//     | TypeNotFunction FunctionTypeTails
+// FunctionTypeTails ::=
+//     | FunctionTypeTail
+//     | FunctionTypeTail FunctionTypeTails
+//     | FunctionTypeTail ? FunctionTypeTails
+// FunctionTypeTail ::=
+//     | Function ParameterTypeList
+//     | Function TypeParameters ParameterTypeList
+// ParameterTypeList ::=
+//     | ( )
+//     | ( NormalParameterType , OptionalParameterTypes )
+//     | ( NormalParameterTypes CommaOpt )
+//     | ( OptionalParameterTypes )
+// NormalParameterTypes ::=
+//     | NormalParameterType
+//     | NormalParameterTypes , NormalParameterType
+// NormalParameterType ::=
+//     | TypedIdentifier
+//     | Type
+// OptionalParameterTypes ::=
+//     | OptionalPositionalParameterTypes
+//     | NamedParameterTypes
+// OptionalPositionalParameterTypes ::=
+//     | [ NormalParameterTypes CommaOpt ]
+// NamedParameterTypes ::=
+//     | { NamedParameterTypesInternal CommaOpt }
+// NamedParameterTypesInternal ::=
+//     | NamedParameterType
+//     | NamedParameterTypesInternal , NamedParameterType
+// NamedParameterType ::=
+//     | TypedIdentifier
+//     | required TypedIdentifier
+// TypedIdentifier ::=
+//     | Type Identifier
 %%
 // Any functions here are in scope for all the grammar actions above.
 
@@ -801,6 +994,16 @@ pub enum Node {
         operator: &'static str,
         left: Box<Node>,
         right: Box<Node>,
+    },
+    TypeTestExpression {
+        span: Span,
+        child: Box<Node>,
+        type_test: TypeTest,
+    },
+    TypeCastExpression {
+        span: Span,
+        child: Box<Node>,
+        type_cast: DartType,
     },
     NumericLiteral {
         span: Span,
@@ -917,8 +1120,7 @@ pub enum Node {
     },
     FunctionDeclaration {
         span: Span,
-        identifier: Box<Node>,
-        parameters: Vec<FunctionParameter>,
+        signature: FunctionSignature,
         body: Box<Node>,
     }
 }
@@ -961,7 +1163,7 @@ pub struct DefaultCase {
 #[derive(Debug)]
 pub struct TryOnPart {
     pub catch_part: Option<TryCatchPart>,
-    pub exc_type: Option<Box<Node>>,
+    pub exc_type: Option<DartType>,
     pub block: Box<Node>,
 }
 
@@ -1001,4 +1203,36 @@ pub enum Selector {
         span: Span,
         args: Box<Node>,
     }
+}
+
+#[derive(Debug)]
+pub struct TypeTest {
+    pub dart_type: DartType,
+    pub check_matching: bool,
+}
+
+#[derive(Debug)]
+pub enum DartType {
+    Named {
+        span: Span,
+        type_name: DartTypeName,
+        type_arguments: Vec<DartType>,
+        is_nullable: bool,
+    },
+    Void {
+        span: Span,
+    },
+}
+
+#[derive(Debug)]
+pub struct DartTypeName {
+    pub identifier: Box<Node>,
+    pub module: Option<Box<Node>>,
+}
+
+#[derive(Debug)]
+pub struct FunctionSignature {
+    pub return_type: Option<DartType>,
+    pub name: Box<Node>,
+    pub parameters: Vec<FunctionParameter>,
 }

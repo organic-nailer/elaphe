@@ -655,3 +655,28 @@ fn subscr() {
         panic!("{:?}", result);
     }
 }
+
+#[test]
+fn type_annotation() {
+    let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
+    let result = catch_unwind(|| {
+        elaphe::run(&output, "main() { int x = 1; print(x); }").expect("execution failed.");
+        exec_py_and_assert(&output, "1\n");
+        elaphe::run(&output, "main() { final int x = 1; print(x); }").expect("execution failed.");
+        exec_py_and_assert(&output, "1\n");
+        elaphe::run(&output, "main() { final x = 1; print(x); }").expect("execution failed.");
+        exec_py_and_assert(&output, "1\n");
+        elaphe::run(&output, "main() { const x = 1; print(x); }").expect("execution failed.");
+        exec_py_and_assert(&output, "1\n");
+        elaphe::run(&output, "main() { const int x = 1; print(x); }").expect("execution failed.");
+        exec_py_and_assert(&output, "1\n");
+        elaphe::run(&output, "main() { np.int32 x = 1; print(x); }").expect("execution failed.");
+        exec_py_and_assert(&output, "1\n");
+        elaphe::run(&output, "main() { late final int x = 1; print(x); }").expect("execution failed.");
+        exec_py_and_assert(&output, "1\n");
+    });
+    clean(&output);
+    if result.is_err() {
+        panic!("{:?}", result);
+    }
+}
