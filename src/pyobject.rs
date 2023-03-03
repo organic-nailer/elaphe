@@ -21,6 +21,8 @@ pub enum PyObject {
         file_name: String,
         code_name: String,
         num_args: u32,
+        num_pos_only_args: u32,
+        num_kw_only_args: u32,
         num_locals: u32,
         stack_size: u32,
         operation_list: Vec<ByteCode>,
@@ -117,6 +119,8 @@ impl PyObject {
                 file_name,
                 code_name,
                 num_args,
+                num_pos_only_args,
+                num_kw_only_args,
                 num_locals,
                 stack_size,
                 operation_list,
@@ -126,8 +130,8 @@ impl PyObject {
                 add_ref: _,
             } => {
                 file.write(&(num_args.to_le_bytes())).unwrap(); // ArgCount
-                file.write(&(0u32.to_le_bytes())).unwrap(); // PosOnlyArgCount
-                file.write(&(0u32.to_le_bytes())).unwrap(); // KwOnlyArgCount
+                file.write(&(num_pos_only_args.to_le_bytes())).unwrap(); // PosOnlyArgCount
+                file.write(&(num_kw_only_args.to_le_bytes())).unwrap(); // KwOnlyArgCount
                 file.write(&(num_locals.to_le_bytes())).unwrap(); // NumLocals
                 file.write(&(*stack_size as u32).to_le_bytes()).unwrap(); // StackSize
                 file.write(&(64u32.to_le_bytes())).unwrap(); // Flags
@@ -195,6 +199,8 @@ impl PyObject {
                 file_name: _,
                 code_name: _,
                 num_args: _,
+                num_pos_only_args: _,
+                num_kw_only_args: _,
                 num_locals: _,
                 stack_size: _,
                 operation_list: _,

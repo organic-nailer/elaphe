@@ -695,3 +695,36 @@ fn variable_declaration() {
         panic!("{:?}", result);
     }
 }
+
+#[test]
+fn function_parameters() {
+    let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
+    let result = catch_unwind(|| {
+        elaphe::run(&output, r#"
+        hoge1(int x, int y) {
+            print(x + y);
+        }
+          
+        hoge2(int x, [int y = 10]) {
+            print(x + y);
+        }
+          
+        hoge3(int x, {int y = 10}) {
+            print(x + y);
+        }
+          
+        main() {
+            hoge1(1,2);
+            hoge2(1);
+            hoge2(1,2);
+            hoge3(1);
+            hoge3(1,y:100);
+        }
+        "#).expect("execution failed.");
+        exec_py_and_assert(&output, "3\n11\n3\n11\n101\n");
+    });
+    clean(&output);
+    if result.is_err() {
+        panic!("{:?}", result);
+    }
+}

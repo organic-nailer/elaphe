@@ -5,6 +5,7 @@
 (0(x|X)[a-fA-F0-9]+)|((([0-9]+(\.[0-9]+)?((e|E)(\+|-)?[0-9]+)?)|(\.[0-9]+((e|E)(\+|-)?[0-9]+)?))) "NUMBER"
 (true)|(false) "BOOLEAN"
 continue "continue"
+required "required"
 default "default"
 rethrow "rethrow"
 finally "finally"

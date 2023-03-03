@@ -48,6 +48,7 @@ pub enum OpCode {
     StoreGlobal(u8),
     LoadConst(u8),
     LoadName(u8),
+    BuildTuple(u8),
     BuildList(u8),
     BuildSet(u8),
     BuildMap(u8),
@@ -68,7 +69,9 @@ pub enum OpCode {
     RaiseVarargs(u8),
     PopJumpIfTrue(u32),
     CallFunction(u8),
-    MakeFunction, // フラグを持つらしい
+    MakeFunction(u8),
+    CallFunctionKw(u8),
+    BuildConstKeyMap(u8),
     LoadMethod(u8),
     CallMethod(u8),
 }
@@ -133,6 +136,7 @@ impl OpCode {
             OpCode::StoreGlobal(_) => 97,
             OpCode::LoadConst(_) => 100,
             OpCode::LoadName(_) => 101,
+            OpCode::BuildTuple(_) => 102,
             OpCode::BuildList(_) => 103,
             OpCode::BuildSet(_) => 104,
             OpCode::BuildMap(_) => 105,
@@ -153,7 +157,9 @@ impl OpCode {
             OpCode::StoreFast(_) => 125,
             OpCode::RaiseVarargs(_) => 130,
             OpCode::CallFunction(_) => 131,
-            OpCode::MakeFunction => 132,
+            OpCode::MakeFunction(_) => 132,
+            OpCode::CallFunctionKw(_) => 141,
+            OpCode::BuildConstKeyMap(_) => 156,
             OpCode::LoadMethod(_) => 160,
             OpCode::CallMethod(_) => 161,
         }
@@ -193,7 +199,11 @@ impl OpCode {
             | OpCode::ImportFrom(v)
             | OpCode::LoadMethod(v)
             | OpCode::CallMethod(v)
-            | OpCode::RaiseVarargs(v) => ByteCode {
+            | OpCode::RaiseVarargs(v)
+            | OpCode::MakeFunction(v)
+            | OpCode::BuildConstKeyMap(v)
+            | OpCode::BuildTuple(v)
+            | OpCode::CallFunctionKw(v) => ByteCode {
                 operation: self.get_value(),
                 operand: v,
             },
@@ -246,7 +256,9 @@ impl OpCode {
             OpCode::BinarySubScr => -1,
             OpCode::StoreSubScr => -3,
 
-            OpCode::BuildList(v) | OpCode::BuildSet(v) => 1 - (v as i32),
+            OpCode::BuildList(v) 
+            | OpCode::BuildTuple(v)
+            | OpCode::BuildSet(v) => 1 - (v as i32),
 
             OpCode::BuildMap(v) => 1 - 2 * (v as i32),
 
@@ -264,7 +276,9 @@ impl OpCode {
             | OpCode::LoadFast(_)
             | OpCode::LoadGlobal(_) => 1,
 
-            OpCode::CallMethod(n) | OpCode::CallFunction(n) => -(n as i32),
+            OpCode::CallMethod(n) 
+            | OpCode::CallFunction(n)
+            | OpCode::CallFunctionKw(n) => -(n as i32),
 
             OpCode::SetupFinally(_) => {
                 if jump {
@@ -284,7 +298,13 @@ impl OpCode {
             OpCode::PopJumpIfFalse(_) | OpCode::PopJumpIfTrue(_) => -1,
             OpCode::JumpIfNotExcMatch(_) => 0,
 
-            OpCode::MakeFunction => -1,
+            OpCode::MakeFunction(v) => 0
+                 - ((v & 0x01) != 0) as i32
+                 - ((v & 0x02) != 0) as i32
+                 - ((v & 0x04) != 0) as i32
+                 - ((v & 0x08) != 0) as i32,
+
+            OpCode::BuildConstKeyMap(v) => -(v as i32),
 
             OpCode::LoadAttr(_) | OpCode::LoadMethod(_) => 0,
             OpCode::StoreAttr(_) => -2,
