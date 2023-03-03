@@ -71,29 +71,23 @@ FunctionBody -> Result<Node, ()>:
     ;
 
 TopVariableDeclaration -> Result<Node, ()>:
-      "var" Identifier ";" { Ok(Node::VariableDeclaration { span: $span, identifier: Box::new($2?), expr: None }) }
-    | Type Identifier ";" { Ok(Node::VariableDeclaration { span: $span, identifier: Box::new($2?), expr: None }) }
-    | "var" Identifier "=" Expression ";" {
-        Ok(Node::VariableDeclaration { span: $span, identifier: Box::new($2?), expr: Some(Box::new($4?)) })
+      "var" InitializedIdentifierList ";" { 
+        Ok(Node::VariableDeclarationList { span: $span, decl_list: $2? }) 
     }
-    | Type Identifier "=" Expression ";" {
-        Ok(Node::VariableDeclaration { span: $span, identifier: Box::new($2?), expr: Some(Box::new($4?)) })
-    }  
-    | "late" "var" Identifier ";" { Ok(Node::VariableDeclaration { span: $span, identifier: Box::new($3?), expr: None }) }
-    | "late" Type Identifier ";" { Ok(Node::VariableDeclaration { span: $span, identifier: Box::new($3?), expr: None }) }
-    | "late" "var" Identifier "=" Expression ";" {
-        Ok(Node::VariableDeclaration { span: $span, identifier: Box::new($3?), expr: Some(Box::new($5?)) })
+    | Type InitializedIdentifierList ";" { 
+        Ok(Node::VariableDeclarationList { span: $span, decl_list: $2? }) 
     }
-    | "late" Type Identifier "=" Expression ";" {
-        Ok(Node::VariableDeclaration { span: $span, identifier: Box::new($3?), expr: Some(Box::new($5?)) })
+    | "late" "var" InitializedIdentifierList ";" { 
+        Ok(Node::VariableDeclarationList { span: $span, decl_list: $3? }) 
     }
-    | "late" "final" Identifier ";" { Ok(Node::VariableDeclaration { span: $span, identifier: Box::new($3?), expr: None }) }
-    | "late" "final" Identifier "=" Expression ";" {
-        Ok(Node::VariableDeclaration { span: $span, identifier: Box::new($3?), expr: Some(Box::new($5?)) })
+    | "late" Type InitializedIdentifierList ";" { 
+        Ok(Node::VariableDeclarationList { span: $span, decl_list: $3? }) 
     }
-    | "late" "final" Type Identifier ";" { Ok(Node::VariableDeclaration { span: $span, identifier: Box::new($4?), expr: None }) }
-    | "late" "final" Type Identifier "=" Expression ";" {
-        Ok(Node::VariableDeclaration { span: $span, identifier: Box::new($4?), expr: Some(Box::new($6?)) })
+    | "late" "final" InitializedIdentifierList ";" { 
+        Ok(Node::VariableDeclarationList { span: $span, decl_list: $3? }) 
+    }
+    | "late" "final" Type InitializedIdentifierList ";" { 
+        Ok(Node::VariableDeclarationList { span: $span, decl_list: $4? }) 
     }
     ;
 
@@ -139,7 +133,10 @@ BlockStatement -> Result<Node, ()>:
     ;
 
 LocalVariableDeclaration -> Result<Node, ()>:
-    InitializedVariableDeclaration ";" { $1 };
+    InitializedVariableDeclaration ";" {
+        Ok(Node::VariableDeclarationList { span: $span, decl_list: $1? })
+    }
+    ;
 
 ExpressionStatement -> Result<Node, ()>:
     ExpressionNotBrace ";" { Ok(Node::ExpressionStatement { span: $span, expr: Box::new($1?) }) }
@@ -241,9 +238,30 @@ DoStatement -> Result<Node, ()>:
     }
     ;
 
-InitializedVariableDeclaration -> Result<Node, ()>:
-      DeclaredIdentifier { Ok(Node::VariableDeclaration { span: $span, identifier: Box::new($1?), expr: None }) }
-    | DeclaredIdentifier "=" Expression { Ok(Node::VariableDeclaration { span: $span, identifier: Box::new($1?), expr: Some(Box::new($3?)) }) }
+InitializedVariableDeclaration -> Result<Vec<VariableDeclaration>, ()>:
+      DeclaredIdentifier { 
+        Ok(vec![VariableDeclaration { identifier: Box::new($1?), expr: None }]) 
+    }
+    | DeclaredIdentifier "=" Expression { 
+        Ok(vec![VariableDeclaration { identifier: Box::new($1?), expr: Some(Box::new($3?)) }]) 
+    }
+    | InitializedVariableDeclaration "," InitializedIdentifier {
+        flatten($1, $3?)
+    }
+    ;
+
+InitializedIdentifier -> Result<VariableDeclaration, ()>:
+      Identifier {
+        Ok(VariableDeclaration { identifier: Box::new($1?), expr: None })
+    }
+    | Identifier "=" Expression {
+        Ok(VariableDeclaration { identifier: Box::new($1?), expr: Some(Box::new($3?)) })
+    }
+    ;
+
+InitializedIdentifierList -> Result<Vec<VariableDeclaration>, ()>:
+      InitializedIdentifier { Ok(vec![$1?]) }
+    | InitializedIdentifierList "," InitializedIdentifier { flatten($1, $3?) }
     ;
 
 DeclaredIdentifier -> Result<Node, ()>:
@@ -1059,10 +1077,9 @@ pub enum Node {
     EmptyStatement {
         span: Span,
     },
-    VariableDeclaration {
+    VariableDeclarationList {
         span: Span,
-        identifier: Box<Node>,
-        expr: Option<Box<Node>>,
+        decl_list: Vec<VariableDeclaration>,
     },
     IfStatement {
         span: Span,
@@ -1235,4 +1252,10 @@ pub struct FunctionSignature {
     pub return_type: Option<DartType>,
     pub name: Box<Node>,
     pub parameters: Vec<FunctionParameter>,
+}
+
+#[derive(Debug)]
+pub struct VariableDeclaration {
+    pub identifier: Box<Node>,
+    pub expr: Option<Box<Node>>,
 }

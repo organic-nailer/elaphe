@@ -900,45 +900,48 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             }
             Node::RethrowStatement { span: _ } => {
                 self.push_op(OpCode::Reraise);
-            }
+            },
 
-            Node::VariableDeclaration {
+            Node::VariableDeclarationList {
                 span: _,
-                identifier,
-                expr,
-            } => match expr {
-                Some(e) => {
-                    self.compile(e, None);
-                    if let Node::Identifier { span: id_span } = **identifier {
-                        let value = self.span_to_str(&id_span);
-                        let position = (**self.context_stack.last().unwrap())
-                            .borrow_mut()
-                            .declare_variable(value);
-                        if self.context_stack.last().unwrap().borrow().is_global() {
-                            // トップレベル変数の場合
-                            self.push_op(OpCode::StoreName(position));
-                        } else {
-                            // ローカル変数の場合
-                            let local_position = self
-                                .context_stack
-                                .last()
-                                .unwrap()
-                                .borrow()
-                                .get_local_variable(value);
-                            self.push_op(OpCode::StoreFast(local_position));
+                decl_list,
+            } => {
+                for declaration in decl_list {
+                    match &declaration.expr {
+                        Some(e) => {
+                            self.compile(e, None);
+                            if let Node::Identifier { span: id_span } = *declaration.identifier {
+                                let value = self.span_to_str(&id_span);
+                                let position = (**self.context_stack.last().unwrap())
+                                    .borrow_mut()
+                                    .declare_variable(value);
+                                if self.context_stack.last().unwrap().borrow().is_global() {
+                                    // トップレベル変数の場合
+                                    self.push_op(OpCode::StoreName(position));
+                                } else {
+                                    // ローカル変数の場合
+                                    let local_position = self
+                                        .context_stack
+                                        .last()
+                                        .unwrap()
+                                        .borrow()
+                                        .get_local_variable(value);
+                                    self.push_op(OpCode::StoreFast(local_position));
+                                }
+                            } else {
+                                panic!("Invalid AST");
+                            }
                         }
-                    } else {
-                        panic!("Invalid AST");
-                    }
-                }
-                None => {
-                    if let Node::Identifier { span: id_span } = **identifier {
-                        let value = &self.span_to_str(&id_span);
-                        (**self.context_stack.last().unwrap())
-                            .borrow_mut()
-                            .declare_variable(value);
-                    } else {
-                        panic!("Invalid AST");
+                        None => {
+                            if let Node::Identifier { span: id_span } = *declaration.identifier {
+                                let value = &self.span_to_str(&id_span);
+                                (**self.context_stack.last().unwrap())
+                                    .borrow_mut()
+                                    .declare_variable(value);
+                            } else {
+                                panic!("Invalid AST");
+                            }
+                        }
                     }
                 }
             },

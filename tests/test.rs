@@ -680,3 +680,18 @@ fn type_annotation() {
         panic!("{:?}", result);
     }
 }
+
+#[test]
+fn variable_declaration() {
+    let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
+    let result = catch_unwind(|| {
+        elaphe::run(&output, "main() { int x = 1, y = 2; print(x + y); }").expect("execution failed.");
+        exec_py_and_assert(&output, "3\n");
+        elaphe::run(&output, "int x = 1, y = 2; main() { print(x + y); }").expect("execution failed.");
+        exec_py_and_assert(&output, "3\n");
+    });
+    clean(&output);
+    if result.is_err() {
+        panic!("{:?}", result);
+    }
+}
