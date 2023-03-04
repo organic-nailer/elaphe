@@ -5,44 +5,40 @@
 // IfStatement (if(Expression)Statementとif(Expression)Statement else Statement)
 // Selector (.Identifierと.identifier())
 // FinalConstVarOrTypeのType周りに3つ
-// Argumentsの辺
 
-LibraryDeclaration -> Result<LibraryDeclaration, ()>:
-    LibraryImportList TopLevelDeclarationList { 
-        Ok(LibraryDeclaration { import_list: $1?, top_level_declaration_list: $2? })
+//----------------------------------------------------------------------
+//-----------------------------Variables--------------------------------
+//----------------------------------------------------------------------
+InitializedVariableDeclaration -> Result<Vec<VariableDeclaration>, ()>:
+      DeclaredIdentifier { 
+        Ok(vec![VariableDeclaration { identifier: Box::new($1?), expr: None }]) 
+    }
+    | DeclaredIdentifier "=" Expression { 
+        Ok(vec![VariableDeclaration { identifier: Box::new($1?), expr: Some(Box::new($3?)) }]) 
+    }
+    | InitializedVariableDeclaration "," InitializedIdentifier {
+        flatten($1, $3?)
     }
     ;
 
-LibraryImportList -> Result<Vec<LibraryImport>, ()>:
-      %empty { Ok(vec![]) }
-    | LibraryImportList LibraryImport { flatten($1, $2?) }
-    ;
-
-LibraryImport -> Result<LibraryImport, ()>:
-      "import" Uri ";" { Ok(LibraryImport { uri: $2?, identifier: None }) }
-    | "import" Uri "as" Identifier ";" { Ok(LibraryImport { uri: $2?, identifier: Some(Box::new($4?)) }) }
-    ;
-
-Uri -> Result<Span, ()>:
-    "STRING" { Ok($span) }
-    ;
-
-TopLevelDeclarationList -> Result<Vec<Box<Node>>, ()>:
-      %empty { Ok(vec![]) }
-    | TopLevelDeclarationList TopLevelDeclaration { flatten($1, Box::new($2?)) }
-    ;
-
-TopLevelDeclaration -> Result<Node, ()>:
-      TopFunctionDeclaration { $1 }
-    | TopVariableDeclaration { $1 }
-    ;
-
-TopFunctionDeclaration -> Result<Node, ()>:
-    FunctionSignature FunctionBody {
-        Ok(Node::FunctionDeclaration { span: $span, signature: $1?, body: Box::new($2?) })
+InitializedIdentifier -> Result<VariableDeclaration, ()>:
+      Identifier {
+        Ok(VariableDeclaration { identifier: Box::new($1?), expr: None })
+    }
+    | Identifier "=" Expression {
+        Ok(VariableDeclaration { identifier: Box::new($1?), expr: Some(Box::new($3?)) })
     }
     ;
 
+InitializedIdentifierList -> Result<Vec<VariableDeclaration>, ()>:
+      InitializedIdentifier { Ok(vec![$1?]) }
+    | InitializedIdentifierList "," InitializedIdentifier { flatten($1, $3?) }
+    ;
+
+
+//----------------------------------------------------------------------
+//-----------------------------Functions--------------------------------
+//----------------------------------------------------------------------
 FunctionSignature -> Result<FunctionSignature, ()>:
       Identifier FormalParameterList {
         Ok(FunctionSignature { return_type: None, name: Box::new($1?), param: $2? })
@@ -50,6 +46,15 @@ FunctionSignature -> Result<FunctionSignature, ()>:
     | Type Identifier FormalParameterList {
         Ok(FunctionSignature { return_type: Some($1?), name: Box::new($2?), param: $3? })
     }
+    ;
+
+FunctionBody -> Result<Node, ()>:
+      "=>" Expression ";" { Ok(Node::ExpressionStatement { span: $span, expr: Box::new($2?) }) }
+    | BlockStatement { $1 }
+    ;
+
+BlockStatement -> Result<Node, ()>:
+      "{" Statements "}" { Ok(Node::BlockStatement { span: $span, children: $2? }) }
     ;
 
 FormalParameterList -> Result<FunctionParamSignature, ()>:
@@ -156,205 +161,6 @@ DefaultNamedParameter -> Result<FunctionParameter, ()>:
     }
     ;
 
-FunctionBody -> Result<Node, ()>:
-      "=>" Expression ";" { Ok(Node::ExpressionStatement { span: $span, expr: Box::new($2?) }) }
-    | BlockStatement { $1 }
-    ;
-
-TopVariableDeclaration -> Result<Node, ()>:
-      "var" InitializedIdentifierList ";" { 
-        Ok(Node::VariableDeclarationList { span: $span, decl_list: $2? }) 
-    }
-    | Type InitializedIdentifierList ";" { 
-        Ok(Node::VariableDeclarationList { span: $span, decl_list: $2? }) 
-    }
-    | "late" "var" InitializedIdentifierList ";" { 
-        Ok(Node::VariableDeclarationList { span: $span, decl_list: $3? }) 
-    }
-    | "late" Type InitializedIdentifierList ";" { 
-        Ok(Node::VariableDeclarationList { span: $span, decl_list: $3? }) 
-    }
-    | "late" "final" InitializedIdentifierList ";" { 
-        Ok(Node::VariableDeclarationList { span: $span, decl_list: $3? }) 
-    }
-    | "late" "final" Type InitializedIdentifierList ";" { 
-        Ok(Node::VariableDeclarationList { span: $span, decl_list: $4? }) 
-    }
-    ;
-
-
-
-
-
-
-
-
-
-Statements -> Result<Vec<Box<Node>>, ()>:
-      %empty { Ok(vec![]) }
-    | Statements Statement { flatten($1, Box::new($2?)) }
-    ;
-
-Statement -> Result<Node, ()>:
-      NonLabeledStatement { $1 }
-    | Label NonLabeledStatement {
-        Ok(Node::LabeledStatement { span: $span, label: Box::new($1?), stmt: Box::new($2?) })
-    }
-    ;
-
-NonLabeledStatement -> Result<Node, ()>:
-      BlockStatement { $1 }
-    | LocalVariableDeclaration { $1 }
-    | IfStatement { $1 }
-    | RethrowStatement { $1 }
-    | TryStatement { $1 }
-    | ForStatement { $1 }
-    | WhileStatement { $1 }
-    | DoStatement { $1 }
-    | SwitchStatement { $1 }
-    | BreakStatement { $1 }
-    | ContinueStatement { $1 }
-    | ReturnStatement { $1 }
-    | ExpressionStatement { $1 }
-    | ";" { Ok(Node::EmptyStatement { span: $span }) }
-    ;
-
-BlockStatement -> Result<Node, ()>:
-      "{" Statements "}" { Ok(Node::BlockStatement { span: $span, children: $2? }) }
-    ;
-
-LocalVariableDeclaration -> Result<Node, ()>:
-    InitializedVariableDeclaration ";" {
-        Ok(Node::VariableDeclarationList { span: $span, decl_list: $1? })
-    }
-    ;
-
-ExpressionStatement -> Result<Node, ()>:
-    ExpressionNotBrace ";" { Ok(Node::ExpressionStatement { span: $span, expr: Box::new($1?) }) }
-    ;
-
-IfStatement -> Result<Node, ()>:
-      "if" "(" Expression ")" Statement { Ok(Node::IfStatement { span: $span, condition: Box::new($3?), if_true_stmt: Box::new($5?), if_false_stmt: None }) }
-    | "if" "(" Expression ")" Statement "else" Statement { Ok(Node::IfStatement { span: $span, condition: Box::new($3?), if_true_stmt: Box::new($5?), if_false_stmt: Some(Box::new($7?)) }) }
-    ;
-
-RethrowStatement -> Result<Node, ()>:
-    "rethrow" ";" {
-        Ok(Node::RethrowStatement { span: $span })
-    }
-    ;
-
-TryStatement -> Result<Node, ()>:
-      "try" BlockStatement FinallyPart {
-        Ok(Node::TryFinallyStatement { span: $span, block_try: Box::new($2?), block_finally: Box::new($3?) })
-    }
-    | "try" BlockStatement OnPartList {
-        Ok(Node::TryOnStatement { span: $span, block_try: Box::new($2?), on_part_list: $3? })
-    }
-    | "try" BlockStatement OnPartList FinallyPart {
-        Ok(Node::TryFinallyStatement { 
-            span: $span, 
-            block_try: Box::new(Node::TryOnStatement {
-                span: $span,
-                block_try: Box::new($2?),
-                on_part_list: $3?,
-            }),
-            block_finally: Box::new($4?), 
-        })
-    }
-    ;
-
-OnPartList -> Result<Vec<TryOnPart>, ()>:
-      OnPart { Ok(vec![$1?]) }
-    | OnPartList OnPart { flatten($1, $2?) }
-    ;
-
-OnPart -> Result<TryOnPart, ()>:
-      CatchPart BlockStatement {
-        Ok(TryOnPart { catch_part: Some($1?), exc_type: None, block: Box::new($2?) })
-    }
-    | "on" TypeNotVoid BlockStatement {
-        Ok(TryOnPart { catch_part: None, exc_type: Some($2?), block: Box::new($3?) })
-    }
-    | "on" TypeNotVoid CatchPart BlockStatement {
-        Ok(TryOnPart { catch_part: Some($3?), exc_type: Some($2?), block: Box::new($4?) })
-    }
-    ;
-
-CatchPart -> Result<TryCatchPart, ()>:
-      "catch" "(" Identifier ")" {
-        Ok(TryCatchPart { id_error: Box::new($3?), id_trace: None })
-    }
-    | "catch" "(" Identifier "," Identifier ")" {
-        Ok(TryCatchPart { id_error: Box::new($3?), id_trace: Some(Box::new($5?)) })
-    }
-    ;
-
-FinallyPart -> Result<Node, ()>:
-    "finally" BlockStatement { $2 }
-    ;
-
-ForStatement -> Result<Node, ()>:
-    "for" "(" ForLoopParts ")" Statement {
-        let part = $3?;
-        Ok(Node::ForStatement { span: $span, init: part.0, condition: part.1, update: part.2, stmt: Box::new($5?) })
-    }
-    ;
-
-ForLoopParts -> Result<(Option<Box<Node>>,Option<Box<Node>>,Option<Vec<Box<Node>>>), ()>:
-      ForInitializerStatement ExpressionOpt ";" ExpressionListOpt {
-        Ok(($1?, $2?, $4?))
-      }
-    ;
-
-ForInitializerStatement -> Result<Option<Box<Node>>, ()>:
-      LocalVariableDeclaration { Ok(Some(Box::new($1?))) }
-    | ExpressionOpt ";" {
-        match $1? {
-            Some(v) => Ok(Some(Box::new(Node::ExpressionStatement { span: $span, expr: v }))),
-            None => Ok(None),
-        }
-     }
-    ;
-
-WhileStatement -> Result<Node, ()>:
-    "while" "(" Expression ")" Statement {
-        Ok(Node::WhileStatement { span: $span, condition: Box::new($3?), stmt: Box::new($5?) })
-    }
-    ;
-
-DoStatement -> Result<Node, ()>:
-    "do" Statement "while" "(" Expression ")" ";" {
-        Ok(Node::DoStatement { span: $span, condition: Box::new($5?), stmt: Box::new($2?) })
-    }
-    ;
-
-InitializedVariableDeclaration -> Result<Vec<VariableDeclaration>, ()>:
-      DeclaredIdentifier { 
-        Ok(vec![VariableDeclaration { identifier: Box::new($1?), expr: None }]) 
-    }
-    | DeclaredIdentifier "=" Expression { 
-        Ok(vec![VariableDeclaration { identifier: Box::new($1?), expr: Some(Box::new($3?)) }]) 
-    }
-    | InitializedVariableDeclaration "," InitializedIdentifier {
-        flatten($1, $3?)
-    }
-    ;
-
-InitializedIdentifier -> Result<VariableDeclaration, ()>:
-      Identifier {
-        Ok(VariableDeclaration { identifier: Box::new($1?), expr: None })
-    }
-    | Identifier "=" Expression {
-        Ok(VariableDeclaration { identifier: Box::new($1?), expr: Some(Box::new($3?)) })
-    }
-    ;
-
-InitializedIdentifierList -> Result<Vec<VariableDeclaration>, ()>:
-      InitializedIdentifier { Ok(vec![$1?]) }
-    | InitializedIdentifierList "," InitializedIdentifier { flatten($1, $3?) }
-    ;
-
 DeclaredIdentifier -> Result<Node, ()>:
       "var" Identifier { $2 }
     | Type Identifier { $2 }
@@ -368,74 +174,20 @@ DeclaredIdentifier -> Result<Node, ()>:
     | "late" "final" Type Identifier { $4 }
     ;
 
-Label -> Result<Node, ()>:
-    Identifier ":" { $1 }
-    ;
-
-BreakStatement -> Result<Node, ()>:
-      "break" ";" {
-        Ok(Node::BreakStatement { span: $span, label: None })
-    }
-    | "break" Identifier ";" {
-        Ok(Node::BreakStatement { span: $span, label: Some(Box::new($2?)) })
-    }
-    ;
-
-ContinueStatement -> Result<Node, ()>:
-      "continue" ";" {
-        Ok(Node::ContinueStatement { span: $span, label: None })
-    }
-    | "continue" Identifier ";" {
-        Ok(Node::ContinueStatement { span: $span, label: Some(Box::new($2?)) })
-    }
-    ;
-
-ReturnStatement -> Result<Node, ()>:
-      "return" ";" { Ok(Node::ReturnStatement { span: $span, value: None }) }
-    | "return" Expression ";" {
-        Ok(Node::ReturnStatement { span: $span, value: Some(Box::new($2?)) })
-    }
-    ;
-
-SwitchStatement -> Result<Node, ()>:
-    "switch" "(" Expression ")" "{" SwitchCaseList DefaultCaseOpt "}" {
-        Ok(Node::SwitchStatement { span: $span, expr: Box::new($3?), case_list: $6?, default_case: $7? })
-    }
-    ;
-
-SwitchCaseList -> Result<Vec<SwitchCase>, ()>:
-      %empty { Ok(vec![]) }
-    | SwitchCaseList SwitchCase { flatten($1, $2?) }
-    ;
-
-SwitchCase -> Result<SwitchCase, ()>:
-      "case" Expression ":" Statements {
-        Ok(SwitchCase { label_list: vec![], expr: Box::new($2?), stmt_list: $4? })
-    }
-    ;
-
-DefaultCase -> Result<DefaultCase, ()>:
-      "default" ":" Statements {
-        Ok(DefaultCase { label_list: vec![], stmt_list: $3? })
-    }
-    ;
-
-DefaultCaseOpt -> Result<Option<DefaultCase>, ()>:
-      %empty { Ok(None) }
-    | DefaultCase { Ok(Some($1?)) }
-    ;
-
-
-
-
-
-
+//----------------------------------------------------------------------
+//-----------------------------Expressions--------------------------------
+//----------------------------------------------------------------------
 Expression -> Result<Node, ()>:
       SelectorExpression AssignmentOperator Expression {
         Ok(Node::AssignmentExpression { span: $span, operator: $2?, left: Box::new($1?), right: Box::new($3?) })
     }
     | ThrowExpression { $1 }
     | ConditionalExpression { $1 }
+    ;
+
+ExpressionOpt -> Result<Option<Box<Node>>, ()>:
+      %empty { Ok(None) }
+    | Expression { Ok(Some(Box::new($1?))) }
     ;
 
 ExpressionNotBrace -> Result<Node, ()>:
@@ -462,15 +214,151 @@ AssignmentOperator -> Result<&'static str, ()>:
     | "??=" { Ok("??=") }
     ;
 
+ExpressionList -> Result<Vec<Box<Node>>, ()>:
+      ExpressionList "," Expression { 
+        flatten($1, Box::new($3?))
+    }
+    | Expression { Ok(vec![Box::new($1?)]) }
+    ;
+
+ExpressionListOpt -> Result<Option<Vec<Box<Node>>>, ()>:
+      %empty { Ok(None) }
+    | ExpressionList { Ok(Some($1?)) }
+    ;
+
+CommaOpt -> Result<(), ()>:
+      %empty { Ok(()) }
+    | "," { Ok(()) }
+    ;
+
+Primary -> Result<Node, ()>:
+      '(' Expression ')' { $2 }
+    | Literal { $1 }
+    | Identifier { $1 }
+    ;
+
+PrimaryNotBrace -> Result<Node, ()>:
+      '(' Expression ')' { $2 }
+    | LiteralNotBrace { $1 }
+    | Identifier { $1 }
+    ;
+
+Identifier -> Result<Node, ()>:
+    'IDENTIFIER' { Ok(Node::Identifier { span: $span }) }
+    ;
+
+Literal -> Result<Node, ()>:
+      'NUMBER' { Ok(Node::NumericLiteral { span: $span }) }
+    | StringLiteralList { Ok(Node::StringLiteral { span: $span, literal_list: $1? }) }
+    | ListLiteral { $1 }
+    | SetOrMapLiteral { $1 }
+    | 'BOOLEAN' { Ok(Node::BooleanLiteral { span: $span }) }
+    | 'NULL' { Ok(Node::NullLiteral { span: $span }) }
+    ;
+
+LiteralNotBrace -> Result<Node, ()>:
+      'NUMBER' { Ok(Node::NumericLiteral { span: $span }) }
+    | StringLiteralList { Ok(Node::StringLiteral { span: $span, literal_list: $1? }) }
+    | ListLiteral { $1 }
+    | 'BOOLEAN' { Ok(Node::BooleanLiteral { span: $span }) }
+    | 'NULL' { Ok(Node::NullLiteral { span: $span }) }
+    ;
+
+StringLiteralList -> Result<Vec<Span>, ()>:
+      StringLiteralList "STRING" { 
+        match $2 {
+            Ok(v) => flatten($1, v.span()),
+            Err(_) => Err(())
+        }
+    }
+    | "STRING" { 
+        match $1 {
+            Ok(v) => Ok(vec![v.span()]),
+            Err(_) => Err(())
+        }
+    }
+    ;
+
+ListLiteral -> Result<Node, ()>:
+      "[" "]" {
+        Ok(Node::ListLiteral { span: $span, element_list: vec![] })
+    }
+    | "const" "[" "]" {
+        Ok(Node::ListLiteral { span: $span, element_list: vec![] })
+    }
+    | "[" ElementList CommaOpt "]" {
+        Ok(Node::ListLiteral { span: $span, element_list: $2? })
+    }
+    | "const" "[" ElementList CommaOpt "]" {
+        Ok(Node::ListLiteral { span: $span, element_list: $3? })
+    }
+    | TypeArguments "[" "]" {
+        Ok(Node::ListLiteral { span: $span, element_list: vec![] })
+    }
+    | "const" TypeArguments "[" "]" {
+        Ok(Node::ListLiteral { span: $span, element_list: vec![] })
+    }
+    | TypeArguments "[" ElementList CommaOpt "]" {
+        Ok(Node::ListLiteral { span: $span, element_list: $3? })
+    }
+    | "const" TypeArguments "[" ElementList CommaOpt "]" {
+        Ok(Node::ListLiteral { span: $span, element_list: $4? })
+    }
+    ;
+
+SetOrMapLiteral -> Result<Node, ()>:
+      "{" "}" {
+        Ok(Node::SetOrMapLiteral { span: $span, element_list: vec![] })
+    }
+    | "const" "{" "}" {
+        Ok(Node::SetOrMapLiteral { span: $span, element_list: vec![] })
+    }
+    | "{" ElementList CommaOpt "}" {
+        Ok(Node::SetOrMapLiteral { span: $span, element_list: $2? })
+    }
+    | "const" "{" ElementList CommaOpt "}" {
+        Ok(Node::SetOrMapLiteral { span: $span, element_list: $3? })
+    }
+    | TypeArguments "{" "}" {
+        Ok(Node::SetOrMapLiteral { span: $span, element_list: vec![] })
+    }
+    | "const" TypeArguments "{" "}" {
+        Ok(Node::SetOrMapLiteral { span: $span, element_list: vec![] })
+    }
+    | TypeArguments "{" ElementList CommaOpt "}" {
+        Ok(Node::SetOrMapLiteral { span: $span, element_list: $3? })
+    }
+    | "const" TypeArguments "{" ElementList CommaOpt "}" {
+        Ok(Node::SetOrMapLiteral { span: $span, element_list: $4? })
+    }
+    ;
+
+ElementList -> Result<Vec<CollectionElement>, ()>:
+      Element { Ok(vec![$1?]) }
+    | ElementList "," Element { flatten($1, $3?) }
+    ;
+
+Element -> Result<CollectionElement, ()>:
+      ExpressionElement { $1 }
+    | MapElement { $1 }
+    ;
+
+ExpressionElement -> Result<CollectionElement, ()>:
+    Expression {
+        Ok(CollectionElement::ExpressionElement { expr: Box::new($1?) })
+    }
+    ;
+
+MapElement -> Result<CollectionElement, ()>:
+    Expression ":" Expression {
+        Ok(CollectionElement::MapElement { key_expr: Box::new($1?), value_expr: Box::new($3?) })
+    }
+    ;
+
 ThrowExpression -> Result<Node, ()>:
     "throw" Expression {
         Ok(Node::ThrowExpression { span: $span, expr: Box::new($2?) })
     }
-    ;
-
-ExpressionOpt -> Result<Option<Box<Node>>, ()>:
-      %empty { Ok(None) }
-    | Expression { Ok(Some(Box::new($1?))) }
     ;
 
 ConditionalExpression -> Result<Node, ()>:
@@ -819,147 +707,6 @@ NormalArgument -> Result<CallParameter, ()>:
       Expression { Ok(CallParameter { identifier: None, expr: Box::new($1?) }) }
     ;
 
-ExpressionList -> Result<Vec<Box<Node>>, ()>:
-      ExpressionList "," Expression { 
-        flatten($1, Box::new($3?))
-    }
-    | Expression { Ok(vec![Box::new($1?)]) }
-    ;
-
-ExpressionListOpt -> Result<Option<Vec<Box<Node>>>, ()>:
-      %empty { Ok(None) }
-    | ExpressionList { Ok(Some($1?)) }
-    ;
-
-CommaOpt -> Result<(), ()>:
-      %empty { Ok(()) }
-    | "," { Ok(()) }
-    ;
-
-Primary -> Result<Node, ()>:
-      '(' Expression ')' { $2 }
-    | Literal { $1 }
-    | Identifier { $1 }
-    ;
-
-PrimaryNotBrace -> Result<Node, ()>:
-      '(' Expression ')' { $2 }
-    | LiteralNotBrace { $1 }
-    | Identifier { $1 }
-    ;
-
-Identifier -> Result<Node, ()>:
-    'IDENTIFIER' { Ok(Node::Identifier { span: $span }) }
-    ;
-
-Literal -> Result<Node, ()>:
-      'NUMBER' { Ok(Node::NumericLiteral { span: $span }) }
-    | StringLiteralList { Ok(Node::StringLiteral { span: $span, literal_list: $1? }) }
-    | ListLiteral { $1 }
-    | SetOrMapLiteral { $1 }
-    | 'BOOLEAN' { Ok(Node::BooleanLiteral { span: $span }) }
-    | 'NULL' { Ok(Node::NullLiteral { span: $span }) }
-    ;
-
-LiteralNotBrace -> Result<Node, ()>:
-      'NUMBER' { Ok(Node::NumericLiteral { span: $span }) }
-    | StringLiteralList { Ok(Node::StringLiteral { span: $span, literal_list: $1? }) }
-    | ListLiteral { $1 }
-    | 'BOOLEAN' { Ok(Node::BooleanLiteral { span: $span }) }
-    | 'NULL' { Ok(Node::NullLiteral { span: $span }) }
-    ;
-
-StringLiteralList -> Result<Vec<Span>, ()>:
-      StringLiteralList "STRING" { 
-        match $2 {
-            Ok(v) => flatten($1, v.span()),
-            Err(_) => Err(())
-        }
-    }
-    | "STRING" { 
-        match $1 {
-            Ok(v) => Ok(vec![v.span()]),
-            Err(_) => Err(())
-        }
-    }
-    ;
-
-ListLiteral -> Result<Node, ()>:
-      "[" "]" {
-        Ok(Node::ListLiteral { span: $span, element_list: vec![] })
-    }
-    | "const" "[" "]" {
-        Ok(Node::ListLiteral { span: $span, element_list: vec![] })
-    }
-    | "[" ElementList CommaOpt "]" {
-        Ok(Node::ListLiteral { span: $span, element_list: $2? })
-    }
-    | "const" "[" ElementList CommaOpt "]" {
-        Ok(Node::ListLiteral { span: $span, element_list: $3? })
-    }
-    | TypeArguments "[" "]" {
-        Ok(Node::ListLiteral { span: $span, element_list: vec![] })
-    }
-    | "const" TypeArguments "[" "]" {
-        Ok(Node::ListLiteral { span: $span, element_list: vec![] })
-    }
-    | TypeArguments "[" ElementList CommaOpt "]" {
-        Ok(Node::ListLiteral { span: $span, element_list: $3? })
-    }
-    | "const" TypeArguments "[" ElementList CommaOpt "]" {
-        Ok(Node::ListLiteral { span: $span, element_list: $4? })
-    }
-    ;
-
-SetOrMapLiteral -> Result<Node, ()>:
-      "{" "}" {
-        Ok(Node::SetOrMapLiteral { span: $span, element_list: vec![] })
-    }
-    | "const" "{" "}" {
-        Ok(Node::SetOrMapLiteral { span: $span, element_list: vec![] })
-    }
-    | "{" ElementList CommaOpt "}" {
-        Ok(Node::SetOrMapLiteral { span: $span, element_list: $2? })
-    }
-    | "const" "{" ElementList CommaOpt "}" {
-        Ok(Node::SetOrMapLiteral { span: $span, element_list: $3? })
-    }
-    | TypeArguments "{" "}" {
-        Ok(Node::SetOrMapLiteral { span: $span, element_list: vec![] })
-    }
-    | "const" TypeArguments "{" "}" {
-        Ok(Node::SetOrMapLiteral { span: $span, element_list: vec![] })
-    }
-    | TypeArguments "{" ElementList CommaOpt "}" {
-        Ok(Node::SetOrMapLiteral { span: $span, element_list: $3? })
-    }
-    | "const" TypeArguments "{" ElementList CommaOpt "}" {
-        Ok(Node::SetOrMapLiteral { span: $span, element_list: $4? })
-    }
-    ;
-
-ElementList -> Result<Vec<CollectionElement>, ()>:
-      Element { Ok(vec![$1?]) }
-    | ElementList "," Element { flatten($1, $3?) }
-    ;
-
-Element -> Result<CollectionElement, ()>:
-      ExpressionElement { $1 }
-    | MapElement { $1 }
-    ;
-
-ExpressionElement -> Result<CollectionElement, ()>:
-    Expression {
-        Ok(CollectionElement::ExpressionElement { expr: Box::new($1?) })
-    }
-    ;
-
-MapElement -> Result<CollectionElement, ()>:
-    Expression ":" Expression {
-        Ok(CollectionElement::MapElement { key_expr: Box::new($1?), value_expr: Box::new($3?) })
-    }
-    ;
-
 
 
 
@@ -991,6 +738,272 @@ TypeCast -> Result<DartType, ()>:
     "as" TypeNotVoid { $2 }
     ;
 
+
+
+//----------------------------------------------------------------------
+//----------------------------Statements--------------------------------
+//----------------------------------------------------------------------
+Statements -> Result<Vec<Box<Node>>, ()>:
+      %empty { Ok(vec![]) }
+    | Statements Statement { flatten($1, Box::new($2?)) }
+    ;
+
+Statement -> Result<Node, ()>:
+      NonLabeledStatement { $1 }
+    | Label NonLabeledStatement {
+        Ok(Node::LabeledStatement { span: $span, label: Box::new($1?), stmt: Box::new($2?) })
+    }
+    ;
+
+NonLabeledStatement -> Result<Node, ()>:
+      BlockStatement { $1 }
+    | LocalVariableDeclaration { $1 }
+    | IfStatement { $1 }
+    | RethrowStatement { $1 }
+    | TryStatement { $1 }
+    | ForStatement { $1 }
+    | WhileStatement { $1 }
+    | DoStatement { $1 }
+    | SwitchStatement { $1 }
+    | BreakStatement { $1 }
+    | ContinueStatement { $1 }
+    | ReturnStatement { $1 }
+    | ExpressionStatement { $1 }
+    | ";" { Ok(Node::EmptyStatement { span: $span }) }
+    ;
+
+ExpressionStatement -> Result<Node, ()>:
+    ExpressionNotBrace ";" { Ok(Node::ExpressionStatement { span: $span, expr: Box::new($1?) }) }
+    ;
+
+LocalVariableDeclaration -> Result<Node, ()>:
+    InitializedVariableDeclaration ";" {
+        Ok(Node::VariableDeclarationList { span: $span, decl_list: $1? })
+    }
+    ;
+
+IfStatement -> Result<Node, ()>:
+      "if" "(" Expression ")" Statement { Ok(Node::IfStatement { span: $span, condition: Box::new($3?), if_true_stmt: Box::new($5?), if_false_stmt: None }) }
+    | "if" "(" Expression ")" Statement "else" Statement { Ok(Node::IfStatement { span: $span, condition: Box::new($3?), if_true_stmt: Box::new($5?), if_false_stmt: Some(Box::new($7?)) }) }
+    ;
+
+ForStatement -> Result<Node, ()>:
+    "for" "(" ForLoopParts ")" Statement {
+        let part = $3?;
+        Ok(Node::ForStatement { span: $span, init: part.0, condition: part.1, update: part.2, stmt: Box::new($5?) })
+    }
+    ;
+
+ForLoopParts -> Result<(Option<Box<Node>>,Option<Box<Node>>,Option<Vec<Box<Node>>>), ()>:
+      ForInitializerStatement ExpressionOpt ";" ExpressionListOpt {
+        Ok(($1?, $2?, $4?))
+      }
+    ;
+
+ForInitializerStatement -> Result<Option<Box<Node>>, ()>:
+      LocalVariableDeclaration { Ok(Some(Box::new($1?))) }
+    | ExpressionOpt ";" {
+        match $1? {
+            Some(v) => Ok(Some(Box::new(Node::ExpressionStatement { span: $span, expr: v }))),
+            None => Ok(None),
+        }
+     }
+    ;
+
+WhileStatement -> Result<Node, ()>:
+    "while" "(" Expression ")" Statement {
+        Ok(Node::WhileStatement { span: $span, condition: Box::new($3?), stmt: Box::new($5?) })
+    }
+    ;
+
+DoStatement -> Result<Node, ()>:
+    "do" Statement "while" "(" Expression ")" ";" {
+        Ok(Node::DoStatement { span: $span, condition: Box::new($5?), stmt: Box::new($2?) })
+    }
+    ;
+
+SwitchStatement -> Result<Node, ()>:
+    "switch" "(" Expression ")" "{" SwitchCaseList DefaultCaseOpt "}" {
+        Ok(Node::SwitchStatement { span: $span, expr: Box::new($3?), case_list: $6?, default_case: $7? })
+    }
+    ;
+
+SwitchCaseList -> Result<Vec<SwitchCase>, ()>:
+      %empty { Ok(vec![]) }
+    | SwitchCaseList SwitchCase { flatten($1, $2?) }
+    ;
+
+SwitchCase -> Result<SwitchCase, ()>:
+      "case" Expression ":" Statements {
+        Ok(SwitchCase { label_list: vec![], expr: Box::new($2?), stmt_list: $4? })
+    }
+    ;
+
+DefaultCase -> Result<DefaultCase, ()>:
+      "default" ":" Statements {
+        Ok(DefaultCase { label_list: vec![], stmt_list: $3? })
+    }
+    ;
+
+DefaultCaseOpt -> Result<Option<DefaultCase>, ()>:
+      %empty { Ok(None) }
+    | DefaultCase { Ok(Some($1?)) }
+    ;
+
+RethrowStatement -> Result<Node, ()>:
+    "rethrow" ";" {
+        Ok(Node::RethrowStatement { span: $span })
+    }
+    ;
+
+TryStatement -> Result<Node, ()>:
+      "try" BlockStatement FinallyPart {
+        Ok(Node::TryFinallyStatement { span: $span, block_try: Box::new($2?), block_finally: Box::new($3?) })
+    }
+    | "try" BlockStatement OnPartList {
+        Ok(Node::TryOnStatement { span: $span, block_try: Box::new($2?), on_part_list: $3? })
+    }
+    | "try" BlockStatement OnPartList FinallyPart {
+        Ok(Node::TryFinallyStatement { 
+            span: $span, 
+            block_try: Box::new(Node::TryOnStatement {
+                span: $span,
+                block_try: Box::new($2?),
+                on_part_list: $3?,
+            }),
+            block_finally: Box::new($4?), 
+        })
+    }
+    ;
+
+OnPartList -> Result<Vec<TryOnPart>, ()>:
+      OnPart { Ok(vec![$1?]) }
+    | OnPartList OnPart { flatten($1, $2?) }
+    ;
+
+OnPart -> Result<TryOnPart, ()>:
+      CatchPart BlockStatement {
+        Ok(TryOnPart { catch_part: Some($1?), exc_type: None, block: Box::new($2?) })
+    }
+    | "on" TypeNotVoid BlockStatement {
+        Ok(TryOnPart { catch_part: None, exc_type: Some($2?), block: Box::new($3?) })
+    }
+    | "on" TypeNotVoid CatchPart BlockStatement {
+        Ok(TryOnPart { catch_part: Some($3?), exc_type: Some($2?), block: Box::new($4?) })
+    }
+    ;
+
+CatchPart -> Result<TryCatchPart, ()>:
+      "catch" "(" Identifier ")" {
+        Ok(TryCatchPart { id_error: Box::new($3?), id_trace: None })
+    }
+    | "catch" "(" Identifier "," Identifier ")" {
+        Ok(TryCatchPart { id_error: Box::new($3?), id_trace: Some(Box::new($5?)) })
+    }
+    ;
+
+FinallyPart -> Result<Node, ()>:
+    "finally" BlockStatement { $2 }
+    ;
+
+ReturnStatement -> Result<Node, ()>:
+      "return" ";" { Ok(Node::ReturnStatement { span: $span, value: None }) }
+    | "return" Expression ";" {
+        Ok(Node::ReturnStatement { span: $span, value: Some(Box::new($2?)) })
+    }
+    ;
+
+Label -> Result<Node, ()>:
+    Identifier ":" { $1 }
+    ;
+
+BreakStatement -> Result<Node, ()>:
+      "break" ";" {
+        Ok(Node::BreakStatement { span: $span, label: None })
+    }
+    | "break" Identifier ";" {
+        Ok(Node::BreakStatement { span: $span, label: Some(Box::new($2?)) })
+    }
+    ;
+
+ContinueStatement -> Result<Node, ()>:
+      "continue" ";" {
+        Ok(Node::ContinueStatement { span: $span, label: None })
+    }
+    | "continue" Identifier ";" {
+        Ok(Node::ContinueStatement { span: $span, label: Some(Box::new($2?)) })
+    }
+    ;
+
+
+
+
+//----------------------------------------------------------------------
+//-----------------------Libraries and Scripts--------------------------
+//----------------------------------------------------------------------
+TopLevelDeclaration -> Result<Node, ()>:
+      TopFunctionDeclaration { $1 }
+    | TopVariableDeclaration { $1 }
+    ;
+
+LibraryDeclaration -> Result<LibraryDeclaration, ()>:
+    LibraryImportList TopLevelDeclarationList { 
+        Ok(LibraryDeclaration { import_list: $1?, top_level_declaration_list: $2? })
+    }
+    ;
+
+TopLevelDeclarationList -> Result<Vec<Box<Node>>, ()>:
+      %empty { Ok(vec![]) }
+    | TopLevelDeclarationList TopLevelDeclaration { flatten($1, Box::new($2?)) }
+    ;
+
+LibraryImportList -> Result<Vec<LibraryImport>, ()>:
+      %empty { Ok(vec![]) }
+    | LibraryImportList LibraryImport { flatten($1, $2?) }
+    ;
+
+LibraryImport -> Result<LibraryImport, ()>:
+      "import" Uri ";" { Ok(LibraryImport { uri: $2?, identifier: None }) }
+    | "import" Uri "as" Identifier ";" { Ok(LibraryImport { uri: $2?, identifier: Some(Box::new($4?)) }) }
+    ;
+
+Uri -> Result<Span, ()>:
+    "STRING" { Ok($span) }
+    ;
+
+TopFunctionDeclaration -> Result<Node, ()>:
+    FunctionSignature FunctionBody {
+        Ok(Node::FunctionDeclaration { span: $span, signature: $1?, body: Box::new($2?) })
+    }
+    ;
+
+TopVariableDeclaration -> Result<Node, ()>:
+      "var" InitializedIdentifierList ";" { 
+        Ok(Node::VariableDeclarationList { span: $span, decl_list: $2? }) 
+    }
+    | Type InitializedIdentifierList ";" { 
+        Ok(Node::VariableDeclarationList { span: $span, decl_list: $2? }) 
+    }
+    | "late" "var" InitializedIdentifierList ";" { 
+        Ok(Node::VariableDeclarationList { span: $span, decl_list: $3? }) 
+    }
+    | "late" Type InitializedIdentifierList ";" { 
+        Ok(Node::VariableDeclarationList { span: $span, decl_list: $3? }) 
+    }
+    | "late" "final" InitializedIdentifierList ";" { 
+        Ok(Node::VariableDeclarationList { span: $span, decl_list: $3? }) 
+    }
+    | "late" "final" Type InitializedIdentifierList ";" { 
+        Ok(Node::VariableDeclarationList { span: $span, decl_list: $4? }) 
+    }
+    ;
+
+
+
+
+//----------------------------------------------------------------------
+//--------------------------Static Types--------------------------------
+//----------------------------------------------------------------------
 Type -> Result<DartType, ()>:
     TypeNotFunction { $1 }
     ;
@@ -1062,6 +1075,9 @@ TypeList -> Result<Vec<DartType>, ()>:
 //     | required TypedIdentifier
 // TypedIdentifier ::=
 //     | Type Identifier
+
+
+
 %%
 // Any functions here are in scope for all the grammar actions above.
 
