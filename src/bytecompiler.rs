@@ -203,11 +203,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
 
         let identifier = match &node.identifier {
             Some(v) => {
-                if let Node::Identifier { span } = **v {
-                    Some(self.span_to_str(&span))
-                } else {
-                    None
-                }
+                Some(self.span_to_str(&v.span))
             }
             None => None,
         };
@@ -408,8 +404,8 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 is_prefix,
                 child,
             } => {
-                if let Node::Identifier { span } = **child {
-                    let value = self.span_to_str(&span);
+                if let Node::IdentifierNode { identifier } = &**child {
+                    let value = self.span_to_str(&identifier.span);
                     if *is_prefix {
                         // 前置
                         self.push_load_var(value);
@@ -442,7 +438,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 self.push_load_var("isinstance");
                 self.compile(child, None);
                 if let DartType::Named { span:_, type_name, type_arguments:_, is_nullable:_ } = &type_test.dart_type {
-                    let name = self.id_to_str(&type_name.identifier);
+                    let name = self.span_to_str(&type_name.identifier.span);
                     let p = (**self.context_stack.last().unwrap())
                         .borrow_mut()
                         .register_or_get_name(name.to_string());
@@ -473,8 +469,8 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                         self.push_op(OpCode::DupTop);
 
                         match &**left {
-                            Node::Identifier { span } => {
-                                let value = self.span_to_str(&span);
+                            Node::IdentifierNode { identifier } => {
+                                let value = self.span_to_str(&identifier.span);
                                 self.push_store_var(value);
                             },
                             Node::SelectorExpression { span:_, child, selector } => {
@@ -484,7 +480,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                                     Selector::Args { span:_, args:_ } => panic!("Invalid lhs value."),
                                     Selector::Method { span:_, identifier:_, arguments:_ } => panic!("Invalid lhs value."),
                                     Selector::Attr { span:_, identifier } => {
-                                        let name = self.id_to_str(identifier);
+                                        let name = self.span_to_str(&identifier.span);
                                         let p = (**self.context_stack.last().unwrap())
                                             .borrow_mut()
                                             .register_or_get_name(name.to_string());
@@ -502,8 +498,8 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     "*=" | "/=" | "~/=" | "%=" | "+=" | "-=" | "<<=" | ">>=" | "&=" | "^="
                         | "|=" => {
                         match &**left {
-                            Node::Identifier { span } => {
-                                let value = self.span_to_str(&span);
+                            Node::IdentifierNode { identifier } => {
+                                let value = self.span_to_str(&identifier.span);
                                 self.push_load_var(value);
 
                                 self.compile(right, None);
@@ -531,7 +527,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                                     Selector::Args { span:_, args:_ } => panic!("Invalid lhs value."),
                                     Selector::Method { span:_, identifier:_, arguments:_ } => panic!("Invalid lhs value."),
                                     Selector::Attr { span:_, identifier } => {
-                                        let name = self.id_to_str(identifier);
+                                        let name = self.span_to_str(&identifier.span);
                                         let p = (**self.context_stack.last().unwrap())
                                             .borrow_mut()
                                             .register_or_get_name(name.to_string());
@@ -592,8 +588,8 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     },
                     "??=" => {
                         match &**left {
-                            Node::Identifier { span } => {
-                                let value = self.span_to_str(&span);
+                            Node::IdentifierNode { identifier } => {
+                                let value = self.span_to_str(&identifier.span);
 
                                 self.push_load_var(value);
                                 self.push_op(OpCode::DupTop);
@@ -614,7 +610,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                                     Selector::Args { span:_, args:_ } => panic!("Invalid lhs value."),
                                     Selector::Method { span:_, identifier:_, arguments:_ } => panic!("Invalid lhs value."),
                                     Selector::Attr { span:_, identifier } => {
-                                        let name = self.id_to_str(identifier);
+                                        let name = self.span_to_str(&identifier.span);
                                         let p = (**self.context_stack.last().unwrap())
                                             .borrow_mut()
                                             .register_or_get_name(name.to_string());
@@ -757,8 +753,8 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     self.push_op(OpCode::BuildSet(size));
                 }
             },
-            Node::Identifier { span } => {
-                let value = self.span_to_str(span);
+            Node::IdentifierNode { identifier } => {
+                let value = self.span_to_str(&identifier.span);
                 self.push_load_var(value);
             },
             Node::Arguments { span: _, children } => {
@@ -766,7 +762,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 for param in children {
                     self.compile(&param.expr, None);
                     if let Some(v) = &param.identifier {
-                        name_list.push(self.id_to_str(v));
+                        name_list.push(self.span_to_str(&v.span));
                     }
                 }
                 if !name_list.is_empty() {
@@ -792,15 +788,11 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                         self.compile(args, None);
                     },
                     Selector::Attr { span:_, identifier } => {
-                        if let Node::Identifier { span } = **identifier {
-                            let name = self.span_to_str(&span);
-                            let p = (**self.context_stack.last().unwrap())
-                                .borrow_mut()
-                                .register_or_get_name(name.to_string());
-                            self.push_op(OpCode::LoadAttr(p));
-                        } else {
-                            panic!("Invalid AST");
-                        }
+                        let name = self.span_to_str(&identifier.span);
+                        let p = (**self.context_stack.last().unwrap())
+                            .borrow_mut()
+                            .register_or_get_name(name.to_string());
+                        self.push_op(OpCode::LoadAttr(p));
                     },
                     Selector::Index { span:_, expr } => {
                         self.compile(expr, None);
@@ -808,36 +800,32 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                         self.push_op(OpCode::BinarySubScr);
                     },
                     Selector::Method { span:_, identifier, arguments } => {
-                        if let Node::Identifier { span } = **identifier {
-                            let name = self.span_to_str(&span);
-                            let p = (**self.context_stack.last().unwrap())
-                                .borrow_mut()
-                                .register_or_get_name(name.to_string());
-                            self.push_op(OpCode::LoadMethod(p));
-        
-                            if let Node::Arguments { span: _, children } = &**arguments {
-                                let mut name_list: Vec<&str> = vec![];
-                                for param in children {
-                                    self.compile(&param.expr, None);
-                                    if let Some(v) = &param.identifier {
-                                        name_list.push(self.id_to_str(v));
-                                    }
-                                }
-                                if !name_list.is_empty() {
-                                    self.push_load_const(PyObject::SmallTuple {
-                                        children: name_list.iter().map(|v| {
-                                            PyObject::new_string(v.to_string(), false)
-                                        }).collect(),
-                                        add_ref: false
-                                    });
-                                    self.push_op(OpCode::CallFunctionKw(children.len() as u8));
-                                }
-                                else {
-                                    self.push_op(OpCode::CallMethod(children.len() as u8))
+                        let name = self.span_to_str(&identifier.span);
+                        let p = (**self.context_stack.last().unwrap())
+                            .borrow_mut()
+                            .register_or_get_name(name.to_string());
+                        self.push_op(OpCode::LoadMethod(p));
+    
+                        if let Node::Arguments { span: _, children } = &**arguments {
+                            let mut name_list: Vec<&str> = vec![];
+                            for param in children {
+                                self.compile(&param.expr, None);
+                                if let Some(v) = &param.identifier {
+                                    name_list.push(self.span_to_str(&v.span));
                                 }
                             }
-                        } else {
-                            panic!("Invalid AST");
+                            if !name_list.is_empty() {
+                                self.push_load_const(PyObject::SmallTuple {
+                                    children: name_list.iter().map(|v| {
+                                        PyObject::new_string(v.to_string(), false)
+                                    }).collect(),
+                                    add_ref: false
+                                });
+                                self.push_op(OpCode::CallFunctionKw(children.len() as u8));
+                            }
+                            else {
+                                self.push_op(OpCode::CallMethod(children.len() as u8))
+                            }
                         }
                     }
                 }
@@ -852,7 +840,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 label,
                 stmt,
             } => {
-                let label_str = self.id_to_str(label);
+                let label_str = self.span_to_str(&label.span);
                 let label_id = self.gen_jump_label();
 
                 // break用のラベルはこの時点で用意する
@@ -865,16 +853,12 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             }
             Node::BreakStatement { span: _, label } => match label {
                 Some(identifier) => {
-                    if let Node::Identifier { span } = **identifier {
-                        let label_str = self.span_to_str(&span);
-                        match self.break_label_table.get(label_str) {
-                            Some(v) => {
-                                self.push_op(OpCode::JumpAbsolute(*v));
-                            }
-                            None => panic!("label {} is not existing in this scope.", label_str),
+                    let label_str = self.span_to_str(&identifier.span);
+                    match self.break_label_table.get(label_str) {
+                        Some(v) => {
+                            self.push_op(OpCode::JumpAbsolute(*v));
                         }
-                    } else {
-                        panic!("Invalid AST")
+                        None => panic!("label {} is not existing in this scope.", label_str),
                     }
                 }
                 None => match self.default_scope_stack.last() {
@@ -886,16 +870,12 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             },
             Node::ContinueStatement { span: _, label } => match label {
                 Some(identifier) => {
-                    if let Node::Identifier { span } = **identifier {
-                        let label_str = self.span_to_str(&span);
-                        match self.continue_label_table.get(label_str) {
-                            Some(v) => {
-                                self.push_op(OpCode::JumpAbsolute(*v));
-                            }
-                            None => panic!("label {} is not existing in this scope.", label_str),
+                    let label_str = self.span_to_str(&identifier.span);
+                    match self.continue_label_table.get(label_str) {
+                        Some(v) => {
+                            self.push_op(OpCode::JumpAbsolute(*v));
                         }
-                    } else {
-                        panic!("Invalid AST")
+                        None => panic!("label {} is not existing in this scope.", label_str),
                     }
                 }
                 None => match self.default_scope_stack.last() {
@@ -942,37 +922,29 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     match &declaration.expr {
                         Some(e) => {
                             self.compile(e, None);
-                            if let Node::Identifier { span: id_span } = *declaration.identifier {
-                                let value = self.span_to_str(&id_span);
-                                let position = (**self.context_stack.last().unwrap())
-                                    .borrow_mut()
-                                    .declare_variable(value);
-                                if self.context_stack.last().unwrap().borrow().is_global() {
-                                    // トップレベル変数の場合
-                                    self.push_op(OpCode::StoreName(position));
-                                } else {
-                                    // ローカル変数の場合
-                                    let local_position = self
-                                        .context_stack
-                                        .last()
-                                        .unwrap()
-                                        .borrow()
-                                        .get_local_variable(value);
-                                    self.push_op(OpCode::StoreFast(local_position));
-                                }
+                            let value = self.span_to_str(&declaration.identifier.span);
+                            let position = (**self.context_stack.last().unwrap())
+                                .borrow_mut()
+                                .declare_variable(value);
+                            if self.context_stack.last().unwrap().borrow().is_global() {
+                                // トップレベル変数の場合
+                                self.push_op(OpCode::StoreName(position));
                             } else {
-                                panic!("Invalid AST");
+                                // ローカル変数の場合
+                                let local_position = self
+                                    .context_stack
+                                    .last()
+                                    .unwrap()
+                                    .borrow()
+                                    .get_local_variable(value);
+                                self.push_op(OpCode::StoreFast(local_position));
                             }
                         }
                         None => {
-                            if let Node::Identifier { span: id_span } = *declaration.identifier {
-                                let value = &self.span_to_str(&id_span);
-                                (**self.context_stack.last().unwrap())
-                                    .borrow_mut()
-                                    .declare_variable(value);
-                            } else {
-                                panic!("Invalid AST");
-                            }
+                            let value = &self.span_to_str(&declaration.identifier.span);
+                            (**self.context_stack.last().unwrap())
+                                .borrow_mut()
+                                .declare_variable(value);
                         }
                     }
                 }
@@ -984,22 +956,22 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             } => {
                 let mut argument_list: Vec<&str> = vec![];
                 for p in &signature.param.normal_list {
-                    let name = self.id_to_str(&p.identifier);
+                    let name = self.span_to_str(&p.identifier.span);
                     argument_list.push(name);
                 }
                 for p in &signature.param.option_list {
-                    let name = self.id_to_str(&p.identifier);
+                    let name = self.span_to_str(&p.identifier.span);
                     argument_list.push(name);
                 }
                 for p in &signature.param.named_list {
-                    let name = self.id_to_str(&p.identifier);
+                    let name = self.span_to_str(&p.identifier.span);
                     argument_list.push(name);
                 }
 
                 let num_normal_args = signature.param.normal_list.len() as u32
                      + signature.param.option_list.len() as u32;
                 let num_kw_only_args = signature.param.named_list.len() as u32;
-                let name = self.id_to_str(&signature.name);
+                let name = self.span_to_str(&signature.name.span);
                 let py_code = run_function(
                     "main.py", 
                     name, 
@@ -1038,7 +1010,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                         match &v.expr {
                             Some(expr) => {
                                 self.compile(expr, None);
-                                name_list.push(self.id_to_str(&v.identifier));
+                                name_list.push(self.span_to_str(&v.identifier.span));
                             },
                             None => ()
                         }
@@ -1177,7 +1149,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     match &on_part.exc_type {
                         Some(v) => {
                             if let DartType::Named { span:_, type_name, type_arguments:_, is_nullable:_ } = v {
-                                let name = self.id_to_str(&type_name.identifier);
+                                let name = self.span_to_str(&type_name.identifier.span);
                                 let p = (**self.context_stack.last().unwrap())
                                     .borrow_mut()
                                     .register_or_get_name(name.to_string());
@@ -1198,7 +1170,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                             // 2番目がtraceback objectになっている
                             // なぜ？
 
-                            let name = self.id_to_str(&catch_part.id_error);
+                            let name = self.span_to_str(&catch_part.id_error.span);
                             (**self.context_stack.last().unwrap())
                                 .borrow_mut()
                                 .declare_variable(name);
@@ -1206,7 +1178,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
 
                             match &catch_part.id_trace {
                                 Some(id_trace) => {
-                                    let name = self.id_to_str(id_trace);
+                                    let name = self.span_to_str(&id_trace.span);
                                     (**self.context_stack.last().unwrap())
                                         .borrow_mut()
                                         .declare_variable(name);
@@ -1407,14 +1379,6 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
 
     fn span_to_str(&self, span: &Span) -> &'value str {
         return &self.source[span.start()..span.end()];
-    }
-
-    fn id_to_str(&self, identifier: &Box<Node>) -> &'value str {
-        if let Node::Identifier { span } = **identifier {
-            self.span_to_str(&span)
-        } else {
-            panic!("Invalid AST")
-        }
     }
 
     fn push_op(&self, op: OpCode) {

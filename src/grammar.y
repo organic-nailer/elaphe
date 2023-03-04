@@ -11,10 +11,10 @@
 //----------------------------------------------------------------------
 InitializedVariableDeclaration -> Result<Vec<VariableDeclaration>, ()>:
       DeclaredIdentifier { 
-        Ok(vec![VariableDeclaration { identifier: Box::new($1?), expr: None }]) 
+        Ok(vec![VariableDeclaration { identifier: $1?, expr: None }]) 
     }
     | DeclaredIdentifier "=" Expression { 
-        Ok(vec![VariableDeclaration { identifier: Box::new($1?), expr: Some(Box::new($3?)) }]) 
+        Ok(vec![VariableDeclaration { identifier: $1?, expr: Some(Box::new($3?)) }]) 
     }
     | InitializedVariableDeclaration "," InitializedIdentifier {
         flatten($1, $3?)
@@ -23,10 +23,10 @@ InitializedVariableDeclaration -> Result<Vec<VariableDeclaration>, ()>:
 
 InitializedIdentifier -> Result<VariableDeclaration, ()>:
       Identifier {
-        Ok(VariableDeclaration { identifier: Box::new($1?), expr: None })
+        Ok(VariableDeclaration { identifier: $1?, expr: None })
     }
     | Identifier "=" Expression {
-        Ok(VariableDeclaration { identifier: Box::new($1?), expr: Some(Box::new($3?)) })
+        Ok(VariableDeclaration { identifier: $1?, expr: Some(Box::new($3?)) })
     }
     ;
 
@@ -41,10 +41,10 @@ InitializedIdentifierList -> Result<Vec<VariableDeclaration>, ()>:
 //----------------------------------------------------------------------
 FunctionSignature -> Result<FunctionSignature, ()>:
       Identifier FormalParameterList {
-        Ok(FunctionSignature { return_type: None, name: Box::new($1?), param: $2? })
+        Ok(FunctionSignature { return_type: None, name: $1?, param: $2? })
     }
     | Type Identifier FormalParameterList {
-        Ok(FunctionSignature { return_type: Some($1?), name: Box::new($2?), param: $3? })
+        Ok(FunctionSignature { return_type: Some($1?), name: $2?, param: $3? })
     }
     ;
 
@@ -85,8 +85,8 @@ FormalParameterList -> Result<FunctionParamSignature, ()>:
     ;
 
 NormalFormalParameterList -> Result<Vec<FunctionParameter>, ()>:
-      NormalFormalParameter { Ok(vec![FunctionParameter { identifier: Box::new($1?), expr: None }]) }
-    | NormalFormalParameterList "," NormalFormalParameter { flatten($1, FunctionParameter { identifier: Box::new($3?), expr: None }) }
+      NormalFormalParameter { Ok(vec![FunctionParameter { identifier: $1?, expr: None }]) }
+    | NormalFormalParameterList "," NormalFormalParameter { flatten($1, FunctionParameter { identifier: $3?, expr: None }) }
     ;
 
 OptionalOrNamedFormalParameterList -> Result<(Vec<FunctionParameter>, bool), ()>:
@@ -120,48 +120,48 @@ NamedFormalParameterListInternal -> Result<Vec<FunctionParameter>, ()>:
     }
     ;
 
-NormalFormalParameter -> Result<Node, ()>:
+NormalFormalParameter -> Result<Identifier, ()>:
       DeclaredIdentifier { $1 }
     | Identifier { $1 }
     ;
 
 DefaultFormalParameter -> Result<FunctionParameter, ()>:
       NormalFormalParameter {
-        Ok(FunctionParameter { identifier: Box::new($1?), expr: None })
+        Ok(FunctionParameter { identifier: $1?, expr: None })
     }
     | NormalFormalParameter "=" Expression {
-        Ok(FunctionParameter { identifier: Box::new($1?), expr: Some(Box::new($3?)) })
+        Ok(FunctionParameter { identifier: $1?, expr: Some(Box::new($3?)) })
     }
     ;
 
 DefaultNamedParameter -> Result<FunctionParameter, ()>:
       DeclaredIdentifier {
-        Ok(FunctionParameter { identifier: Box::new($1?), expr: None })
+        Ok(FunctionParameter { identifier: $1?, expr: None })
     }
     | Identifier {
-        Ok(FunctionParameter { identifier: Box::new($1?), expr: None })
+        Ok(FunctionParameter { identifier: $1?, expr: None })
     }
     | DeclaredIdentifier "=" Expression {
-        Ok(FunctionParameter { identifier: Box::new($1?), expr: Some(Box::new($3?)) })
+        Ok(FunctionParameter { identifier: $1?, expr: Some(Box::new($3?)) })
     }
     | Identifier ":" Expression {
-        Ok(FunctionParameter { identifier: Box::new($1?), expr: Some(Box::new($3?)) })
+        Ok(FunctionParameter { identifier: $1?, expr: Some(Box::new($3?)) })
     }
     | "required" DeclaredIdentifier {
-        Ok(FunctionParameter { identifier: Box::new($2?), expr: None })
+        Ok(FunctionParameter { identifier: $2?, expr: None })
     }
     | "required" Identifier {
-        Ok(FunctionParameter { identifier: Box::new($2?), expr: None })
+        Ok(FunctionParameter { identifier: $2?, expr: None })
     }
     | "required" DeclaredIdentifier "=" Expression {
-        Ok(FunctionParameter { identifier: Box::new($2?), expr: Some(Box::new($4?)) })
+        Ok(FunctionParameter { identifier: $2?, expr: Some(Box::new($4?)) })
     }
     | "required" Identifier ":" Expression {
-        Ok(FunctionParameter { identifier: Box::new($2?), expr: Some(Box::new($4?)) })
+        Ok(FunctionParameter { identifier: $2?, expr: Some(Box::new($4?)) })
     }
     ;
 
-DeclaredIdentifier -> Result<Node, ()>:
+DeclaredIdentifier -> Result<Identifier, ()>:
       "var" Identifier { $2 }
     | Type Identifier { $2 }
     | "late" "var" Identifier { $3 }
@@ -234,17 +234,17 @@ CommaOpt -> Result<(), ()>:
 Primary -> Result<Node, ()>:
       '(' Expression ')' { $2 }
     | Literal { $1 }
-    | Identifier { $1 }
+    | Identifier { Ok(Node::IdentifierNode { identifier: $1? }) }
     ;
 
 PrimaryNotBrace -> Result<Node, ()>:
       '(' Expression ')' { $2 }
     | LiteralNotBrace { $1 }
-    | Identifier { $1 }
+    | Identifier { Ok(Node::IdentifierNode { identifier: $1? }) }
     ;
 
-Identifier -> Result<Node, ()>:
-    'IDENTIFIER' { Ok(Node::Identifier { span: $span }) }
+Identifier -> Result<Identifier, ()>:
+    'IDENTIFIER' { Ok(Identifier { span: $span }) }
     ;
 
 Literal -> Result<Node, ()>:
@@ -672,10 +672,10 @@ Selector -> Result<Selector, ()>:
         Ok(Selector::Args { span: $span, args: Box::new($1?) })
     }
     | "." Identifier { 
-        Ok(Selector::Attr { span: $span, identifier: Box::new($2?) }) 
+        Ok(Selector::Attr { span: $span, identifier: $2? }) 
     }
     | "." Identifier Arguments {
-        Ok(Selector::Method { span: $span, identifier: Box::new($2?), arguments: Box::new($3?) })
+        Ok(Selector::Method { span: $span, identifier: $2?, arguments: Box::new($3?) })
     }
     | "[" Expression "]" {
         Ok(Selector::Index { span: $span, expr: Box::new($2?) })
@@ -700,7 +700,7 @@ ArgumentList -> Result<Vec<CallParameter>, ()>:
     ;
 
 NamedArgument -> Result<CallParameter, ()>:
-    Label Expression { Ok(CallParameter { identifier: Some(Box::new($1?)), expr: Box::new($2?) }) }
+    Label Expression { Ok(CallParameter { identifier: Some($1?), expr: Box::new($2?) }) }
     ;
 
 NormalArgument -> Result<CallParameter, ()>:
@@ -751,7 +751,7 @@ Statements -> Result<Vec<Box<Node>>, ()>:
 Statement -> Result<Node, ()>:
       NonLabeledStatement { $1 }
     | Label NonLabeledStatement {
-        Ok(Node::LabeledStatement { span: $span, label: Box::new($1?), stmt: Box::new($2?) })
+        Ok(Node::LabeledStatement { span: $span, label: $1?, stmt: Box::new($2?) })
     }
     ;
 
@@ -895,10 +895,10 @@ OnPart -> Result<TryOnPart, ()>:
 
 CatchPart -> Result<TryCatchPart, ()>:
       "catch" "(" Identifier ")" {
-        Ok(TryCatchPart { id_error: Box::new($3?), id_trace: None })
+        Ok(TryCatchPart { id_error: $3?, id_trace: None })
     }
     | "catch" "(" Identifier "," Identifier ")" {
-        Ok(TryCatchPart { id_error: Box::new($3?), id_trace: Some(Box::new($5?)) })
+        Ok(TryCatchPart { id_error: $3?, id_trace: Some($5?) })
     }
     ;
 
@@ -913,7 +913,7 @@ ReturnStatement -> Result<Node, ()>:
     }
     ;
 
-Label -> Result<Node, ()>:
+Label -> Result<Identifier, ()>:
     Identifier ":" { $1 }
     ;
 
@@ -922,7 +922,7 @@ BreakStatement -> Result<Node, ()>:
         Ok(Node::BreakStatement { span: $span, label: None })
     }
     | "break" Identifier ";" {
-        Ok(Node::BreakStatement { span: $span, label: Some(Box::new($2?)) })
+        Ok(Node::BreakStatement { span: $span, label: Some($2?) })
     }
     ;
 
@@ -931,7 +931,7 @@ ContinueStatement -> Result<Node, ()>:
         Ok(Node::ContinueStatement { span: $span, label: None })
     }
     | "continue" Identifier ";" {
-        Ok(Node::ContinueStatement { span: $span, label: Some(Box::new($2?)) })
+        Ok(Node::ContinueStatement { span: $span, label: Some($2?) })
     }
     ;
 
@@ -964,7 +964,7 @@ LibraryImportList -> Result<Vec<LibraryImport>, ()>:
 
 LibraryImport -> Result<LibraryImport, ()>:
       "import" Uri ";" { Ok(LibraryImport { uri: $2?, identifier: None }) }
-    | "import" Uri "as" Identifier ";" { Ok(LibraryImport { uri: $2?, identifier: Some(Box::new($4?)) }) }
+    | "import" Uri "as" Identifier ";" { Ok(LibraryImport { uri: $2?, identifier: Some($4?) }) }
     ;
 
 Uri -> Result<Span, ()>:
@@ -1024,10 +1024,10 @@ TypeNotVoidNotFunction -> Result<DartType, ()>:
 
 TypeName -> Result<DartTypeName, ()>:
       Identifier {
-        Ok(DartTypeName { identifier: Box::new($1?), module: None })
+        Ok(DartTypeName { identifier: $1?, module: None })
     }
     | Identifier "." Identifier {
-        Ok(DartTypeName { identifier: Box::new($3?), module: Some(Box::new($1?)) })
+        Ok(DartTypeName { identifier: $3?, module: Some($1?) })
     }
     ;
 
@@ -1166,8 +1166,8 @@ pub enum Node {
         span: Span,
         element_list: Vec<CollectionElement>,
     },
-    Identifier {
-        span: Span,
+    IdentifierNode {
+        identifier: Identifier,
     },
     Arguments {
         span: Span,
@@ -1185,7 +1185,7 @@ pub enum Node {
 
     LabeledStatement {
         span: Span,
-        label: Box<Node>,
+        label: Identifier,
         stmt: Box<Node>,
     },
     BlockStatement {
@@ -1241,11 +1241,11 @@ pub enum Node {
     },
     BreakStatement {
         span: Span,
-        label: Option<Box<Node>>,
+        label: Option<Identifier>,
     },
     ContinueStatement {
         span: Span,
-        label: Option<Box<Node>>,
+        label: Option<Identifier>,
     },
     ReturnStatement {
         span: Span,
@@ -1273,12 +1273,12 @@ pub struct LibraryDeclaration {
 #[derive(Debug)]
 pub struct LibraryImport {
     pub uri: Span,
-    pub identifier: Option<Box<Node>>,
+    pub identifier: Option<Identifier>,
 }
 
 #[derive(Debug)]
 pub struct FunctionParameter {
-    pub identifier: Box<Node>,
+    pub identifier: Identifier,
     pub expr: Option<Box<Node>>,
 }
 
@@ -1304,8 +1304,8 @@ pub struct TryOnPart {
 
 #[derive(Debug)]
 pub struct TryCatchPart {
-    pub id_error: Box<Node>,
-    pub id_trace: Option<Box<Node>>,
+    pub id_error: Identifier,
+    pub id_trace: Option<Identifier>,
 }
 
 #[derive(Debug)]
@@ -1327,11 +1327,11 @@ pub enum Selector {
     },
     Attr {
         span: Span,
-        identifier: Box<Node>,
+        identifier: Identifier,
     },
     Method {
         span: Span,
-        identifier: Box<Node>,
+        identifier: Identifier,
         arguments: Box<Node>,
     },
     Args {
@@ -1361,20 +1361,20 @@ pub enum DartType {
 
 #[derive(Debug)]
 pub struct DartTypeName {
-    pub identifier: Box<Node>,
-    pub module: Option<Box<Node>>,
+    pub identifier: Identifier,
+    pub module: Option<Identifier>,
 }
 
 #[derive(Debug)]
 pub struct FunctionSignature {
     pub return_type: Option<DartType>,
-    pub name: Box<Node>,
+    pub name: Identifier,
     pub param: FunctionParamSignature,
 }
 
 #[derive(Debug)]
 pub struct VariableDeclaration {
-    pub identifier: Box<Node>,
+    pub identifier: Identifier,
     pub expr: Option<Box<Node>>,
 }
 
@@ -1387,6 +1387,11 @@ pub struct FunctionParamSignature {
 
 #[derive(Debug)]
 pub struct CallParameter {
-    pub identifier: Option<Box<Node>>,
+    pub identifier: Option<Identifier>,
     pub expr: Box<Node>,
+}
+
+#[derive(Debug)]
+pub struct Identifier {
+    pub span: Span,
 }
