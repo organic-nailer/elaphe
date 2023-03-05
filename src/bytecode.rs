@@ -35,6 +35,7 @@ pub enum OpCode {
     BinaryAnd,
     BinaryXor,
     BinaryOr,
+    LoadBuildClass,
     InplaceLShift,
     InplaceRShift,
     InplaceAnd,
@@ -123,6 +124,7 @@ impl OpCode {
             OpCode::BinaryAnd => 64,
             OpCode::BinaryXor => 65,
             OpCode::BinaryOr => 66,
+            OpCode::LoadBuildClass => 71,
             OpCode::InplaceLShift => 75,
             OpCode::InplaceRShift => 76,
             OpCode::InplaceAnd => 77,
@@ -308,6 +310,8 @@ impl OpCode {
 
             OpCode::LoadAttr(_) | OpCode::LoadMethod(_) => 0,
             OpCode::StoreAttr(_) => -2,
+
+            OpCode::LoadBuildClass => 1,
         }
     }
 }

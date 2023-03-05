@@ -3,12 +3,20 @@ use std::{cell::RefCell, collections::HashMap};
 
 use cfgrammar::Span;
 
-use crate::bytecode::{calc_stack_size, ByteCode};
+use crate::bytecode::{ByteCode};
 use crate::executioncontext::{
-    BlockContext, ExecutionContext, GlobalContext, PyContext, VariableScope,
+    BlockContext, ExecutionContext, VariableScope,
 };
-use crate::parser::{LibraryDeclaration, LibraryImport};
+use crate::parser::{LibraryImport};
 use crate::{bytecode::OpCode, parser::Node, pyobject::PyObject, parser::CollectionElement, parser::Selector, parser::DartType};
+use crate::parser::FunctionSignature;
+
+use self::runclass::run_class;
+use self::runfunction::run_function;
+
+pub mod runroot;
+pub mod runfunction;
+pub mod runclass;
 
 struct DefaultScope {
     break_label: u32,
@@ -24,175 +32,6 @@ pub struct ByteCompiler<'ctx, 'value: 'ctx> {
     break_label_table: HashMap<&'value str, u32>,
     continue_label_table: HashMap<&'value str, u32>,
     source: &'value str,
-}
-
-const PREDEFINED_VARIABLES: [&'static str; 4] = ["print", "isinstance", "IOError", "KeyboardInterrupt"];
-
-pub fn run_root<'value>(
-    file_name: &'value str,
-    root_node: &'value LibraryDeclaration,
-    source: &'value str,
-) -> PyObject {
-    let global_context = Rc::new(RefCell::new(GlobalContext {
-        constant_list: vec![],
-        name_list: vec![],
-        name_map: HashMap::new(),
-        global_variables: Vec::from(PREDEFINED_VARIABLES),
-    }));
-
-    let mut compiler = ByteCompiler {
-        byte_operations: RefCell::new(vec![]),
-        context_stack: vec![global_context.clone()],
-        jump_label_table: RefCell::new(HashMap::new()),
-        jump_label_key_index: RefCell::new(0),
-        default_scope_stack: vec![],
-        break_label_table: HashMap::new(),
-        continue_label_table: HashMap::new(),
-        source,
-    };
-
-    // 0番目の定数にNoneを追加
-    (*global_context)
-        .borrow_mut()
-        .push_const(PyObject::None(false));
-
-    for node in &root_node.import_list {
-        compiler.compile_import(node);
-    }
-
-    for node in &root_node.top_level_declaration_list {
-        compiler.compile(&node, None);
-    }
-
-    // main関数を実行
-    let main_position = (*global_context)
-        .borrow_mut()
-        .register_or_get_name("main".to_string());
-    compiler.push_op(OpCode::LoadName(main_position));
-    compiler.push_op(OpCode::CallFunction(0));
-    compiler.push_op(OpCode::PopTop);
-    compiler.push_op(OpCode::LoadConst(0));
-    compiler.push_op(OpCode::ReturnValue);
-
-    let stack_size = calc_stack_size(&compiler.byte_operations.borrow()) as u32;
-    let operation_list = compiler.resolve_references();
-
-    compiler.context_stack.pop();
-
-    // 所有が1箇所しかないはずなのでRcの外に出す
-    let global_context = Rc::try_unwrap(global_context).ok().unwrap().into_inner();
-
-    let constant_list = PyObject::SmallTuple {
-        children: global_context.constant_list,
-        add_ref: false,
-    };
-    let name_list = PyObject::SmallTuple {
-        children: global_context.name_list,
-        add_ref: false,
-    };
-
-    PyObject::Code {
-        file_name: file_name.to_string(),
-        code_name: "<module>".to_string(),
-        num_args: 0,
-        num_pos_only_args: 0,
-        num_kw_only_args: 0,
-        num_locals: 0,
-        stack_size,
-        operation_list,
-        constant_list: Box::new(constant_list),
-        name_list: Box::new(name_list),
-        local_list: Box::new(PyObject::SmallTuple {
-            children: vec![],
-            add_ref: false,
-        }),
-        add_ref: true,
-    }
-}
-
-pub fn run_function<'ctx, 'value, 'cpl>(
-    file_name: &'value str,
-    code_name: &'value str,
-    argument_list: Vec<&'value str>,
-    num_args: u32,
-    num_pos_only_args: u32,
-    num_kw_only_args: u32,
-    outer_compiler: &'cpl ByteCompiler<'ctx, 'value>,
-    body: &'value Node,
-    source: &'value str,
-) -> PyObject {
-    let py_context = Rc::new(RefCell::new(PyContext {
-        outer: outer_compiler.context_stack.last().unwrap().clone(),
-        constant_list: vec![],
-        name_list: vec![],
-        name_map: HashMap::new(),
-        local_variables: vec![],
-    }));
-
-    let block_context = Rc::new(RefCell::new(BlockContext {
-        outer: py_context.clone(),
-        variables: vec![],
-    }));
-
-    for arg in argument_list {
-        (*block_context).borrow_mut().declare_variable(arg);
-    }
-
-    let mut compiler = ByteCompiler {
-        byte_operations: RefCell::new(vec![]),
-        context_stack: vec![block_context.clone()],
-        jump_label_table: RefCell::new(HashMap::new()),
-        jump_label_key_index: RefCell::new(*outer_compiler.jump_label_key_index.borrow()),
-        default_scope_stack: vec![],
-        break_label_table: HashMap::new(),
-        continue_label_table: HashMap::new(),
-        source,
-    };
-
-    compiler.compile(body, None);
-
-    compiler.push_load_const(PyObject::None(false));
-    compiler.push_op(OpCode::ReturnValue);
-
-    compiler.context_stack.pop();
-    drop(block_context);
-
-    // outer_compilerへの情報の復帰
-    *outer_compiler.jump_label_key_index.borrow_mut() = *compiler.jump_label_key_index.borrow();
-
-    // PyCodeの作成
-    let stack_size = calc_stack_size(&compiler.byte_operations.borrow()) as u32;
-    let operation_list = compiler.resolve_references();
-
-    let py_context = Rc::try_unwrap(py_context).ok().unwrap().into_inner();
-
-    PyObject::Code {
-        file_name: file_name.to_string(),
-        code_name: code_name.to_string(),
-        num_args,
-        num_pos_only_args,
-        num_kw_only_args,
-        num_locals: py_context.local_variables.len() as u32,
-        stack_size,
-        operation_list,
-        constant_list: Box::new(PyObject::SmallTuple {
-            children: py_context.constant_list,
-            add_ref: false,
-        }),
-        name_list: Box::new(PyObject::SmallTuple {
-            children: py_context.name_list,
-            add_ref: false,
-        }),
-        local_list: Box::new(PyObject::SmallTuple {
-            children: py_context
-                .local_variables
-                .iter()
-                .map(|v| PyObject::new_string(v.to_string(), false))
-                .collect(),
-            add_ref: false,
-        }),
-        add_ref: false,
-    }
 }
 
 impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
@@ -954,92 +793,118 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 signature,
                 body,
             } => {
-                let mut argument_list: Vec<&str> = vec![];
-                for p in &signature.param.normal_list {
-                    let name = self.span_to_str(&p.identifier.span);
-                    argument_list.push(name);
-                }
-                for p in &signature.param.option_list {
-                    let name = self.span_to_str(&p.identifier.span);
-                    argument_list.push(name);
-                }
-                for p in &signature.param.named_list {
-                    let name = self.span_to_str(&p.identifier.span);
-                    argument_list.push(name);
-                }
+                self.comiple_declare_function(signature, body, None, None);
+                // let mut argument_list: Vec<&str> = vec![];
+                // for p in &signature.param.normal_list {
+                //     let name = self.span_to_str(&p.identifier.span);
+                //     argument_list.push(name);
+                // }
+                // for p in &signature.param.option_list {
+                //     let name = self.span_to_str(&p.identifier.span);
+                //     argument_list.push(name);
+                // }
+                // for p in &signature.param.named_list {
+                //     let name = self.span_to_str(&p.identifier.span);
+                //     argument_list.push(name);
+                // }
 
-                let num_normal_args = signature.param.normal_list.len() as u32
-                     + signature.param.option_list.len() as u32;
-                let num_kw_only_args = signature.param.named_list.len() as u32;
-                let name = self.span_to_str(&signature.name.span);
-                let py_code = run_function(
-                    "main.py", 
-                    name, 
-                    argument_list, 
-                    num_normal_args,
-                    0,
-                    num_kw_only_args,
-                    self, 
-                    body, 
-                    self.source);
+                // let num_normal_args = signature.param.normal_list.len() as u32
+                //      + signature.param.option_list.len() as u32;
+                // let num_kw_only_args = signature.param.named_list.len() as u32;
+                // let name = self.span_to_str(&signature.name.span);
+                // let py_code = run_function(
+                //     "main.py", 
+                //     name, 
+                //     argument_list, 
+                //     num_normal_args,
+                //     0,
+                //     num_kw_only_args,
+                //     self, 
+                //     body, 
+                //     self.source);
 
-                // 通常引数のデフォルト値の設定
-                let has_default = !signature.param.option_list.is_empty();
-                if has_default {
-                    let size = signature.param.option_list.len() as u8;
-                    for v in &signature.param.option_list {
-                        match &v.expr {
-                            Some(expr) => {
-                                self.compile(expr, None);
-                            },
-                            None => {
-                                self.push_load_const(PyObject::None(false));
-                            }
-                        }
-                    }
-                    self.push_op(OpCode::BuildTuple(size));
-                }
+                // // 通常引数のデフォルト値の設定
+                // let has_default = !signature.param.option_list.is_empty();
+                // if has_default {
+                //     let size = signature.param.option_list.len() as u8;
+                //     for v in &signature.param.option_list {
+                //         match &v.expr {
+                //             Some(expr) => {
+                //                 self.compile(expr, None);
+                //             },
+                //             None => {
+                //                 self.push_load_const(PyObject::None(false));
+                //             }
+                //         }
+                //     }
+                //     self.push_op(OpCode::BuildTuple(size));
+                // }
 
-                // キーワード引数のデフォルト値の設定
-                let has_kw_default = signature.param.named_list.iter().any(|v| {
-                    v.expr.is_some()
-                });
-                if has_kw_default {
-                    let mut name_list: Vec<&str> = vec![];
-                    for v in &signature.param.named_list {
-                        match &v.expr {
-                            Some(expr) => {
-                                self.compile(expr, None);
-                                name_list.push(self.span_to_str(&v.identifier.span));
-                            },
-                            None => ()
-                        }
-                    }
-                    self.push_load_const(PyObject::SmallTuple {
-                        children: name_list.iter().map(|v| {
-                            PyObject::new_string(v.to_string(), false)
-                        }).collect(),
-                        add_ref: false
-                    });
-                    let size = name_list.len() as u8;
-                    self.push_op(OpCode::BuildConstKeyMap(size));
-                }
+                // // キーワード引数のデフォルト値の設定
+                // let has_kw_default = signature.param.named_list.iter().any(|v| {
+                //     v.expr.is_some()
+                // });
+                // if has_kw_default {
+                //     let mut name_list: Vec<&str> = vec![];
+                //     for v in &signature.param.named_list {
+                //         match &v.expr {
+                //             Some(expr) => {
+                //                 self.compile(expr, None);
+                //                 name_list.push(self.span_to_str(&v.identifier.span));
+                //             },
+                //             None => ()
+                //         }
+                //     }
+                //     self.push_load_const(PyObject::SmallTuple {
+                //         children: name_list.iter().map(|v| {
+                //             PyObject::new_string(v.to_string(), false)
+                //         }).collect(),
+                //         add_ref: false
+                //     });
+                //     let size = name_list.len() as u8;
+                //     self.push_op(OpCode::BuildConstKeyMap(size));
+                // }
 
-                // アノテーションは未実装
-                // クロージャは未実装
+                // // アノテーションは未実装
+                // // クロージャは未実装
 
-                // コードオブジェクトの読み込み
-                self.push_load_const(py_code);
-                // 関数名の読み込み
+                // // コードオブジェクトの読み込み
+                // self.push_load_const(py_code);
+                // // 関数名の読み込み
+                // self.push_load_const(PyObject::new_string(name.to_string(), false));
+                // // 関数作成と収納
+                // let make_flag = (has_default as u8) | ((has_kw_default as u8) << 1);
+                // self.push_op(OpCode::MakeFunction(make_flag));
+                // let p = (**self.context_stack.last().unwrap())
+                //     .borrow_mut()
+                //     .declare_variable(name);
+                // self.push_op(OpCode::StoreName(p));
+            },
+            Node::ClassDeclaration { span:_, identifier, member_list } => {
+                self.push_op(OpCode::LoadBuildClass);
+
+                let name = self.span_to_str(&identifier.span);
+                self.push_load_const(run_class(
+                    "main.py",
+                    name,
+                    member_list,
+                    self,
+                    self.source,
+                ));
+
                 self.push_load_const(PyObject::new_string(name.to_string(), false));
-                // 関数作成と収納
-                let make_flag = (has_default as u8) | ((has_kw_default as u8) << 1);
-                self.push_op(OpCode::MakeFunction(make_flag));
+
+                self.push_op(OpCode::MakeFunction(0));
+
+                self.push_load_const(PyObject::new_string(name.to_string(), false));
+
+                self.push_op(OpCode::CallFunction(2));
+
                 let p = (**self.context_stack.last().unwrap())
                     .borrow_mut()
                     .declare_variable(name);
                 self.push_op(OpCode::StoreName(p));
-            }
+            },
 
             Node::IfStatement {
                 span: _,
@@ -1375,6 +1240,112 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 self.default_scope_stack.pop();
             }
         }
+    }
+
+    fn comiple_declare_function(&mut self, 
+        signature: &'value FunctionSignature, 
+        body: &'value Box<Node>,
+        function_name_prefix: Option<String>,
+        implicit_arg: Option<&'value str>,
+    ) {
+        let mut argument_list: Vec<&str> = vec![];
+        if let Some(name) = implicit_arg {
+            argument_list.push(name);
+        }
+        for p in &signature.param.normal_list {
+            let name = self.span_to_str(&p.identifier.span);
+            argument_list.push(name);
+        }
+        for p in &signature.param.option_list {
+            let name = self.span_to_str(&p.identifier.span);
+            argument_list.push(name);
+        }
+        for p in &signature.param.named_list {
+            let name = self.span_to_str(&p.identifier.span);
+            argument_list.push(name);
+        }
+
+        let mut num_normal_args = signature.param.normal_list.len() as u32
+             + signature.param.option_list.len() as u32;
+        if implicit_arg.is_some() {
+            num_normal_args += 1;
+        }
+        let num_kw_only_args = signature.param.named_list.len() as u32;
+        let name = self.span_to_str(&signature.name.span);
+        let py_code = run_function(
+            "main.py", 
+            name, 
+            argument_list, 
+            num_normal_args,
+            0,
+            num_kw_only_args,
+            self, 
+            body, 
+            self.source);
+
+        // 通常引数のデフォルト値の設定
+        let has_default = !signature.param.option_list.is_empty();
+        if has_default {
+            let size = signature.param.option_list.len() as u8;
+            for v in &signature.param.option_list {
+                match &v.expr {
+                    Some(expr) => {
+                        self.compile(expr, None);
+                    },
+                    None => {
+                        self.push_load_const(PyObject::None(false));
+                    }
+                }
+            }
+            self.push_op(OpCode::BuildTuple(size));
+        }
+
+        // キーワード引数のデフォルト値の設定
+        let has_kw_default = signature.param.named_list.iter().any(|v| {
+            v.expr.is_some()
+        });
+        if has_kw_default {
+            let mut name_list: Vec<&str> = vec![];
+            for v in &signature.param.named_list {
+                match &v.expr {
+                    Some(expr) => {
+                        self.compile(expr, None);
+                        name_list.push(self.span_to_str(&v.identifier.span));
+                    },
+                    None => ()
+                }
+            }
+            self.push_load_const(PyObject::SmallTuple {
+                children: name_list.iter().map(|v| {
+                    PyObject::new_string(v.to_string(), false)
+                }).collect(),
+                add_ref: false
+            });
+            let size = name_list.len() as u8;
+            self.push_op(OpCode::BuildConstKeyMap(size));
+        }
+
+        // アノテーションは未実装
+        // クロージャは未実装
+
+        // コードオブジェクトの読み込み
+        self.push_load_const(py_code);
+        // 関数名の読み込み
+        match function_name_prefix {
+            Some(prefix) => {
+                self.push_load_const(PyObject::new_string(format!("{}{}", prefix, name), false));
+            },
+            None => {
+                self.push_load_const(PyObject::new_string(name.to_string(), false));
+            }
+        }
+        // 関数作成と収納
+        let make_flag = (has_default as u8) | ((has_kw_default as u8) << 1);
+        self.push_op(OpCode::MakeFunction(make_flag));
+        let p = (**self.context_stack.last().unwrap())
+            .borrow_mut()
+            .declare_variable(name);
+        self.push_op(OpCode::StoreName(p));
     }
 
     fn span_to_str(&self, span: &Span) -> &'value str {

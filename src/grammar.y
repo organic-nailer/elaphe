@@ -1,5 +1,5 @@
 %start LibraryDeclaration
-%expect 5
+%expect 2
 %%
 // シフト還元競合:
 // IfStatement (if(Expression)Statementとif(Expression)Statement else Statement)
@@ -172,6 +172,36 @@ DeclaredIdentifier -> Result<Identifier, ()>:
     | "final" Type Identifier { $3 }
     | "late" "final" Identifier { $3 }
     | "late" "final" Type Identifier { $4 }
+    ;
+
+
+//----------------------------------------------------------------------
+//-----------------------------Classes----------------------------------
+//----------------------------------------------------------------------
+ClassDeclaration -> Result<Node, ()>:
+      "class" Identifier "{" "}" {
+        Ok(Node::ClassDeclaration { span: $span, identifier: $2?, member_list: vec![] })
+    }
+    | "class" Identifier "{" ClassDeclarationInternal "}" {
+        Ok(Node::ClassDeclaration { span: $span, identifier: $2?, member_list: $4? })
+    }
+    ;
+
+ClassDeclarationInternal -> Result<Vec<Box<Node>>, ()>:
+      ClassMemberDeclaration { Ok(vec![Box::new($1?)]) }
+    | ClassDeclarationInternal ClassMemberDeclaration {
+        flatten($1, Box::new($2?))
+    }
+    ;
+
+ClassMemberDeclaration -> Result<Node, ()>:
+    MethodSignature FunctionBody {
+        Ok(Node::FunctionDeclaration { span: $span, signature: $1?, body: Box::new($2?) })
+    }
+    ;
+
+MethodSignature -> Result<FunctionSignature, ()>:
+    FunctionSignature { $1 }
     ;
 
 //----------------------------------------------------------------------
@@ -942,7 +972,8 @@ ContinueStatement -> Result<Node, ()>:
 //-----------------------Libraries and Scripts--------------------------
 //----------------------------------------------------------------------
 TopLevelDeclaration -> Result<Node, ()>:
-      TopFunctionDeclaration { $1 }
+      ClassDeclaration { $1 }
+    | TopFunctionDeclaration { $1 }
     | TopVariableDeclaration { $1 }
     ;
 
@@ -1025,9 +1056,6 @@ TypeNotVoidNotFunction -> Result<DartType, ()>:
 TypeName -> Result<DartTypeName, ()>:
       Identifier {
         Ok(DartTypeName { identifier: $1?, module: None })
-    }
-    | Identifier "." Identifier {
-        Ok(DartTypeName { identifier: $3?, module: Some($1?) })
     }
     ;
 
@@ -1261,7 +1289,12 @@ pub enum Node {
         span: Span,
         signature: FunctionSignature,
         body: Box<Node>,
-    }
+    },
+    ClassDeclaration {
+        span: Span,
+        identifier: Identifier,
+        member_list: Vec<Box<Node>>,
+    },
 }
 
 #[derive(Debug)]

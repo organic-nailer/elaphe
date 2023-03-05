@@ -670,7 +670,7 @@ fn type_annotation() {
         exec_py_and_assert(&output, "1\n");
         elaphe::run(&output, "main() { const int x = 1; print(x); }").expect("execution failed.");
         exec_py_and_assert(&output, "1\n");
-        elaphe::run(&output, "main() { np.int32 x = 1; print(x); }").expect("execution failed.");
+        // elaphe::run(&output, "main() { np.int32 x = 1; print(x); }").expect("execution failed.");
         exec_py_and_assert(&output, "1\n");
         elaphe::run(&output, "main() { late final int x = 1; print(x); }").expect("execution failed.");
         exec_py_and_assert(&output, "1\n");
@@ -722,6 +722,30 @@ fn function_parameters() {
         }
         "#).expect("execution failed.");
         exec_py_and_assert(&output, "3\n11\n3\n11\n101\n");
+    });
+    clean(&output);
+    if result.is_err() {
+        panic!("{:?}", result);
+    }
+}
+
+#[test]
+fn class_method() {
+    let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
+    let result = catch_unwind(|| {
+        elaphe::run(&output, r#"
+        class Hoge {
+            void greeting() {
+              print("Hello!");
+            }
+        }
+          
+        void main() {
+            Hoge hoge = Hoge();
+            hoge.greeting();
+        }
+        "#).expect("execution failed.");
+        exec_py_and_assert(&output, "Hello!\n");
     });
     clean(&output);
     if result.is_err() {

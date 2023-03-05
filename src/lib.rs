@@ -53,7 +53,7 @@ fn write_header(file: &mut File) {
 }
 
 fn write_root_py_code(file: &mut File, source: &str, node: LibraryDeclaration) {
-    let code = bytecompiler::run_root("main.py", &node, source);
+    let code = bytecompiler::runroot::run_root("main.py", &node, source);
 
     code.write(file);
 }
