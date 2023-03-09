@@ -734,6 +734,7 @@ PostfixExpressionNotBrace -> Result<Node<'input>, ()>:
 
 SelectorExpression -> Result<Node<'input>, ()>:
       Primary { $1 }
+    | SliceExpression { $1 }
     | SelectorExpression Selector {
         Ok(Node::SelectorExpression { child: Box::new($1?), selector: $2? })
     }
@@ -741,8 +742,24 @@ SelectorExpression -> Result<Node<'input>, ()>:
 
 SelectorExpressionNotBrace -> Result<Node<'input>, ()>:
       PrimaryNotBrace { $1 }
+    | SliceExpression { $1 }
     | SelectorExpressionNotBrace Selector {
         Ok(Node::SelectorExpression { child: Box::new($1?), selector: $2? })
+    }
+    ;
+
+SliceExpression -> Result<Node<'input>, ()>:
+      "sl" "(" ")" {
+        Ok(Node::SliceExpression { start: None, end: None, step: None })
+    }
+    | "sl" "(" Expression ")" {
+        Ok(Node::SliceExpression { start: Some(Box::new($3?)), end: None, step: None })
+    }
+    | "sl" "(" Expression "," Expression ")" {
+        Ok(Node::SliceExpression { start: Some(Box::new($3?)), end: Some(Box::new($5?)), step: None })
+    }
+    | "sl" "(" Expression "," Expression "," Expression ")" {
+        Ok(Node::SliceExpression { start: Some(Box::new($3?)), end: Some(Box::new($5?)), step: Some(Box::new($7?)) })
     }
     ;
 
@@ -1307,6 +1324,11 @@ pub enum Node<'input> {
         identifier: Identifier<'input>,
         member_list: Vec<Member<'input>>,
     },
+    SliceExpression {
+        start: Option<Box<Node<'input>>>,
+        end: Option<Box<Node<'input>>>,
+        step: Option<Box<Node<'input>>>,
+    }
 }
 
 #[derive(Debug)]

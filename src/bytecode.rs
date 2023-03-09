@@ -71,6 +71,7 @@ pub enum OpCode {
     PopJumpIfTrue(u32),
     CallFunction(u8),
     MakeFunction(u8),
+    BuildSlice(u8),
     CallFunctionKw(u8),
     BuildConstKeyMap(u8),
     LoadMethod(u8),
@@ -160,6 +161,7 @@ impl OpCode {
             OpCode::RaiseVarargs(_) => 130,
             OpCode::CallFunction(_) => 131,
             OpCode::MakeFunction(_) => 132,
+            OpCode::BuildSlice(_) => 133,
             OpCode::CallFunctionKw(_) => 141,
             OpCode::BuildConstKeyMap(_) => 156,
             OpCode::LoadMethod(_) => 160,
@@ -203,6 +205,7 @@ impl OpCode {
             | OpCode::CallMethod(v)
             | OpCode::RaiseVarargs(v)
             | OpCode::MakeFunction(v)
+            | OpCode::BuildSlice(v)
             | OpCode::BuildConstKeyMap(v)
             | OpCode::BuildTuple(v)
             | OpCode::CallFunctionKw(v) => ByteCode {
@@ -263,6 +266,8 @@ impl OpCode {
             | OpCode::BuildSet(v) => 1 - (v as i32),
 
             OpCode::BuildMap(v) => 1 - 2 * (v as i32),
+
+            OpCode::BuildSlice(v) => if v == 3 { -2 } else { -1 },
 
             OpCode::ImportName(_) => -1,
             OpCode::ImportFrom(_) => 1,

@@ -659,6 +659,35 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     }
                 }
             },
+            Node::SliceExpression { start, end, step } => {
+                match start {
+                    Some(v) => {
+                        self.compile(v, None);
+                    },
+                    None => {
+                        self.push_load_const(PyObject::None(false));
+                    }
+                }
+
+                match end {
+                    Some(v) => {
+                        self.compile(v, None);
+                    },
+                    None => {
+                        self.push_load_const(PyObject::None(false));
+                    }
+                }
+
+                match step {
+                    Some(v) => {
+                        self.compile(v, None);
+                        self.push_op(OpCode::BuildSlice(3));
+                    },
+                    None => {
+                        self.push_op(OpCode::BuildSlice(2));
+                    }
+                }
+            },
             Node::ThrowExpression { expr } => {
                 self.compile(expr, None);
                 self.push_op(OpCode::RaiseVarargs(1));

@@ -822,3 +822,29 @@ fn class_constructor() {
         panic!("{:?}", result);
     }
 }
+
+#[test]
+fn slice() {
+    let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
+    let result = catch_unwind(|| {
+        elaphe::run(&output, r#"
+        void main() {
+            var list = [0,1,2,3,4,5,6,7,8,9];
+          
+            print(list[sl()]);
+            print(list[sl(7)]);
+            print(list[sl(3,6)]);
+            print(list[sl(null,3)]);
+            print(list[sl(null,null,2)]);
+            print(list[sl(3,null,3)]);
+            print(list[sl(null,6,3)]);
+            print(list[sl(3,6,2)]);
+        }
+        "#).expect("execution failed.");
+        exec_py_and_assert(&output, "[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]\n[7, 8, 9]\n[3, 4, 5]\n[0, 1, 2]\n[0, 2, 4, 6, 8]\n[3, 6, 9]\n[0, 3]\n[3, 5]\n");
+    });
+    clean(&output);
+    if result.is_err() {
+        panic!("{:?}", result);
+    }
+}
