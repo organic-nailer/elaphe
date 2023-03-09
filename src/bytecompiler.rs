@@ -1282,7 +1282,8 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             .borrow()
             .check_variable_scope(value);
         match scope {
-            VariableScope::Global => {
+            VariableScope::Global |
+            VariableScope::NotDefined => {
                 if self.context_stack.last().unwrap().borrow().is_global() {
                     let p = (**self.context_stack.last().unwrap())
                         .borrow_mut()
@@ -1317,9 +1318,6 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     .register_or_get_name(value);
                 self.push_op(OpCode::LoadAttr(p));
             }
-            VariableScope::NotDefined => {
-                panic!("{} is used before its declaration.", value);
-            }
         }
     }
 
@@ -1331,7 +1329,8 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             .borrow()
             .check_variable_scope(value);
         match scope {
-            VariableScope::Global => {
+            VariableScope::Global |
+            VariableScope::NotDefined => {
                 if self.context_stack.last().unwrap().borrow().is_global() {
                     let p = (**self.context_stack.last().unwrap())
                         .borrow_mut()
@@ -1365,9 +1364,6 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     .borrow_mut()
                     .register_or_get_name(value);
                 self.push_op(OpCode::StoreAttr(p));
-            }
-            VariableScope::NotDefined => {
-                panic!("{} is used before its declaration.", value);
             }
         }
     }

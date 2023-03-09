@@ -7,8 +7,6 @@ use crate::parser::{LibraryDeclaration};
 
 use super::ByteCompiler;
 
-const PREDEFINED_VARIABLES: [&'static str; 4] = ["print", "isinstance", "IOError", "KeyboardInterrupt"];
-
 pub fn run_root<'value>(
     file_name: &String,
     root_node: &'value LibraryDeclaration,
@@ -18,7 +16,7 @@ pub fn run_root<'value>(
         constant_list: vec![],
         name_list: vec![],
         name_map: HashMap::new(),
-        global_variables: PREDEFINED_VARIABLES.iter().map(|s| s.to_string()).collect(),
+        global_variables: vec![],
     }));
 
     let mut compiler = ByteCompiler {
