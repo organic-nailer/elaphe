@@ -1304,6 +1304,19 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     .get_local_variable(value);
                 self.push_op(OpCode::LoadFast(p));
             }
+            VariableScope::Instance => {
+                let p = self
+                    .context_stack
+                    .last()
+                    .unwrap()
+                    .borrow()
+                    .get_local_variable(&"self".to_string());
+                self.push_op(OpCode::LoadFast(p));
+                let p = (**self.context_stack.last().unwrap())
+                    .borrow_mut()
+                    .register_or_get_name(value);
+                self.push_op(OpCode::LoadAttr(p));
+            }
             VariableScope::NotDefined => {
                 panic!("{} is used before its declaration.", value);
             }
@@ -1339,6 +1352,19 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     .borrow()
                     .get_local_variable(value);
                 self.push_op(OpCode::StoreFast(p));
+            }
+            VariableScope::Instance => {
+                let p = self
+                    .context_stack
+                    .last()
+                    .unwrap()
+                    .borrow()
+                    .get_local_variable(&"self".to_string());
+                self.push_op(OpCode::LoadFast(p));
+                let p = (**self.context_stack.last().unwrap())
+                    .borrow_mut()
+                    .register_or_get_name(value);
+                self.push_op(OpCode::StoreAttr(p));
             }
             VariableScope::NotDefined => {
                 panic!("{} is used before its declaration.", value);

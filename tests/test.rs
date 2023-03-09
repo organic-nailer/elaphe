@@ -762,16 +762,32 @@ fn class_field() {
             int x = 1;
             void greeting() {
               print("Hello!");
-              print(this.x);
+              print(x); // 1
+              x = 2;
+              print(x); // 2
+              this.x = 3;
+              print(x); // 3
+            }
+          
+            void greeting2(int x) {
+              print(x); // 10
+              print(this.x); // 3
+              x = 4;
+              print(x); // 4
+              print(this.x); // 3
+              this.x = 5;
+              print(x); // 4
+              print(this.x); // 5
             }
         }
           
         void main() {
             Hoge hoge = Hoge();
             hoge.greeting();
-        }
+            hoge.greeting2(10);
+        }          
         "#).expect("execution failed.");
-        exec_py_and_assert(&output, "Hello!\n1\n");
+        exec_py_and_assert(&output, "Hello!\n1\n2\n3\n10\n3\n4\n3\n4\n5\n");
     });
     clean(&output);
     if result.is_err() {

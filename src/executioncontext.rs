@@ -20,6 +20,11 @@ pub struct BlockContext<'ctx> {
     pub variables: Vec<String>,
 }
 
+pub struct ClassContext<'ctx> {
+    pub outer: Rc<RefCell<dyn ExecutionContext + 'ctx>>,
+    pub instance_variables: Vec<String>,
+}
+
 pub trait ExecutionContext {
     fn push_const(&mut self, value: PyObject);
     fn const_len(&self) -> usize;
@@ -164,8 +169,44 @@ impl<'ctx> ExecutionContext for BlockContext<'ctx> {
     }
 }
 
+impl<'ctx> ExecutionContext for ClassContext<'ctx> {
+    fn push_const(&mut self, value: PyObject) {
+        self.outer.borrow_mut().push_const(value);
+    }
+
+    fn const_len(&self) -> usize {
+        self.outer.borrow().const_len()
+    }
+
+    fn declare_variable(&mut self, symbol: &String) -> u8 {
+        self.instance_variables.push(symbol.clone());
+        self.outer.borrow_mut().declare_variable(symbol)
+    }
+
+    fn get_local_variable(&self, symbol: &String) -> u8 {
+        self.outer.borrow_mut().get_local_variable(symbol)
+    }
+
+    fn check_variable_scope(&self, symbol: &String) -> VariableScope {
+        if self.instance_variables.contains(symbol) {
+            VariableScope::Instance
+        } else {
+            self.outer.borrow().check_variable_scope(symbol)
+        }
+    }
+
+    fn register_or_get_name(&mut self, name: &String) -> u8 {
+        self.outer.borrow_mut().register_or_get_name(name)
+    }
+
+    fn is_global(&self) -> bool {
+        false
+    }
+}
+
 pub enum VariableScope {
     Global,
     Local,
+    Instance,
     NotDefined,
 }

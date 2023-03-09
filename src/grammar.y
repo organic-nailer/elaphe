@@ -298,6 +298,7 @@ Primary -> Result<Node<'input>, ()>:
 
 PrimaryNotBrace -> Result<Node<'input>, ()>:
       '(' Expression ')' { $2 }
+    | ThisExpression { $1 }
     | LiteralNotBrace { $1 }
     | Identifier { Ok(Node::IdentifierNode { identifier: $1? }) }
     ;

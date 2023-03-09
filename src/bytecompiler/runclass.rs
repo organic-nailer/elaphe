@@ -1,7 +1,7 @@
 use std::{rc::Rc, cell::RefCell, collections::HashMap};
 
 use crate::bytecode::{OpCode, calc_stack_size};
-use crate::executioncontext::{PyContext, BlockContext};
+use crate::executioncontext::{PyContext, ClassContext, ExecutionContext};
 use crate::pyobject::PyObject;
 use crate::parser::{Node, VariableDeclaration, FunctionSignature, Identifier, FunctionParamSignature};
 
@@ -22,14 +22,14 @@ pub fn run_class<'ctx, 'value, 'cpl>(
         local_variables: vec![],
     }));
 
-    let block_context = Rc::new(RefCell::new(BlockContext {
+    let class_context = Rc::new(RefCell::new(ClassContext {
         outer: py_context.clone(),
-        variables: vec![],
+        instance_variables: vec![],
     }));
 
     let mut compiler = ByteCompiler {
         byte_operations: RefCell::new(vec![]),
-        context_stack: vec![block_context.clone()],
+        context_stack: vec![class_context.clone()],
         jump_label_table: RefCell::new(HashMap::new()),
         jump_label_key_index: RefCell::new(*outer_compiler.jump_label_key_index.borrow()),
         default_scope_stack: vec![],
@@ -64,6 +64,10 @@ pub fn run_class<'ctx, 'value, 'cpl>(
         match &**member {
             Node::VariableDeclarationList { decl_list } => {
                 instance_variable_declaration_list.push(&decl_list);
+                // インスタンス変数を登録
+                for decl in decl_list {
+                    class_context.borrow_mut().declare_variable(&decl.identifier.value.to_string());
+                }
             },
             Node::FunctionDeclaration { signature:_, body:_ } => {
                 method_declaration_list.push(member);
@@ -100,7 +104,7 @@ pub fn run_class<'ctx, 'value, 'cpl>(
     compiler.push_op(OpCode::ReturnValue);
 
     compiler.context_stack.pop();
-    drop(block_context);
+    drop(class_context);
 
     // outer_compilerへの情報の復帰
     *outer_compiler.jump_label_key_index.borrow_mut() = *compiler.jump_label_key_index.borrow();
