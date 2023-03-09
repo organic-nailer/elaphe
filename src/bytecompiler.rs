@@ -7,7 +7,7 @@ use crate::executioncontext::{
 };
 use crate::parser::{LibraryImport};
 use crate::{bytecode::OpCode, parser::Node, pyobject::PyObject, parser::CollectionElement, parser::Selector, parser::DartType};
-use crate::parser::FunctionSignature;
+use crate::parser::FunctionParamSignature;
 
 use self::runclass::run_class;
 use self::runfunction::run_function;
@@ -790,7 +790,8 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 body,
             } => {
                 self.comiple_declare_function(
-                    signature, 
+                    &signature.name.value.to_string(),
+                    &signature.param, 
                     body, 
                     None, 
                     None,
@@ -1153,7 +1154,8 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
     }
 
     fn comiple_declare_function<F: FnOnce(&mut ByteCompiler<'ctx, 'value>)>(&mut self, 
-        signature: &'value FunctionSignature, 
+        name: &String,
+        param: &'value FunctionParamSignature, 
         body: &'value Box<Node>,
         function_name_prefix: Option<String>,
         implicit_arg: Option<&String>,
@@ -1163,26 +1165,25 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
         if let Some(name) = implicit_arg {
             argument_list.push(name.clone());
         }
-        for p in &signature.param.normal_list {
+        for p in &param.normal_list {
             let name = p.identifier.value.to_string();
             argument_list.push(name);
         }
-        for p in &signature.param.option_list {
+        for p in &param.option_list {
             let name = p.identifier.value.to_string();
             argument_list.push(name);
         }
-        for p in &signature.param.named_list {
+        for p in &param.named_list {
             let name = p.identifier.value.to_string();
             argument_list.push(name);
         }
 
-        let mut num_normal_args = signature.param.normal_list.len() as u32
-             + signature.param.option_list.len() as u32;
+        let mut num_normal_args = param.normal_list.len() as u32
+             + param.option_list.len() as u32;
         if implicit_arg.is_some() {
             num_normal_args += 1;
         }
-        let num_kw_only_args = signature.param.named_list.len() as u32;
-        let name = signature.name.value.to_string();
+        let num_kw_only_args = param.named_list.len() as u32;
         let py_code = run_function(
             &"main.py".to_string(), 
             &name, 
@@ -1197,10 +1198,10 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
         );
 
         // 通常引数のデフォルト値の設定
-        let has_default = !signature.param.option_list.is_empty();
+        let has_default = !param.option_list.is_empty();
         if has_default {
-            let size = signature.param.option_list.len() as u8;
-            for v in &signature.param.option_list {
+            let size = param.option_list.len() as u8;
+            for v in &param.option_list {
                 match &v.expr {
                     Some(expr) => {
                         self.compile(expr, None);
@@ -1214,12 +1215,12 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
         }
 
         // キーワード引数のデフォルト値の設定
-        let has_kw_default = signature.param.named_list.iter().any(|v| {
+        let has_kw_default = param.named_list.iter().any(|v| {
             v.expr.is_some()
         });
         if has_kw_default {
             let mut name_list: Vec<&str> = vec![];
-            for v in &signature.param.named_list {
+            for v in &param.named_list {
                 match &v.expr {
                     Some(expr) => {
                         self.compile(expr, None);

@@ -187,50 +187,65 @@ ClassDeclaration -> Result<Node<'input>, ()>:
     }
     ;
 
-ClassDeclarationInternal -> Result<Vec<Box<Node<'input>>>, ()>:
-      ClassMemberDeclaration { Ok(vec![Box::new($1?)]) }
+ClassDeclarationInternal -> Result<Vec<Member<'input>>, ()>:
+      ClassMemberDeclaration { Ok(vec![$1?]) }
     | ClassDeclarationInternal ClassMemberDeclaration {
-        flatten($1, Box::new($2?))
+        flatten($1, $2?)
     }
     ;
 
-ClassMemberDeclaration -> Result<Node<'input>, ()>:
+ClassMemberDeclaration -> Result<Member<'input>, ()>:
       Declaration ";" { $1 }
-    | MethodSignature FunctionBody {
-        Ok(Node::FunctionDeclaration { signature: $1?, body: Box::new($2?) })
+    | MemberImpl { $1 }
+    ;
+
+MemberImpl -> Result<Member<'input>, ()>:
+      FunctionSignature FunctionBody {
+        Ok(Member::MethodImpl { signature: $1?, body: Box::new($2?) })
     }
+//     | ConstructorSignature FunctionBody {
+//         Ok(Member::ConstructorImpl { signature: $1?, body: Box::new($2?) })
+//     }
     ;
 
-MethodSignature -> Result<FunctionSignature<'input>, ()>:
-    FunctionSignature { $1 }
-    ;
-
-Declaration -> Result<Node<'input>, ()>:
+Declaration -> Result<Member<'input>, ()>:
       "var" InitializedIdentifierList {
-        Ok(Node::VariableDeclarationList { decl_list: $2? }) 
+        Ok(Member::VariableDecl { decl_list: $2? }) 
     }
     | Type InitializedIdentifierList {
-        Ok(Node::VariableDeclarationList { decl_list: $2? }) 
+        Ok(Member::VariableDecl { decl_list: $2? }) 
     }
     | "late" "var" InitializedIdentifierList {
-        Ok(Node::VariableDeclarationList { decl_list: $3? }) 
+        Ok(Member::VariableDecl { decl_list: $3? }) 
     }
     | "late" Type InitializedIdentifierList {
-        Ok(Node::VariableDeclarationList { decl_list: $3? }) 
+        Ok(Member::VariableDecl { decl_list: $3? }) 
     }
     | "final" InitializedIdentifierList {
-        Ok(Node::VariableDeclarationList { decl_list: $2? }) 
+        Ok(Member::VariableDecl { decl_list: $2? }) 
     }
     | "final" Type InitializedIdentifierList {
-        Ok(Node::VariableDeclarationList { decl_list: $3? }) 
+        Ok(Member::VariableDecl { decl_list: $3? }) 
     }
     | "late" "final" InitializedIdentifierList {
-        Ok(Node::VariableDeclarationList { decl_list: $3? }) 
+        Ok(Member::VariableDecl { decl_list: $3? }) 
     }
     | "late" "final" Type InitializedIdentifierList {
-        Ok(Node::VariableDeclarationList { decl_list: $4? }) 
+        Ok(Member::VariableDecl { decl_list: $4? }) 
     }
     ;
+
+// ConstructorSignature -> Result<ConstructorSignature<'input>, ()>:
+//     ConstructorName FormalParameterList {
+//         Ok(ConstructorSignature { name: $1?, param: $2? })
+//     }
+//     ;
+// 
+// ConstructorName -> Result<Option<Identifier<'input>>, ()>:
+//       Identifier "." Identifier {
+//         Ok(Some($3?))
+//     }
+//     ;
 
 //----------------------------------------------------------------------
 //-----------------------------Expressions--------------------------------
@@ -1290,7 +1305,7 @@ pub enum Node<'input> {
     },
     ClassDeclaration {
         identifier: Identifier<'input>,
-        member_list: Vec<Box<Node<'input>>>,
+        member_list: Vec<Member<'input>>,
     },
 }
 
@@ -1417,4 +1432,25 @@ pub struct CallParameter<'input> {
 #[derive(Debug)]
 pub struct Identifier<'input> {
     pub value: &'input str,
+}
+
+#[derive(Debug)]
+pub struct ConstructorSignature<'input> {
+    pub name: Option<Identifier<'input>>,
+    pub param: FunctionParamSignature<'input>,
+}
+
+#[derive(Debug)]
+pub enum Member<'input> {
+    MethodImpl {
+        signature: FunctionSignature<'input>,
+        body: Box<Node<'input>>,
+    },
+    ConstructorImpl {
+        signature: ConstructorSignature<'input>,
+        body: Box<Node<'input>>,
+    },
+    VariableDecl {
+        decl_list: Vec<VariableDeclaration<'input>>,
+    }
 }

@@ -794,3 +794,31 @@ fn class_field() {
         panic!("{:?}", result);
     }
 }
+
+#[test]
+fn class_constructor() {
+    let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
+    let result = catch_unwind(|| {
+        elaphe::run(&output, r#"
+        class Hoge {
+            int y = 0;
+            Hoge(int x) {
+              print(x);
+              print(y);
+              y = x;
+              print(x);
+              print(y);
+            }
+          }
+          
+          void main() {
+            var h = Hoge(10);
+          }
+        "#).expect("execution failed.");
+        exec_py_and_assert(&output, "10\n0\n10\n10\n");
+    });
+    clean(&output);
+    if result.is_err() {
+        panic!("{:?}", result);
+    }
+}
