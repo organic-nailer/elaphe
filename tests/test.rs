@@ -752,3 +752,29 @@ fn class_method() {
         panic!("{:?}", result);
     }
 }
+
+#[test]
+fn class_field() {
+    let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
+    let result = catch_unwind(|| {
+        elaphe::run(&output, r#"
+        class Hoge {
+            int x = 1;
+            void greeting() {
+              print("Hello!");
+              print(this.x);
+            }
+        }
+          
+        void main() {
+            Hoge hoge = Hoge();
+            hoge.greeting();
+        }
+        "#).expect("execution failed.");
+        exec_py_and_assert(&output, "Hello!\n1\n");
+    });
+    clean(&output);
+    if result.is_err() {
+        panic!("{:?}", result);
+    }
+}

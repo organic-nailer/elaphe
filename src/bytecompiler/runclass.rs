@@ -3,13 +3,13 @@ use std::{rc::Rc, cell::RefCell, collections::HashMap};
 use crate::bytecode::{OpCode, calc_stack_size};
 use crate::executioncontext::{PyContext, BlockContext};
 use crate::pyobject::PyObject;
-use crate::parser::{Node};
+use crate::parser::{Node, VariableDeclaration, FunctionSignature, Identifier, FunctionParamSignature};
 
 use super::ByteCompiler;
 
 pub fn run_class<'ctx, 'value, 'cpl>(
-    file_name: &'value str,
-    code_name: &'value str,
+    file_name: &String,
+    code_name: &String,
     member_list: &'value Vec<Box<Node>>,
     outer_compiler: &'cpl ByteCompiler<'ctx, 'value>,
     source: &'value str,
@@ -41,24 +41,57 @@ pub fn run_class<'ctx, 'value, 'cpl>(
     // __module__ = __name__
     let p = (compiler.context_stack.last().unwrap())
         .borrow_mut()
-        .register_or_get_name("__name__".to_string());
+        .register_or_get_name(&"__name__".to_string());
     compiler.push_op(OpCode::LoadName(p));
     
     let p = (compiler.context_stack.last().unwrap())
         .borrow_mut()
-        .register_or_get_name("__module__".to_string());
+        .register_or_get_name(&"__module__".to_string());
     compiler.push_op(OpCode::StoreName(p));
 
     // __qualname__ = "Hoge"
     compiler.push_load_const(PyObject::new_string("Hoge".to_string(), false));
     let p = (compiler.context_stack.last().unwrap())
         .borrow_mut()
-        .register_or_get_name("__qualname__".to_string());
+        .register_or_get_name(&"__qualname__".to_string());
     compiler.push_op(OpCode::StoreName(p));
 
-
+    // メンバの分類
+    let mut instance_variable_declaration_list: Vec<&Vec<VariableDeclaration>> = vec![];
+    let mut primary_constructor: Option<&Box<Node>> = None;
+    let mut method_declaration_list: Vec<&Box<Node>> = vec![];
     for member in member_list {
-        compile_member(&mut compiler, member, code_name);
+        match &**member {
+            Node::VariableDeclarationList { decl_list } => {
+                instance_variable_declaration_list.push(&decl_list);
+            },
+            Node::FunctionDeclaration { signature:_, body:_ } => {
+                method_declaration_list.push(member);
+            }
+            _ => ()
+        }
+    }
+
+    let dummy_constructor = Box::new(Node::FunctionDeclaration { 
+        signature: FunctionSignature { 
+            return_type: None, 
+            name: Identifier { value: "__init__" }, 
+            param: FunctionParamSignature { 
+                normal_list: vec![], option_list: vec![], named_list: vec![] }
+        }, 
+        body: Box::new(Node::EmptyStatement)
+    });
+    if !instance_variable_declaration_list.is_empty() 
+    && primary_constructor.is_none() {
+        primary_constructor = Some(&dummy_constructor);
+    }
+
+    if let Some(method) = primary_constructor {
+        compile_constructor(&mut compiler, method, code_name, instance_variable_declaration_list);
+    }
+
+    for method in method_declaration_list {
+        compile_method(&mut compiler, &method, code_name)
     }
 
 
@@ -103,12 +136,52 @@ pub fn run_class<'ctx, 'value, 'cpl>(
     }
 }
 
-fn compile_member<'ctx, 'value, 'cpl>(compiler: &'cpl mut ByteCompiler<'ctx, 'value>, node: &'value Box<Node>, class_name: &'value str) {
-    match &**node {
-        Node::FunctionDeclaration { span:_, signature, body } => {
-            let prefix = format!("{}{}", class_name, ".");
-            compiler.comiple_declare_function(&signature, &body, Some(prefix), Some("self"));
-        },
-        _ => panic!("Not Implemented Member")
+fn compile_method<'ctx, 'value, 'cpl>(
+    compiler: &'cpl mut ByteCompiler<'ctx, 'value>, 
+    node: &'value Box<Node>, 
+    class_name: &'value str,
+) {
+    if let Node::FunctionDeclaration { signature, body } = &**node {
+        let prefix = format!("{}{}", class_name, ".");
+        compiler.comiple_declare_function(&signature, &body, Some(prefix), Some(&"self".to_string()), |_| ());
+    }
+}
+
+fn compile_constructor<'ctx, 'value, 'cpl>(
+    compiler: &'cpl mut ByteCompiler<'ctx, 'value>, 
+    node: &'value Box<Node>, 
+    class_name: &'value str,
+    instance_variable_declaration_list: Vec<&'value Vec<VariableDeclaration>>,
+) {
+    if let Node::FunctionDeclaration { signature, body } = &**node {
+        let prefix = format!("{}{}", class_name, ".");
+        let preface = |compiler: &mut ByteCompiler<'ctx, 'value>| {
+            for decl_list in instance_variable_declaration_list {
+                for decl in decl_list {
+                    match &decl.expr {
+                        Some(expr) => { compiler.compile(&*expr, None) },
+                        None => { compiler.push_load_const(PyObject::None(false)); }
+                    }
+                    let p = compiler
+                        .context_stack
+                        .last()
+                        .unwrap()
+                        .borrow()
+                        .get_local_variable(&"self".to_string());
+                    compiler.push_op(OpCode::LoadFast(p));
+
+                    let p = (**compiler.context_stack.last().unwrap())
+                        .borrow_mut()
+                        .register_or_get_name(&decl.identifier.value.to_string());
+                    compiler.push_op(OpCode::StoreAttr(p));
+                }
+            }
+        };
+        compiler.comiple_declare_function(
+            &signature, &body, 
+            Some(prefix), 
+            Some(&"self".to_string()),
+            preface,
+        );
     }
 }

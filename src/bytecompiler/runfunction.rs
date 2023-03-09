@@ -7,16 +7,17 @@ use crate::parser::{Node};
 
 use super::ByteCompiler;
 
-pub fn run_function<'ctx, 'value, 'cpl>(
-    file_name: &'value str,
-    code_name: &'value str,
-    argument_list: Vec<&'value str>,
+pub fn run_function<'ctx, 'value, 'cpl, F: FnOnce(&mut ByteCompiler<'ctx, 'value>)>(
+    file_name: &String,
+    code_name: &String,
+    argument_list: Vec<String>,
     num_args: u32,
     num_pos_only_args: u32,
     num_kw_only_args: u32,
     outer_compiler: &'cpl ByteCompiler<'ctx, 'value>,
     body: &'value Node,
     source: &'value str,
+    preface: F,
 ) -> PyObject {
     let py_context = Rc::new(RefCell::new(PyContext {
         outer: outer_compiler.context_stack.last().unwrap().clone(),
@@ -32,7 +33,7 @@ pub fn run_function<'ctx, 'value, 'cpl>(
     }));
 
     for arg in argument_list {
-        (*block_context).borrow_mut().declare_variable(arg);
+        (*block_context).borrow_mut().declare_variable(&arg);
     }
 
     let mut compiler = ByteCompiler {
@@ -45,6 +46,8 @@ pub fn run_function<'ctx, 'value, 'cpl>(
         continue_label_table: HashMap::new(),
         source,
     };
+
+    preface(&mut compiler);
 
     compiler.compile(body, None);
 

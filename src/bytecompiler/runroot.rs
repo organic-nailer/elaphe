@@ -10,7 +10,7 @@ use super::ByteCompiler;
 const PREDEFINED_VARIABLES: [&'static str; 4] = ["print", "isinstance", "IOError", "KeyboardInterrupt"];
 
 pub fn run_root<'value>(
-    file_name: &'value str,
+    file_name: &String,
     root_node: &'value LibraryDeclaration,
     source: &'value str,
 ) -> PyObject {
@@ -18,7 +18,7 @@ pub fn run_root<'value>(
         constant_list: vec![],
         name_list: vec![],
         name_map: HashMap::new(),
-        global_variables: Vec::from(PREDEFINED_VARIABLES),
+        global_variables: PREDEFINED_VARIABLES.iter().map(|s| s.to_string()).collect(),
     }));
 
     let mut compiler = ByteCompiler {
@@ -48,7 +48,7 @@ pub fn run_root<'value>(
     // main関数を実行
     let main_position = (*global_context)
         .borrow_mut()
-        .register_or_get_name("main".to_string());
+        .register_or_get_name(&"main".to_string());
     compiler.push_op(OpCode::LoadName(main_position));
     compiler.push_op(OpCode::CallFunction(0));
     compiler.push_op(OpCode::PopTop);

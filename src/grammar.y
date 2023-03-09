@@ -9,7 +9,7 @@
 //----------------------------------------------------------------------
 //-----------------------------Variables--------------------------------
 //----------------------------------------------------------------------
-InitializedVariableDeclaration -> Result<Vec<VariableDeclaration>, ()>:
+InitializedVariableDeclaration -> Result<Vec<VariableDeclaration<'input>>, ()>:
       DeclaredIdentifier { 
         Ok(vec![VariableDeclaration { identifier: $1?, expr: None }]) 
     }
@@ -21,7 +21,7 @@ InitializedVariableDeclaration -> Result<Vec<VariableDeclaration>, ()>:
     }
     ;
 
-InitializedIdentifier -> Result<VariableDeclaration, ()>:
+InitializedIdentifier -> Result<VariableDeclaration<'input>, ()>:
       Identifier {
         Ok(VariableDeclaration { identifier: $1?, expr: None })
     }
@@ -30,7 +30,7 @@ InitializedIdentifier -> Result<VariableDeclaration, ()>:
     }
     ;
 
-InitializedIdentifierList -> Result<Vec<VariableDeclaration>, ()>:
+InitializedIdentifierList -> Result<Vec<VariableDeclaration<'input>>, ()>:
       InitializedIdentifier { Ok(vec![$1?]) }
     | InitializedIdentifierList "," InitializedIdentifier { flatten($1, $3?) }
     ;
@@ -39,7 +39,7 @@ InitializedIdentifierList -> Result<Vec<VariableDeclaration>, ()>:
 //----------------------------------------------------------------------
 //-----------------------------Functions--------------------------------
 //----------------------------------------------------------------------
-FunctionSignature -> Result<FunctionSignature, ()>:
+FunctionSignature -> Result<FunctionSignature<'input>, ()>:
       Identifier FormalParameterList {
         Ok(FunctionSignature { return_type: None, name: $1?, param: $2? })
     }
@@ -48,16 +48,16 @@ FunctionSignature -> Result<FunctionSignature, ()>:
     }
     ;
 
-FunctionBody -> Result<Node, ()>:
-      "=>" Expression ";" { Ok(Node::ExpressionStatement { span: $span, expr: Box::new($2?) }) }
+FunctionBody -> Result<Node<'input>, ()>:
+      "=>" Expression ";" { Ok(Node::ExpressionStatement { expr: Box::new($2?) }) }
     | BlockStatement { $1 }
     ;
 
-BlockStatement -> Result<Node, ()>:
-      "{" Statements "}" { Ok(Node::BlockStatement { span: $span, children: $2? }) }
+BlockStatement -> Result<Node<'input>, ()>:
+      "{" Statements "}" { Ok(Node::BlockStatement { children: $2? }) }
     ;
 
-FormalParameterList -> Result<FunctionParamSignature, ()>:
+FormalParameterList -> Result<FunctionParamSignature<'input>, ()>:
       "(" ")" {
         Ok(FunctionParamSignature { normal_list: vec![], option_list: vec![], named_list: vec![] })
     }
@@ -84,12 +84,12 @@ FormalParameterList -> Result<FunctionParamSignature, ()>:
     }
     ;
 
-NormalFormalParameterList -> Result<Vec<FunctionParameter>, ()>:
+NormalFormalParameterList -> Result<Vec<FunctionParameter<'input>>, ()>:
       NormalFormalParameter { Ok(vec![FunctionParameter { identifier: $1?, expr: None }]) }
     | NormalFormalParameterList "," NormalFormalParameter { flatten($1, FunctionParameter { identifier: $3?, expr: None }) }
     ;
 
-OptionalOrNamedFormalParameterList -> Result<(Vec<FunctionParameter>, bool), ()>:
+OptionalOrNamedFormalParameterList -> Result<(Vec<FunctionParameter<'input>>, bool), ()>:
       OptionalPositionalFormalParameterList {
         Ok(($1?, true))
     }
@@ -98,34 +98,34 @@ OptionalOrNamedFormalParameterList -> Result<(Vec<FunctionParameter>, bool), ()>
     }
     ;
 
-OptionalPositionalFormalParameterList -> Result<Vec<FunctionParameter>, ()>:
+OptionalPositionalFormalParameterList -> Result<Vec<FunctionParameter<'input>>, ()>:
     "[" OptionalPositionalFormalParameterListInternal CommaOpt "]" { $2 }
     ;
 
-OptionalPositionalFormalParameterListInternal -> Result<Vec<FunctionParameter>, ()>:
+OptionalPositionalFormalParameterListInternal -> Result<Vec<FunctionParameter<'input>>, ()>:
       DefaultFormalParameter { Ok(vec![$1?]) }
     | OptionalPositionalFormalParameterListInternal "," DefaultFormalParameter {
         flatten($1, $3?)
     }
     ;
 
-NamedFormalParameterList -> Result<Vec<FunctionParameter>, ()>:
+NamedFormalParameterList -> Result<Vec<FunctionParameter<'input>>, ()>:
     "{" NamedFormalParameterListInternal CommaOpt "}" { Ok($2?) }
     ;
 
-NamedFormalParameterListInternal -> Result<Vec<FunctionParameter>, ()>:
+NamedFormalParameterListInternal -> Result<Vec<FunctionParameter<'input>>, ()>:
       DefaultNamedParameter { Ok(vec![$1?]) }
     | NamedFormalParameterListInternal "," DefaultNamedParameter {
         flatten($1, $3?)
     }
     ;
 
-NormalFormalParameter -> Result<Identifier, ()>:
+NormalFormalParameter -> Result<Identifier<'input>, ()>:
       DeclaredIdentifier { $1 }
     | Identifier { $1 }
     ;
 
-DefaultFormalParameter -> Result<FunctionParameter, ()>:
+DefaultFormalParameter -> Result<FunctionParameter<'input>, ()>:
       NormalFormalParameter {
         Ok(FunctionParameter { identifier: $1?, expr: None })
     }
@@ -134,7 +134,7 @@ DefaultFormalParameter -> Result<FunctionParameter, ()>:
     }
     ;
 
-DefaultNamedParameter -> Result<FunctionParameter, ()>:
+DefaultNamedParameter -> Result<FunctionParameter<'input>, ()>:
       DeclaredIdentifier {
         Ok(FunctionParameter { identifier: $1?, expr: None })
     }
@@ -161,7 +161,7 @@ DefaultNamedParameter -> Result<FunctionParameter, ()>:
     }
     ;
 
-DeclaredIdentifier -> Result<Identifier, ()>:
+DeclaredIdentifier -> Result<Identifier<'input>, ()>:
       "var" Identifier { $2 }
     | Type Identifier { $2 }
     | "late" "var" Identifier { $3 }
@@ -178,51 +178,79 @@ DeclaredIdentifier -> Result<Identifier, ()>:
 //----------------------------------------------------------------------
 //-----------------------------Classes----------------------------------
 //----------------------------------------------------------------------
-ClassDeclaration -> Result<Node, ()>:
+ClassDeclaration -> Result<Node<'input>, ()>:
       "class" Identifier "{" "}" {
-        Ok(Node::ClassDeclaration { span: $span, identifier: $2?, member_list: vec![] })
+        Ok(Node::ClassDeclaration { identifier: $2?, member_list: vec![] })
     }
     | "class" Identifier "{" ClassDeclarationInternal "}" {
-        Ok(Node::ClassDeclaration { span: $span, identifier: $2?, member_list: $4? })
+        Ok(Node::ClassDeclaration { identifier: $2?, member_list: $4? })
     }
     ;
 
-ClassDeclarationInternal -> Result<Vec<Box<Node>>, ()>:
+ClassDeclarationInternal -> Result<Vec<Box<Node<'input>>>, ()>:
       ClassMemberDeclaration { Ok(vec![Box::new($1?)]) }
     | ClassDeclarationInternal ClassMemberDeclaration {
         flatten($1, Box::new($2?))
     }
     ;
 
-ClassMemberDeclaration -> Result<Node, ()>:
-    MethodSignature FunctionBody {
-        Ok(Node::FunctionDeclaration { span: $span, signature: $1?, body: Box::new($2?) })
+ClassMemberDeclaration -> Result<Node<'input>, ()>:
+      Declaration ";" { $1 }
+    | MethodSignature FunctionBody {
+        Ok(Node::FunctionDeclaration { signature: $1?, body: Box::new($2?) })
     }
     ;
 
-MethodSignature -> Result<FunctionSignature, ()>:
+MethodSignature -> Result<FunctionSignature<'input>, ()>:
     FunctionSignature { $1 }
+    ;
+
+Declaration -> Result<Node<'input>, ()>:
+      "var" InitializedIdentifierList {
+        Ok(Node::VariableDeclarationList { decl_list: $2? }) 
+    }
+    | Type InitializedIdentifierList {
+        Ok(Node::VariableDeclarationList { decl_list: $2? }) 
+    }
+    | "late" "var" InitializedIdentifierList {
+        Ok(Node::VariableDeclarationList { decl_list: $3? }) 
+    }
+    | "late" Type InitializedIdentifierList {
+        Ok(Node::VariableDeclarationList { decl_list: $3? }) 
+    }
+    | "final" InitializedIdentifierList {
+        Ok(Node::VariableDeclarationList { decl_list: $2? }) 
+    }
+    | "final" Type InitializedIdentifierList {
+        Ok(Node::VariableDeclarationList { decl_list: $3? }) 
+    }
+    | "late" "final" InitializedIdentifierList {
+        Ok(Node::VariableDeclarationList { decl_list: $3? }) 
+    }
+    | "late" "final" Type InitializedIdentifierList {
+        Ok(Node::VariableDeclarationList { decl_list: $4? }) 
+    }
     ;
 
 //----------------------------------------------------------------------
 //-----------------------------Expressions--------------------------------
 //----------------------------------------------------------------------
-Expression -> Result<Node, ()>:
+Expression -> Result<Node<'input>, ()>:
       SelectorExpression AssignmentOperator Expression {
-        Ok(Node::AssignmentExpression { span: $span, operator: $2?, left: Box::new($1?), right: Box::new($3?) })
+        Ok(Node::AssignmentExpression { operator: $2?, left: Box::new($1?), right: Box::new($3?) })
     }
     | ThrowExpression { $1 }
     | ConditionalExpression { $1 }
     ;
 
-ExpressionOpt -> Result<Option<Box<Node>>, ()>:
+ExpressionOpt -> Result<Option<Box<Node<'input>>>, ()>:
       %empty { Ok(None) }
     | Expression { Ok(Some(Box::new($1?))) }
     ;
 
-ExpressionNotBrace -> Result<Node, ()>:
+ExpressionNotBrace -> Result<Node<'input>, ()>:
       SelectorExpressionNotBrace AssignmentOperator Expression {
-        Ok(Node::AssignmentExpression { span: $span, operator: $2?, left: Box::new($1?), right: Box::new($3?) })
+        Ok(Node::AssignmentExpression { operator: $2?, left: Box::new($1?), right: Box::new($3?) })
     }
     | ThrowExpression { $1 }
     | ConditionalExpressionNotBrace { $1 }
@@ -244,14 +272,14 @@ AssignmentOperator -> Result<&'static str, ()>:
     | "??=" { Ok("??=") }
     ;
 
-ExpressionList -> Result<Vec<Box<Node>>, ()>:
+ExpressionList -> Result<Vec<Box<Node<'input>>>, ()>:
       ExpressionList "," Expression { 
         flatten($1, Box::new($3?))
     }
     | Expression { Ok(vec![Box::new($1?)]) }
     ;
 
-ExpressionListOpt -> Result<Option<Vec<Box<Node>>>, ()>:
+ExpressionListOpt -> Result<Option<Vec<Box<Node<'input>>>>, ()>:
       %empty { Ok(None) }
     | ExpressionList { Ok(Some($1?)) }
     ;
@@ -261,479 +289,484 @@ CommaOpt -> Result<(), ()>:
     | "," { Ok(()) }
     ;
 
-Primary -> Result<Node, ()>:
+Primary -> Result<Node<'input>, ()>:
       '(' Expression ')' { $2 }
+    | ThisExpression { $1 }
     | Literal { $1 }
     | Identifier { Ok(Node::IdentifierNode { identifier: $1? }) }
     ;
 
-PrimaryNotBrace -> Result<Node, ()>:
+PrimaryNotBrace -> Result<Node<'input>, ()>:
       '(' Expression ')' { $2 }
     | LiteralNotBrace { $1 }
     | Identifier { Ok(Node::IdentifierNode { identifier: $1? }) }
     ;
 
-Identifier -> Result<Identifier, ()>:
-    'IDENTIFIER' { Ok(Identifier { span: $span }) }
+Identifier -> Result<Identifier<'input>, ()>:
+    'IDENTIFIER' { Ok(Identifier { value: $lexer.span_str($span) }) }
     ;
 
-Literal -> Result<Node, ()>:
-      'NUMBER' { Ok(Node::NumericLiteral { span: $span }) }
-    | StringLiteralList { Ok(Node::StringLiteral { span: $span, literal_list: $1? }) }
+Literal -> Result<Node<'input>, ()>:
+      'NUMBER' { Ok(Node::NumericLiteral { value: $lexer.span_str($span) }) }
+    | StringLiteralList { Ok(Node::StringLiteral { literal_list: $1? }) }
     | ListLiteral { $1 }
     | SetOrMapLiteral { $1 }
-    | 'BOOLEAN' { Ok(Node::BooleanLiteral { span: $span }) }
-    | 'NULL' { Ok(Node::NullLiteral { span: $span }) }
+    | 'BOOLEAN' { Ok(Node::BooleanLiteral { value: $lexer.span_str($span) }) }
+    | 'NULL' { Ok(Node::NullLiteral) }
     ;
 
-LiteralNotBrace -> Result<Node, ()>:
-      'NUMBER' { Ok(Node::NumericLiteral { span: $span }) }
-    | StringLiteralList { Ok(Node::StringLiteral { span: $span, literal_list: $1? }) }
+LiteralNotBrace -> Result<Node<'input>, ()>:
+      'NUMBER' { Ok(Node::NumericLiteral { value: $lexer.span_str($span) }) }
+    | StringLiteralList { Ok(Node::StringLiteral { literal_list: $1? }) }
     | ListLiteral { $1 }
-    | 'BOOLEAN' { Ok(Node::BooleanLiteral { span: $span }) }
-    | 'NULL' { Ok(Node::NullLiteral { span: $span }) }
+    | 'BOOLEAN' { Ok(Node::BooleanLiteral { value: $lexer.span_str($span) }) }
+    | 'NULL' { Ok(Node::NullLiteral) }
     ;
 
-StringLiteralList -> Result<Vec<Span>, ()>:
+StringLiteralList -> Result<Vec<&'input str>, ()>:
       StringLiteralList "STRING" { 
         match $2 {
-            Ok(v) => flatten($1, v.span()),
+            Ok(v) => flatten($1, $lexer.span_str(v.span())),
             Err(_) => Err(())
         }
     }
     | "STRING" { 
         match $1 {
-            Ok(v) => Ok(vec![v.span()]),
+            Ok(v) => Ok(vec![$lexer.span_str(v.span())]),
             Err(_) => Err(())
         }
     }
     ;
 
-ListLiteral -> Result<Node, ()>:
+ListLiteral -> Result<Node<'input>, ()>:
       "[" "]" {
-        Ok(Node::ListLiteral { span: $span, element_list: vec![] })
+        Ok(Node::ListLiteral { element_list: vec![] })
     }
     | "const" "[" "]" {
-        Ok(Node::ListLiteral { span: $span, element_list: vec![] })
+        Ok(Node::ListLiteral { element_list: vec![] })
     }
     | "[" ElementList CommaOpt "]" {
-        Ok(Node::ListLiteral { span: $span, element_list: $2? })
+        Ok(Node::ListLiteral { element_list: $2? })
     }
     | "const" "[" ElementList CommaOpt "]" {
-        Ok(Node::ListLiteral { span: $span, element_list: $3? })
+        Ok(Node::ListLiteral { element_list: $3? })
     }
     | TypeArguments "[" "]" {
-        Ok(Node::ListLiteral { span: $span, element_list: vec![] })
+        Ok(Node::ListLiteral { element_list: vec![] })
     }
     | "const" TypeArguments "[" "]" {
-        Ok(Node::ListLiteral { span: $span, element_list: vec![] })
+        Ok(Node::ListLiteral { element_list: vec![] })
     }
     | TypeArguments "[" ElementList CommaOpt "]" {
-        Ok(Node::ListLiteral { span: $span, element_list: $3? })
+        Ok(Node::ListLiteral { element_list: $3? })
     }
     | "const" TypeArguments "[" ElementList CommaOpt "]" {
-        Ok(Node::ListLiteral { span: $span, element_list: $4? })
+        Ok(Node::ListLiteral { element_list: $4? })
     }
     ;
 
-SetOrMapLiteral -> Result<Node, ()>:
+SetOrMapLiteral -> Result<Node<'input>, ()>:
       "{" "}" {
-        Ok(Node::SetOrMapLiteral { span: $span, element_list: vec![] })
+        Ok(Node::SetOrMapLiteral { element_list: vec![] })
     }
     | "const" "{" "}" {
-        Ok(Node::SetOrMapLiteral { span: $span, element_list: vec![] })
+        Ok(Node::SetOrMapLiteral { element_list: vec![] })
     }
     | "{" ElementList CommaOpt "}" {
-        Ok(Node::SetOrMapLiteral { span: $span, element_list: $2? })
+        Ok(Node::SetOrMapLiteral { element_list: $2? })
     }
     | "const" "{" ElementList CommaOpt "}" {
-        Ok(Node::SetOrMapLiteral { span: $span, element_list: $3? })
+        Ok(Node::SetOrMapLiteral { element_list: $3? })
     }
     | TypeArguments "{" "}" {
-        Ok(Node::SetOrMapLiteral { span: $span, element_list: vec![] })
+        Ok(Node::SetOrMapLiteral { element_list: vec![] })
     }
     | "const" TypeArguments "{" "}" {
-        Ok(Node::SetOrMapLiteral { span: $span, element_list: vec![] })
+        Ok(Node::SetOrMapLiteral { element_list: vec![] })
     }
     | TypeArguments "{" ElementList CommaOpt "}" {
-        Ok(Node::SetOrMapLiteral { span: $span, element_list: $3? })
+        Ok(Node::SetOrMapLiteral { element_list: $3? })
     }
     | "const" TypeArguments "{" ElementList CommaOpt "}" {
-        Ok(Node::SetOrMapLiteral { span: $span, element_list: $4? })
+        Ok(Node::SetOrMapLiteral { element_list: $4? })
     }
     ;
 
-ElementList -> Result<Vec<CollectionElement>, ()>:
+ElementList -> Result<Vec<CollectionElement<'input>>, ()>:
       Element { Ok(vec![$1?]) }
     | ElementList "," Element { flatten($1, $3?) }
     ;
 
-Element -> Result<CollectionElement, ()>:
+Element -> Result<CollectionElement<'input>, ()>:
       ExpressionElement { $1 }
     | MapElement { $1 }
     ;
 
-ExpressionElement -> Result<CollectionElement, ()>:
+ExpressionElement -> Result<CollectionElement<'input>, ()>:
     Expression {
         Ok(CollectionElement::ExpressionElement { expr: Box::new($1?) })
     }
     ;
 
-MapElement -> Result<CollectionElement, ()>:
+MapElement -> Result<CollectionElement<'input>, ()>:
     Expression ":" Expression {
         Ok(CollectionElement::MapElement { key_expr: Box::new($1?), value_expr: Box::new($3?) })
     }
     ;
 
-ThrowExpression -> Result<Node, ()>:
+ThrowExpression -> Result<Node<'input>, ()>:
     "throw" Expression {
-        Ok(Node::ThrowExpression { span: $span, expr: Box::new($2?) })
+        Ok(Node::ThrowExpression { expr: Box::new($2?) })
     }
     ;
 
-ConditionalExpression -> Result<Node, ()>:
+ThisExpression -> Result<Node<'input>, ()>:
+    "this" { Ok(Node::ThisExpression) }
+    ;
+
+ConditionalExpression -> Result<Node<'input>, ()>:
       IfNullExpression { $1 }
     | IfNullExpression "?" Expression ":" Expression {
-        Ok(Node::ConditionalExpression { span: $span, condition: Box::new($1?), if_true_expr: Box::new($3?), if_false_expr: Box::new($5?) })
+        Ok(Node::ConditionalExpression { condition: Box::new($1?), if_true_expr: Box::new($3?), if_false_expr: Box::new($5?) })
     }
     ;
 
-ConditionalExpressionNotBrace -> Result<Node, ()>:
+ConditionalExpressionNotBrace -> Result<Node<'input>, ()>:
       IfNullExpressionNotBrace { $1 }
     | IfNullExpressionNotBrace "?" Expression ":" Expression {
-        Ok(Node::ConditionalExpression { span: $span, condition: Box::new($1?), if_true_expr: Box::new($3?), if_false_expr: Box::new($5?) })
+        Ok(Node::ConditionalExpression { condition: Box::new($1?), if_true_expr: Box::new($3?), if_false_expr: Box::new($5?) })
     }
     ;
 
-IfNullExpression -> Result<Node, ()>:
+IfNullExpression -> Result<Node<'input>, ()>:
       LogicalOrExpression { $1 }
     | IfNullExpression "??" LogicalOrExpression{
-        Ok(Node::BinaryExpression { span: $span, operator: "??", left: Box::new($1?), right: Box::new($3?) })
+        Ok(Node::BinaryExpression { operator: "??", left: Box::new($1?), right: Box::new($3?) })
     }
     ;
 
-IfNullExpressionNotBrace -> Result<Node, ()>:
+IfNullExpressionNotBrace -> Result<Node<'input>, ()>:
       LogicalOrExpressionNotBrace { $1 }
     | IfNullExpressionNotBrace "??" LogicalOrExpression{
-        Ok(Node::BinaryExpression { span: $span, operator: "??", left: Box::new($1?), right: Box::new($3?) })
+        Ok(Node::BinaryExpression { operator: "??", left: Box::new($1?), right: Box::new($3?) })
     }
     ;
 
-LogicalOrExpression -> Result<Node, ()>:
+LogicalOrExpression -> Result<Node<'input>, ()>:
       LogicalAndExpression { $1 }
     | LogicalOrExpression "||" LogicalAndExpression{
-        Ok(Node::BinaryExpression { span: $span, operator: "||", left: Box::new($1?), right: Box::new($3?) })
+        Ok(Node::BinaryExpression { operator: "||", left: Box::new($1?), right: Box::new($3?) })
     }
     ;
 
-LogicalOrExpressionNotBrace -> Result<Node, ()>:
+LogicalOrExpressionNotBrace -> Result<Node<'input>, ()>:
       LogicalAndExpressionNotBrace { $1 }
     | LogicalOrExpressionNotBrace "||" LogicalAndExpression{
-        Ok(Node::BinaryExpression { span: $span, operator: "||", left: Box::new($1?), right: Box::new($3?) })
+        Ok(Node::BinaryExpression { operator: "||", left: Box::new($1?), right: Box::new($3?) })
     }
     ;
 
-LogicalAndExpression -> Result<Node, ()>:
+LogicalAndExpression -> Result<Node<'input>, ()>:
       EqualityExpression { $1 }
     | LogicalAndExpression "&&" EqualityExpression{
-        Ok(Node::BinaryExpression { span: $span, operator: "&&", left: Box::new($1?), right: Box::new($3?) })
+        Ok(Node::BinaryExpression { operator: "&&", left: Box::new($1?), right: Box::new($3?) })
     }
     ;
 
-LogicalAndExpressionNotBrace -> Result<Node, ()>:
+LogicalAndExpressionNotBrace -> Result<Node<'input>, ()>:
       EqualityExpressionNotBrace { $1 }
     | LogicalAndExpressionNotBrace "&&" EqualityExpression{
-        Ok(Node::BinaryExpression { span: $span, operator: "&&", left: Box::new($1?), right: Box::new($3?) })
+        Ok(Node::BinaryExpression { operator: "&&", left: Box::new($1?), right: Box::new($3?) })
     }
     ;
 
-EqualityExpression -> Result<Node, ()>:
+EqualityExpression -> Result<Node<'input>, ()>:
       RelationalExpression "==" RelationalExpression {
-        Ok(Node::BinaryExpression { span: $span, operator: "==", left: Box::new($1?), right: Box::new($3?) })
+        Ok(Node::BinaryExpression { operator: "==", left: Box::new($1?), right: Box::new($3?) })
     }
     | RelationalExpression "!=" RelationalExpression {
-        Ok(Node::BinaryExpression { span: $span, operator: "!=", left: Box::new($1?), right: Box::new($3?) })
+        Ok(Node::BinaryExpression { operator: "!=", left: Box::new($1?), right: Box::new($3?) })
     }
     | RelationalExpression { $1 }
     ;
 
-EqualityExpressionNotBrace -> Result<Node, ()>:
+EqualityExpressionNotBrace -> Result<Node<'input>, ()>:
       RelationalExpressionNotBrace "==" RelationalExpression {
-        Ok(Node::BinaryExpression { span: $span, operator: "==", left: Box::new($1?), right: Box::new($3?) })
+        Ok(Node::BinaryExpression { operator: "==", left: Box::new($1?), right: Box::new($3?) })
     }
     | RelationalExpressionNotBrace "!=" RelationalExpression {
-        Ok(Node::BinaryExpression { span: $span, operator: "!=", left: Box::new($1?), right: Box::new($3?) })
+        Ok(Node::BinaryExpression { operator: "!=", left: Box::new($1?), right: Box::new($3?) })
     }
     | RelationalExpressionNotBrace { $1 }
     ;
 
-RelationalExpression -> Result<Node, ()>:
+RelationalExpression -> Result<Node<'input>, ()>:
       BitwiseOrExpression ">=" BitwiseOrExpression {
-        Ok(Node::BinaryExpression { span: $span, operator: ">=", left: Box::new($1?), right: Box::new($3?) })
+        Ok(Node::BinaryExpression { operator: ">=", left: Box::new($1?), right: Box::new($3?) })
     }
     | BitwiseOrExpression ">" BitwiseOrExpression {
-        Ok(Node::BinaryExpression { span: $span, operator: ">", left: Box::new($1?), right: Box::new($3?) })
+        Ok(Node::BinaryExpression { operator: ">", left: Box::new($1?), right: Box::new($3?) })
     }
     | BitwiseOrExpression "<=" BitwiseOrExpression {
-        Ok(Node::BinaryExpression { span: $span, operator: "<=", left: Box::new($1?), right: Box::new($3?) })
+        Ok(Node::BinaryExpression { operator: "<=", left: Box::new($1?), right: Box::new($3?) })
     }
     | BitwiseOrExpression "<" BitwiseOrExpression {
-        Ok(Node::BinaryExpression { span: $span, operator: "<", left: Box::new($1?), right: Box::new($3?) })
+        Ok(Node::BinaryExpression { operator: "<", left: Box::new($1?), right: Box::new($3?) })
     }
     | BitwiseOrExpression TypeTest {
-        Ok(Node::TypeTestExpression { span: $span, child: Box::new($1?), type_test: $2? })
+        Ok(Node::TypeTestExpression { child: Box::new($1?), type_test: $2? })
     }
     | BitwiseOrExpression TypeCast {
-        Ok(Node::TypeCastExpression { span: $span, child: Box::new($1?), type_cast: $2? })
+        Ok(Node::TypeCastExpression { child: Box::new($1?), type_cast: $2? })
     }
     | BitwiseOrExpression { $1 }
     ;
 
-RelationalExpressionNotBrace -> Result<Node, ()>:
+RelationalExpressionNotBrace -> Result<Node<'input>, ()>:
       BitwiseOrExpressionNotBrace ">=" BitwiseOrExpression {
-        Ok(Node::BinaryExpression { span: $span, operator: ">=", left: Box::new($1?), right: Box::new($3?) })
+        Ok(Node::BinaryExpression { operator: ">=", left: Box::new($1?), right: Box::new($3?) })
     }
     | BitwiseOrExpressionNotBrace ">" BitwiseOrExpression {
-        Ok(Node::BinaryExpression { span: $span, operator: ">", left: Box::new($1?), right: Box::new($3?) })
+        Ok(Node::BinaryExpression { operator: ">", left: Box::new($1?), right: Box::new($3?) })
     }
     | BitwiseOrExpressionNotBrace "<=" BitwiseOrExpression {
-        Ok(Node::BinaryExpression { span: $span, operator: "<=", left: Box::new($1?), right: Box::new($3?) })
+        Ok(Node::BinaryExpression { operator: "<=", left: Box::new($1?), right: Box::new($3?) })
     }
     | BitwiseOrExpressionNotBrace "<" BitwiseOrExpression {
-        Ok(Node::BinaryExpression { span: $span, operator: "<", left: Box::new($1?), right: Box::new($3?) })
+        Ok(Node::BinaryExpression { operator: "<", left: Box::new($1?), right: Box::new($3?) })
     }
     | BitwiseOrExpressionNotBrace TypeTest {
-        Ok(Node::TypeTestExpression { span: $span, child: Box::new($1?), type_test: $2? })
+        Ok(Node::TypeTestExpression { child: Box::new($1?), type_test: $2? })
     }
     | BitwiseOrExpressionNotBrace TypeCast {
-        Ok(Node::TypeCastExpression { span: $span, child: Box::new($1?), type_cast: $2? })
+        Ok(Node::TypeCastExpression { child: Box::new($1?), type_cast: $2? })
     }
     | BitwiseOrExpressionNotBrace { $1 }
     ;
 
-BitwiseOrExpression -> Result<Node, ()>:
+BitwiseOrExpression -> Result<Node<'input>, ()>:
       BitwiseOrExpression "|" BitwiseXorExpression {
-        Ok(Node::BinaryExpression { span: $span, operator: "|", left: Box::new($1?), right: Box::new($3?) })
+        Ok(Node::BinaryExpression { operator: "|", left: Box::new($1?), right: Box::new($3?) })
     }
     | BitwiseXorExpression { $1 }
     ;
 
-BitwiseOrExpressionNotBrace -> Result<Node, ()>:
+BitwiseOrExpressionNotBrace -> Result<Node<'input>, ()>:
       BitwiseOrExpressionNotBrace "|" BitwiseXorExpression {
-        Ok(Node::BinaryExpression { span: $span, operator: "|", left: Box::new($1?), right: Box::new($3?) })
+        Ok(Node::BinaryExpression { operator: "|", left: Box::new($1?), right: Box::new($3?) })
     }
     | BitwiseXorExpressionNotBrace { $1 }
     ;
 
-BitwiseXorExpression -> Result<Node, ()>:
+BitwiseXorExpression -> Result<Node<'input>, ()>:
       BitwiseXorExpression "^" BitwiseAndExpression {
-        Ok(Node::BinaryExpression { span: $span, operator: "^", left: Box::new($1?), right: Box::new($3?) })
+        Ok(Node::BinaryExpression { operator: "^", left: Box::new($1?), right: Box::new($3?) })
     }
     | BitwiseAndExpression { $1 }
     ;
 
-BitwiseXorExpressionNotBrace -> Result<Node, ()>:
+BitwiseXorExpressionNotBrace -> Result<Node<'input>, ()>:
       BitwiseXorExpressionNotBrace "^" BitwiseAndExpression {
-        Ok(Node::BinaryExpression { span: $span, operator: "^", left: Box::new($1?), right: Box::new($3?) })
+        Ok(Node::BinaryExpression { operator: "^", left: Box::new($1?), right: Box::new($3?) })
     }
     | BitwiseAndExpressionNotBrace { $1 }
     ;
 
-BitwiseAndExpression -> Result<Node, ()>:
+BitwiseAndExpression -> Result<Node<'input>, ()>:
       BitwiseAndExpression "&" ShiftExpression {
-        Ok(Node::BinaryExpression { span: $span, operator: "&", left: Box::new($1?), right: Box::new($3?) })
+        Ok(Node::BinaryExpression { operator: "&", left: Box::new($1?), right: Box::new($3?) })
     }
     | ShiftExpression { $1 }
     ;
 
-BitwiseAndExpressionNotBrace -> Result<Node, ()>:
+BitwiseAndExpressionNotBrace -> Result<Node<'input>, ()>:
       BitwiseAndExpressionNotBrace "&" ShiftExpression {
-        Ok(Node::BinaryExpression { span: $span, operator: "&", left: Box::new($1?), right: Box::new($3?) })
+        Ok(Node::BinaryExpression { operator: "&", left: Box::new($1?), right: Box::new($3?) })
     }
     | ShiftExpressionNotBrace { $1 }
     ;
 
-ShiftExpression -> Result<Node, ()>:
+ShiftExpression -> Result<Node<'input>, ()>:
       ShiftExpression "<<" AdditiveExpression {
-        Ok(Node::BinaryExpression { span: $span, operator: "<<", left: Box::new($1?), right: Box::new($3?) })
+        Ok(Node::BinaryExpression { operator: "<<", left: Box::new($1?), right: Box::new($3?) })
     }
     | ShiftExpression ">>" AdditiveExpression {
-        Ok(Node::BinaryExpression { span: $span, operator: ">>", left: Box::new($1?), right: Box::new($3?) })
+        Ok(Node::BinaryExpression { operator: ">>", left: Box::new($1?), right: Box::new($3?) })
     }
     | AdditiveExpression { $1 }
     ;
 
-ShiftExpressionNotBrace -> Result<Node, ()>:
+ShiftExpressionNotBrace -> Result<Node<'input>, ()>:
       ShiftExpressionNotBrace "<<" AdditiveExpression {
-        Ok(Node::BinaryExpression { span: $span, operator: "<<", left: Box::new($1?), right: Box::new($3?) })
+        Ok(Node::BinaryExpression { operator: "<<", left: Box::new($1?), right: Box::new($3?) })
     }
     | ShiftExpressionNotBrace ">>" AdditiveExpression {
-        Ok(Node::BinaryExpression { span: $span, operator: ">>", left: Box::new($1?), right: Box::new($3?) })
+        Ok(Node::BinaryExpression { operator: ">>", left: Box::new($1?), right: Box::new($3?) })
     }
     | AdditiveExpressionNotBrace { $1 }
     ;
 
-AdditiveExpression -> Result<Node, ()>:
+AdditiveExpression -> Result<Node<'input>, ()>:
       AdditiveExpression '+' MultiplicativeExpression { 
-        Ok(Node::BinaryExpression { span: $span, operator: "+", left: Box::new($1?), right: Box::new($3?) })
+        Ok(Node::BinaryExpression { operator: "+", left: Box::new($1?), right: Box::new($3?) })
     }
     | AdditiveExpression '-' MultiplicativeExpression { 
-        Ok(Node::BinaryExpression { span: $span, operator: "-", left: Box::new($1?), right: Box::new($3?) })
+        Ok(Node::BinaryExpression { operator: "-", left: Box::new($1?), right: Box::new($3?) })
     }
     | MultiplicativeExpression { $1 }
     ;
 
-AdditiveExpressionNotBrace -> Result<Node, ()>:
+AdditiveExpressionNotBrace -> Result<Node<'input>, ()>:
       AdditiveExpressionNotBrace '+' MultiplicativeExpression { 
-        Ok(Node::BinaryExpression { span: $span, operator: "+", left: Box::new($1?), right: Box::new($3?) })
+        Ok(Node::BinaryExpression { operator: "+", left: Box::new($1?), right: Box::new($3?) })
     }
     | AdditiveExpressionNotBrace '-' MultiplicativeExpression { 
-        Ok(Node::BinaryExpression { span: $span, operator: "-", left: Box::new($1?), right: Box::new($3?) })
+        Ok(Node::BinaryExpression { operator: "-", left: Box::new($1?), right: Box::new($3?) })
     }
     | MultiplicativeExpressionNotBrace { $1 }
     ;
 
-MultiplicativeExpression -> Result<Node, ()>:
+MultiplicativeExpression -> Result<Node<'input>, ()>:
       MultiplicativeExpression '*' Primary { 
-        Ok(Node::BinaryExpression { span: $span, operator: "*", left: Box::new($1?), right: Box::new($3?) })
+        Ok(Node::BinaryExpression { operator: "*", left: Box::new($1?), right: Box::new($3?) })
     }
     | MultiplicativeExpression '/' Primary { 
-        Ok(Node::BinaryExpression { span: $span, operator: "/", left: Box::new($1?), right: Box::new($3?) })
+        Ok(Node::BinaryExpression { operator: "/", left: Box::new($1?), right: Box::new($3?) })
     }
     | MultiplicativeExpression '%' Primary { 
-        Ok(Node::BinaryExpression { span: $span, operator: "%", left: Box::new($1?), right: Box::new($3?) })
+        Ok(Node::BinaryExpression { operator: "%", left: Box::new($1?), right: Box::new($3?) })
     }
     | MultiplicativeExpression '~/' Primary { 
-        Ok(Node::BinaryExpression { span: $span, operator: "~/", left: Box::new($1?), right: Box::new($3?) })
+        Ok(Node::BinaryExpression { operator: "~/", left: Box::new($1?), right: Box::new($3?) })
     }
     | UnaryExpression { $1 }
     ;
 
-MultiplicativeExpressionNotBrace -> Result<Node, ()>:
+MultiplicativeExpressionNotBrace -> Result<Node<'input>, ()>:
       MultiplicativeExpressionNotBrace '*' Primary { 
-        Ok(Node::BinaryExpression { span: $span, operator: "*", left: Box::new($1?), right: Box::new($3?) })
+        Ok(Node::BinaryExpression { operator: "*", left: Box::new($1?), right: Box::new($3?) })
     }
     | MultiplicativeExpressionNotBrace '/' Primary { 
-        Ok(Node::BinaryExpression { span: $span, operator: "/", left: Box::new($1?), right: Box::new($3?) })
+        Ok(Node::BinaryExpression { operator: "/", left: Box::new($1?), right: Box::new($3?) })
     }
     | MultiplicativeExpressionNotBrace '%' Primary { 
-        Ok(Node::BinaryExpression { span: $span, operator: "%", left: Box::new($1?), right: Box::new($3?) })
+        Ok(Node::BinaryExpression { operator: "%", left: Box::new($1?), right: Box::new($3?) })
     }
     | MultiplicativeExpressionNotBrace '~/' Primary { 
-        Ok(Node::BinaryExpression { span: $span, operator: "~/", left: Box::new($1?), right: Box::new($3?) })
+        Ok(Node::BinaryExpression { operator: "~/", left: Box::new($1?), right: Box::new($3?) })
     }
     | UnaryExpressionNotBrace { $1 }
     ;
 
-UnaryExpression -> Result<Node, ()>:
+UnaryExpression -> Result<Node<'input>, ()>:
       "-" UnaryExpression {
-        Ok(Node::UnaryOpExpression { span: $span, operator: "-", child: Box::new($2?) })
+        Ok(Node::UnaryOpExpression { operator: "-", child: Box::new($2?) })
     }
     | "!" UnaryExpression {
-        Ok(Node::UnaryOpExpression { span: $span, operator: "!", child: Box::new($2?) })
+        Ok(Node::UnaryOpExpression { operator: "!", child: Box::new($2?) })
     }
     | "~" UnaryExpression {
-        Ok(Node::UnaryOpExpression { span: $span, operator: "~", child: Box::new($2?) })
+        Ok(Node::UnaryOpExpression { operator: "~", child: Box::new($2?) })
     }
     | "++" SelectorExpression {
-        Ok(Node::UpdateExpression { span: $span, operator: "++", is_prefix: true, child: Box::new($2?) })
+        Ok(Node::UpdateExpression { operator: "++", is_prefix: true, child: Box::new($2?) })
     }
     | "--" SelectorExpression {
-        Ok(Node::UpdateExpression { span: $span, operator: "--", is_prefix: true, child: Box::new($2?) })
+        Ok(Node::UpdateExpression { operator: "--", is_prefix: true, child: Box::new($2?) })
     }
     | PostfixExpression { $1 }
     ;
 
-UnaryExpressionNotBrace -> Result<Node, ()>:
+UnaryExpressionNotBrace -> Result<Node<'input>, ()>:
       "-" UnaryExpression {
-        Ok(Node::UnaryOpExpression { span: $span, operator: "-", child: Box::new($2?) })
+        Ok(Node::UnaryOpExpression { operator: "-", child: Box::new($2?) })
     }
     | "!" UnaryExpression {
-        Ok(Node::UnaryOpExpression { span: $span, operator: "!", child: Box::new($2?) })
+        Ok(Node::UnaryOpExpression { operator: "!", child: Box::new($2?) })
     }
     | "~" UnaryExpression {
-        Ok(Node::UnaryOpExpression { span: $span, operator: "~", child: Box::new($2?) })
+        Ok(Node::UnaryOpExpression { operator: "~", child: Box::new($2?) })
     }
     | "++" SelectorExpression {
-        Ok(Node::UpdateExpression { span: $span, operator: "++", is_prefix: true, child: Box::new($2?) })
+        Ok(Node::UpdateExpression { operator: "++", is_prefix: true, child: Box::new($2?) })
     }
     | "--" SelectorExpression {
-        Ok(Node::UpdateExpression { span: $span, operator: "--", is_prefix: true, child: Box::new($2?) })
+        Ok(Node::UpdateExpression { operator: "--", is_prefix: true, child: Box::new($2?) })
     }
     | PostfixExpressionNotBrace { $1 }
     ;
 
-PostfixExpression -> Result<Node, ()>:
+PostfixExpression -> Result<Node<'input>, ()>:
       SelectorExpression { $1 }
     | Primary "++" {
-        Ok(Node::UpdateExpression { span: $span, operator: "++", is_prefix: false, child: Box::new($1?) })
+        Ok(Node::UpdateExpression { operator: "++", is_prefix: false, child: Box::new($1?) })
     }
     | Primary "--" {
-        Ok(Node::UpdateExpression { span: $span, operator: "--", is_prefix: false, child: Box::new($1?) })
+        Ok(Node::UpdateExpression { operator: "--", is_prefix: false, child: Box::new($1?) })
     }
     ;
 
-PostfixExpressionNotBrace -> Result<Node, ()>:
+PostfixExpressionNotBrace -> Result<Node<'input>, ()>:
       SelectorExpressionNotBrace { $1 }
     | PrimaryNotBrace "++" {
-        Ok(Node::UpdateExpression { span: $span, operator: "++", is_prefix: false, child: Box::new($1?) })
+        Ok(Node::UpdateExpression { operator: "++", is_prefix: false, child: Box::new($1?) })
     }
     | PrimaryNotBrace "--" {
-        Ok(Node::UpdateExpression { span: $span, operator: "--", is_prefix: false, child: Box::new($1?) })
+        Ok(Node::UpdateExpression { operator: "--", is_prefix: false, child: Box::new($1?) })
     }
     ;
 
-SelectorExpression -> Result<Node, ()>:
+SelectorExpression -> Result<Node<'input>, ()>:
       Primary { $1 }
     | SelectorExpression Selector {
-        Ok(Node::SelectorExpression { span: $span, child: Box::new($1?), selector: $2? })
+        Ok(Node::SelectorExpression { child: Box::new($1?), selector: $2? })
     }
     ;
 
-SelectorExpressionNotBrace -> Result<Node, ()>:
+SelectorExpressionNotBrace -> Result<Node<'input>, ()>:
       PrimaryNotBrace { $1 }
     | SelectorExpressionNotBrace Selector {
-        Ok(Node::SelectorExpression { span: $span, child: Box::new($1?), selector: $2? })
+        Ok(Node::SelectorExpression { child: Box::new($1?), selector: $2? })
     }
     ;
 
-Selector -> Result<Selector, ()>:
+Selector -> Result<Selector<'input>, ()>:
       Arguments { 
-        Ok(Selector::Args { span: $span, args: Box::new($1?) })
+        Ok(Selector::Args { args: Box::new($1?) })
     }
     | "." Identifier { 
-        Ok(Selector::Attr { span: $span, identifier: $2? }) 
+        Ok(Selector::Attr { identifier: $2? }) 
     }
     | "." Identifier Arguments {
-        Ok(Selector::Method { span: $span, identifier: $2?, arguments: Box::new($3?) })
+        Ok(Selector::Method { identifier: $2?, arguments: Box::new($3?) })
     }
     | "[" Expression "]" {
-        Ok(Selector::Index { span: $span, expr: Box::new($2?) })
+        Ok(Selector::Index { expr: Box::new($2?) })
     }
     ;
 
-//ArgumentPart -> Result<Node, ()>:
+//ArgumentPart -> Result<Node<'input>, ()>:
 //      Arguments { $1 }
 //    | TypeArguments Arguments { $2 }
 //    ;
 
-Arguments -> Result<Node, ()>:
-      "(" ")" { Ok(Node::Arguments { span: $span, children: vec![] }) }
-    | "(" ArgumentList CommaOpt ")" { Ok(Node::Arguments { span: $span, children: $2? }) }
+Arguments -> Result<Node<'input>, ()>:
+      "(" ")" { Ok(Node::Arguments { children: vec![] }) }
+    | "(" ArgumentList CommaOpt ")" { Ok(Node::Arguments { children: $2? }) }
     ;
 
-ArgumentList -> Result<Vec<CallParameter>, ()>:
+ArgumentList -> Result<Vec<CallParameter<'input>>, ()>:
       NamedArgument { Ok(vec![$1?]) }
     | NormalArgument { Ok(vec![$1?]) }
     | ArgumentList "," NamedArgument { flatten($1, $3?) }
     | ArgumentList "," NormalArgument { flatten($1, $3?) }
     ;
 
-NamedArgument -> Result<CallParameter, ()>:
+NamedArgument -> Result<CallParameter<'input>, ()>:
     Label Expression { Ok(CallParameter { identifier: Some($1?), expr: Box::new($2?) }) }
     ;
 
-NormalArgument -> Result<CallParameter, ()>:
+NormalArgument -> Result<CallParameter<'input>, ()>:
       Expression { Ok(CallParameter { identifier: None, expr: Box::new($1?) }) }
     ;
 
@@ -759,12 +792,12 @@ NormalArgument -> Result<CallParameter, ()>:
 //     | TypeParameter
 //     | TypeParametersInternal , TypeParameter
 
-TypeTest -> Result<TypeTest, ()>:
+TypeTest -> Result<TypeTest<'input>, ()>:
       "is" TypeNotVoid { Ok(TypeTest { dart_type: $2?, check_matching: true }) }
     | "is" "!" TypeNotVoid { Ok(TypeTest { dart_type: $3?, check_matching: false }) }
     ;
 
-TypeCast -> Result<DartType, ()>:
+TypeCast -> Result<DartType<'input>, ()>:
     "as" TypeNotVoid { $2 }
     ;
 
@@ -773,19 +806,19 @@ TypeCast -> Result<DartType, ()>:
 //----------------------------------------------------------------------
 //----------------------------Statements--------------------------------
 //----------------------------------------------------------------------
-Statements -> Result<Vec<Box<Node>>, ()>:
+Statements -> Result<Vec<Box<Node<'input>>>, ()>:
       %empty { Ok(vec![]) }
     | Statements Statement { flatten($1, Box::new($2?)) }
     ;
 
-Statement -> Result<Node, ()>:
+Statement -> Result<Node<'input>, ()>:
       NonLabeledStatement { $1 }
     | Label NonLabeledStatement {
-        Ok(Node::LabeledStatement { span: $span, label: $1?, stmt: Box::new($2?) })
+        Ok(Node::LabeledStatement { label: $1?, stmt: Box::new($2?) })
     }
     ;
 
-NonLabeledStatement -> Result<Node, ()>:
+NonLabeledStatement -> Result<Node<'input>, ()>:
       BlockStatement { $1 }
     | LocalVariableDeclaration { $1 }
     | IfStatement { $1 }
@@ -799,105 +832,104 @@ NonLabeledStatement -> Result<Node, ()>:
     | ContinueStatement { $1 }
     | ReturnStatement { $1 }
     | ExpressionStatement { $1 }
-    | ";" { Ok(Node::EmptyStatement { span: $span }) }
+    | ";" { Ok(Node::EmptyStatement) }
     ;
 
-ExpressionStatement -> Result<Node, ()>:
-    ExpressionNotBrace ";" { Ok(Node::ExpressionStatement { span: $span, expr: Box::new($1?) }) }
+ExpressionStatement -> Result<Node<'input>, ()>:
+    ExpressionNotBrace ";" { Ok(Node::ExpressionStatement { expr: Box::new($1?) }) }
     ;
 
-LocalVariableDeclaration -> Result<Node, ()>:
+LocalVariableDeclaration -> Result<Node<'input>, ()>:
     InitializedVariableDeclaration ";" {
-        Ok(Node::VariableDeclarationList { span: $span, decl_list: $1? })
+        Ok(Node::VariableDeclarationList { decl_list: $1? })
     }
     ;
 
-IfStatement -> Result<Node, ()>:
-      "if" "(" Expression ")" Statement { Ok(Node::IfStatement { span: $span, condition: Box::new($3?), if_true_stmt: Box::new($5?), if_false_stmt: None }) }
-    | "if" "(" Expression ")" Statement "else" Statement { Ok(Node::IfStatement { span: $span, condition: Box::new($3?), if_true_stmt: Box::new($5?), if_false_stmt: Some(Box::new($7?)) }) }
+IfStatement -> Result<Node<'input>, ()>:
+      "if" "(" Expression ")" Statement { Ok(Node::IfStatement { condition: Box::new($3?), if_true_stmt: Box::new($5?), if_false_stmt: None }) }
+    | "if" "(" Expression ")" Statement "else" Statement { Ok(Node::IfStatement { condition: Box::new($3?), if_true_stmt: Box::new($5?), if_false_stmt: Some(Box::new($7?)) }) }
     ;
 
-ForStatement -> Result<Node, ()>:
+ForStatement -> Result<Node<'input>, ()>:
     "for" "(" ForLoopParts ")" Statement {
         let part = $3?;
-        Ok(Node::ForStatement { span: $span, init: part.0, condition: part.1, update: part.2, stmt: Box::new($5?) })
+        Ok(Node::ForStatement { init: part.0, condition: part.1, update: part.2, stmt: Box::new($5?) })
     }
     ;
 
-ForLoopParts -> Result<(Option<Box<Node>>,Option<Box<Node>>,Option<Vec<Box<Node>>>), ()>:
+ForLoopParts -> Result<(Option<Box<Node<'input>>>,Option<Box<Node<'input>>>,Option<Vec<Box<Node<'input>>>>), ()>:
       ForInitializerStatement ExpressionOpt ";" ExpressionListOpt {
         Ok(($1?, $2?, $4?))
       }
     ;
 
-ForInitializerStatement -> Result<Option<Box<Node>>, ()>:
+ForInitializerStatement -> Result<Option<Box<Node<'input>>>, ()>:
       LocalVariableDeclaration { Ok(Some(Box::new($1?))) }
     | ExpressionOpt ";" {
         match $1? {
-            Some(v) => Ok(Some(Box::new(Node::ExpressionStatement { span: $span, expr: v }))),
+            Some(v) => Ok(Some(Box::new(Node::ExpressionStatement { expr: v }))),
             None => Ok(None),
         }
      }
     ;
 
-WhileStatement -> Result<Node, ()>:
+WhileStatement -> Result<Node<'input>, ()>:
     "while" "(" Expression ")" Statement {
-        Ok(Node::WhileStatement { span: $span, condition: Box::new($3?), stmt: Box::new($5?) })
+        Ok(Node::WhileStatement { condition: Box::new($3?), stmt: Box::new($5?) })
     }
     ;
 
-DoStatement -> Result<Node, ()>:
+DoStatement -> Result<Node<'input>, ()>:
     "do" Statement "while" "(" Expression ")" ";" {
-        Ok(Node::DoStatement { span: $span, condition: Box::new($5?), stmt: Box::new($2?) })
+        Ok(Node::DoStatement { condition: Box::new($5?), stmt: Box::new($2?) })
     }
     ;
 
-SwitchStatement -> Result<Node, ()>:
+SwitchStatement -> Result<Node<'input>, ()>:
     "switch" "(" Expression ")" "{" SwitchCaseList DefaultCaseOpt "}" {
-        Ok(Node::SwitchStatement { span: $span, expr: Box::new($3?), case_list: $6?, default_case: $7? })
+        Ok(Node::SwitchStatement { expr: Box::new($3?), case_list: $6?, default_case: $7? })
     }
     ;
 
-SwitchCaseList -> Result<Vec<SwitchCase>, ()>:
+SwitchCaseList -> Result<Vec<SwitchCase<'input>>, ()>:
       %empty { Ok(vec![]) }
     | SwitchCaseList SwitchCase { flatten($1, $2?) }
     ;
 
-SwitchCase -> Result<SwitchCase, ()>:
+SwitchCase -> Result<SwitchCase<'input>, ()>:
       "case" Expression ":" Statements {
         Ok(SwitchCase { label_list: vec![], expr: Box::new($2?), stmt_list: $4? })
     }
     ;
 
-DefaultCase -> Result<DefaultCase, ()>:
+DefaultCase -> Result<DefaultCase<'input>, ()>:
       "default" ":" Statements {
         Ok(DefaultCase { label_list: vec![], stmt_list: $3? })
     }
     ;
 
-DefaultCaseOpt -> Result<Option<DefaultCase>, ()>:
+DefaultCaseOpt -> Result<Option<DefaultCase<'input>>, ()>:
       %empty { Ok(None) }
     | DefaultCase { Ok(Some($1?)) }
     ;
 
-RethrowStatement -> Result<Node, ()>:
+RethrowStatement -> Result<Node<'input>, ()>:
     "rethrow" ";" {
-        Ok(Node::RethrowStatement { span: $span })
+        Ok(Node::RethrowStatement)
     }
     ;
 
-TryStatement -> Result<Node, ()>:
+TryStatement -> Result<Node<'input>, ()>:
       "try" BlockStatement FinallyPart {
-        Ok(Node::TryFinallyStatement { span: $span, block_try: Box::new($2?), block_finally: Box::new($3?) })
+        Ok(Node::TryFinallyStatement { block_try: Box::new($2?), block_finally: Box::new($3?) })
     }
     | "try" BlockStatement OnPartList {
-        Ok(Node::TryOnStatement { span: $span, block_try: Box::new($2?), on_part_list: $3? })
+        Ok(Node::TryOnStatement { block_try: Box::new($2?), on_part_list: $3? })
     }
     | "try" BlockStatement OnPartList FinallyPart {
         Ok(Node::TryFinallyStatement { 
-            span: $span, 
+            
             block_try: Box::new(Node::TryOnStatement {
-                span: $span,
                 block_try: Box::new($2?),
                 on_part_list: $3?,
             }),
@@ -906,12 +938,12 @@ TryStatement -> Result<Node, ()>:
     }
     ;
 
-OnPartList -> Result<Vec<TryOnPart>, ()>:
+OnPartList -> Result<Vec<TryOnPart<'input>>, ()>:
       OnPart { Ok(vec![$1?]) }
     | OnPartList OnPart { flatten($1, $2?) }
     ;
 
-OnPart -> Result<TryOnPart, ()>:
+OnPart -> Result<TryOnPart<'input>, ()>:
       CatchPart BlockStatement {
         Ok(TryOnPart { catch_part: Some($1?), exc_type: None, block: Box::new($2?) })
     }
@@ -923,7 +955,7 @@ OnPart -> Result<TryOnPart, ()>:
     }
     ;
 
-CatchPart -> Result<TryCatchPart, ()>:
+CatchPart -> Result<TryCatchPart<'input>, ()>:
       "catch" "(" Identifier ")" {
         Ok(TryCatchPart { id_error: $3?, id_trace: None })
     }
@@ -932,36 +964,36 @@ CatchPart -> Result<TryCatchPart, ()>:
     }
     ;
 
-FinallyPart -> Result<Node, ()>:
+FinallyPart -> Result<Node<'input>, ()>:
     "finally" BlockStatement { $2 }
     ;
 
-ReturnStatement -> Result<Node, ()>:
-      "return" ";" { Ok(Node::ReturnStatement { span: $span, value: None }) }
+ReturnStatement -> Result<Node<'input>, ()>:
+      "return" ";" { Ok(Node::ReturnStatement { value: None }) }
     | "return" Expression ";" {
-        Ok(Node::ReturnStatement { span: $span, value: Some(Box::new($2?)) })
+        Ok(Node::ReturnStatement { value: Some(Box::new($2?)) })
     }
     ;
 
-Label -> Result<Identifier, ()>:
+Label -> Result<Identifier<'input>, ()>:
     Identifier ":" { $1 }
     ;
 
-BreakStatement -> Result<Node, ()>:
+BreakStatement -> Result<Node<'input>, ()>:
       "break" ";" {
-        Ok(Node::BreakStatement { span: $span, label: None })
+        Ok(Node::BreakStatement { label: None })
     }
     | "break" Identifier ";" {
-        Ok(Node::BreakStatement { span: $span, label: Some($2?) })
+        Ok(Node::BreakStatement { label: Some($2?) })
     }
     ;
 
-ContinueStatement -> Result<Node, ()>:
+ContinueStatement -> Result<Node<'input>, ()>:
       "continue" ";" {
-        Ok(Node::ContinueStatement { span: $span, label: None })
+        Ok(Node::ContinueStatement { label: None })
     }
     | "continue" Identifier ";" {
-        Ok(Node::ContinueStatement { span: $span, label: Some($2?) })
+        Ok(Node::ContinueStatement { label: Some($2?) })
     }
     ;
 
@@ -971,61 +1003,61 @@ ContinueStatement -> Result<Node, ()>:
 //----------------------------------------------------------------------
 //-----------------------Libraries and Scripts--------------------------
 //----------------------------------------------------------------------
-TopLevelDeclaration -> Result<Node, ()>:
+TopLevelDeclaration -> Result<Node<'input>, ()>:
       ClassDeclaration { $1 }
     | TopFunctionDeclaration { $1 }
     | TopVariableDeclaration { $1 }
     ;
 
-LibraryDeclaration -> Result<LibraryDeclaration, ()>:
+LibraryDeclaration -> Result<LibraryDeclaration<'input>, ()>:
     LibraryImportList TopLevelDeclarationList { 
         Ok(LibraryDeclaration { import_list: $1?, top_level_declaration_list: $2? })
     }
     ;
 
-TopLevelDeclarationList -> Result<Vec<Box<Node>>, ()>:
+TopLevelDeclarationList -> Result<Vec<Box<Node<'input>>>, ()>:
       %empty { Ok(vec![]) }
     | TopLevelDeclarationList TopLevelDeclaration { flatten($1, Box::new($2?)) }
     ;
 
-LibraryImportList -> Result<Vec<LibraryImport>, ()>:
+LibraryImportList -> Result<Vec<LibraryImport<'input>>, ()>:
       %empty { Ok(vec![]) }
     | LibraryImportList LibraryImport { flatten($1, $2?) }
     ;
 
-LibraryImport -> Result<LibraryImport, ()>:
+LibraryImport -> Result<LibraryImport<'input>, ()>:
       "import" Uri ";" { Ok(LibraryImport { uri: $2?, identifier: None }) }
     | "import" Uri "as" Identifier ";" { Ok(LibraryImport { uri: $2?, identifier: Some($4?) }) }
     ;
 
-Uri -> Result<Span, ()>:
-    "STRING" { Ok($span) }
+Uri -> Result<&'input str, ()>:
+    "STRING" { Ok($lexer.span_str($span)) }
     ;
 
-TopFunctionDeclaration -> Result<Node, ()>:
+TopFunctionDeclaration -> Result<Node<'input>, ()>:
     FunctionSignature FunctionBody {
-        Ok(Node::FunctionDeclaration { span: $span, signature: $1?, body: Box::new($2?) })
+        Ok(Node::FunctionDeclaration { signature: $1?, body: Box::new($2?) })
     }
     ;
 
-TopVariableDeclaration -> Result<Node, ()>:
+TopVariableDeclaration -> Result<Node<'input>, ()>:
       "var" InitializedIdentifierList ";" { 
-        Ok(Node::VariableDeclarationList { span: $span, decl_list: $2? }) 
+        Ok(Node::VariableDeclarationList { decl_list: $2? }) 
     }
     | Type InitializedIdentifierList ";" { 
-        Ok(Node::VariableDeclarationList { span: $span, decl_list: $2? }) 
+        Ok(Node::VariableDeclarationList { decl_list: $2? }) 
     }
     | "late" "var" InitializedIdentifierList ";" { 
-        Ok(Node::VariableDeclarationList { span: $span, decl_list: $3? }) 
+        Ok(Node::VariableDeclarationList { decl_list: $3? }) 
     }
     | "late" Type InitializedIdentifierList ";" { 
-        Ok(Node::VariableDeclarationList { span: $span, decl_list: $3? }) 
+        Ok(Node::VariableDeclarationList { decl_list: $3? }) 
     }
     | "late" "final" InitializedIdentifierList ";" { 
-        Ok(Node::VariableDeclarationList { span: $span, decl_list: $3? }) 
+        Ok(Node::VariableDeclarationList { decl_list: $3? }) 
     }
     | "late" "final" Type InitializedIdentifierList ";" { 
-        Ok(Node::VariableDeclarationList { span: $span, decl_list: $4? }) 
+        Ok(Node::VariableDeclarationList { decl_list: $4? }) 
     }
     ;
 
@@ -1035,34 +1067,34 @@ TopVariableDeclaration -> Result<Node, ()>:
 //----------------------------------------------------------------------
 //--------------------------Static Types--------------------------------
 //----------------------------------------------------------------------
-Type -> Result<DartType, ()>:
+Type -> Result<DartType<'input>, ()>:
     TypeNotFunction { $1 }
     ;
 
-TypeNotVoid -> Result<DartType, ()>:
+TypeNotVoid -> Result<DartType<'input>, ()>:
     TypeNotVoidNotFunction { $1 }
     ;
 
-TypeNotFunction -> Result<DartType, ()>:
-      "void" { Ok(DartType::Void { span: $span }) }
+TypeNotFunction -> Result<DartType<'input>, ()>:
+      "void" { Ok(DartType::Void) }
     | TypeNotVoidNotFunction { $1 }
     ;
 
-TypeNotVoidNotFunction -> Result<DartType, ()>:
+TypeNotVoidNotFunction -> Result<DartType<'input>, ()>:
       TypeName { 
-        Ok(DartType::Named { span: $span, type_name: $1?, type_arguments: vec![], is_nullable: false }) }
+        Ok(DartType::Named { type_name: $1?, type_arguments: vec![], is_nullable: false }) }
     ;
 
-TypeName -> Result<DartTypeName, ()>:
+TypeName -> Result<DartTypeName<'input>, ()>:
       Identifier {
         Ok(DartTypeName { identifier: $1?, module: None })
     }
     ;
 
-TypeArguments -> Result<Vec<DartType>, ()>:
+TypeArguments -> Result<Vec<DartType<'input>>, ()>:
     "<" TypeList ">" { $2 }
     ;
-TypeList -> Result<Vec<DartType>, ()>:
+TypeList -> Result<Vec<DartType<'input>>, ()>:
       Type { Ok(vec![$1?]) }
     | TypeList "," Type { flatten($1, $3?) }
     ;
@@ -1130,301 +1162,258 @@ fn flatten<T>(left: Result<Vec<T>,()>, right: T) -> Result<Vec<T>,()> {
     Ok(flt)
 }
 
-use cfgrammar::Span;
-
 #[derive(Debug)]
-pub enum Node {
+pub enum Node<'input> {
     BinaryExpression {
-        span: Span,
         operator: &'static str,
-        left: Box<Node>,
-        right: Box<Node>,
+        left: Box<Node<'input>>,
+        right: Box<Node<'input>>,
     },
     ConditionalExpression {
-        span: Span,
-        condition: Box<Node>,
-        if_true_expr: Box<Node>,
-        if_false_expr: Box<Node>,
+        condition: Box<Node<'input>>,
+        if_true_expr: Box<Node<'input>>,
+        if_false_expr: Box<Node<'input>>,
     },
     UnaryOpExpression {
-        span: Span,
         operator: &'static str,
-        child: Box<Node>,
+        child: Box<Node<'input>>,
     },
     UpdateExpression {
-        span: Span,
         operator: &'static str,
         is_prefix: bool,
-        child: Box<Node>,
+        child: Box<Node<'input>>,
     },
     AssignmentExpression {
-        span: Span,
         operator: &'static str,
-        left: Box<Node>,
-        right: Box<Node>,
+        left: Box<Node<'input>>,
+        right: Box<Node<'input>>,
     },
     TypeTestExpression {
-        span: Span,
-        child: Box<Node>,
-        type_test: TypeTest,
+        child: Box<Node<'input>>,
+        type_test: TypeTest<'input>,
     },
     TypeCastExpression {
-        span: Span,
-        child: Box<Node>,
-        type_cast: DartType,
+        child: Box<Node<'input>>,
+        type_cast: DartType<'input>,
     },
     NumericLiteral {
-        span: Span,
+        value: &'input str,
     },
     StringLiteral {
-        span: Span,
-        literal_list: Vec<Span>,
+        literal_list: Vec<&'input str>,
     },
     BooleanLiteral {
-        span: Span,
+        value: &'input str,
     },
-    NullLiteral {
-        span: Span,
-    },
+    NullLiteral,
     ListLiteral {
-        span: Span,
-        element_list: Vec<CollectionElement>,
+        element_list: Vec<CollectionElement<'input>>,
     },
     SetOrMapLiteral {
-        span: Span,
-        element_list: Vec<CollectionElement>,
+        element_list: Vec<CollectionElement<'input>>,
     },
     IdentifierNode {
-        identifier: Identifier,
+        identifier: Identifier<'input>,
     },
     Arguments {
-        span: Span,
-        children: Vec<CallParameter>
+        children: Vec<CallParameter<'input>>
     },
     SelectorExpression {
-        span: Span,
-        child: Box<Node>,
-        selector: Selector,
+        child: Box<Node<'input>>,
+        selector: Selector<'input>,
     },
     ThrowExpression {
-        span: Span,
-        expr: Box<Node>,
+        expr: Box<Node<'input>>,
     },
+    ThisExpression,
 
     LabeledStatement {
-        span: Span,
-        label: Identifier,
-        stmt: Box<Node>,
+        label: Identifier<'input>,
+        stmt: Box<Node<'input>>,
     },
     BlockStatement {
-        span: Span,
-        children: Vec<Box<Node>>,
+        children: Vec<Box<Node<'input>>>,
     },
     ExpressionStatement {
-        span: Span,
-        expr: Box<Node>,
+        expr: Box<Node<'input>>,
     },
-    EmptyStatement {
-        span: Span,
-    },
+    EmptyStatement,
     VariableDeclarationList {
-        span: Span,
-        decl_list: Vec<VariableDeclaration>,
+        decl_list: Vec<VariableDeclaration<'input>>,
     },
     IfStatement {
-        span: Span,
-        condition: Box<Node>,
-        if_true_stmt: Box<Node>,
-        if_false_stmt: Option<Box<Node>>,
+        condition: Box<Node<'input>>,
+        if_true_stmt: Box<Node<'input>>,
+        if_false_stmt: Option<Box<Node<'input>>>,
     },
-    RethrowStatement {
-        span: Span,
-    },
+    RethrowStatement,
     TryFinallyStatement {
-        span: Span,
-        block_try: Box<Node>,
-        block_finally: Box<Node>,
+        block_try: Box<Node<'input>>,
+        block_finally: Box<Node<'input>>,
     },
     TryOnStatement {
-        span: Span,
-        block_try: Box<Node>,
-        on_part_list: Vec<TryOnPart>,
+        block_try: Box<Node<'input>>,
+        on_part_list: Vec<TryOnPart<'input>>,
     },
     ForStatement {
-        span: Span,
-        init: Option<Box<Node>>,
-        condition: Option<Box<Node>>,
-        update: Option<Vec<Box<Node>>>,
-        stmt: Box<Node>,
+        init: Option<Box<Node<'input>>>,
+        condition: Option<Box<Node<'input>>>,
+        update: Option<Vec<Box<Node<'input>>>>,
+        stmt: Box<Node<'input>>,
     },
     WhileStatement {
-        span: Span,
-        condition: Box<Node>,
-        stmt: Box<Node>,
+        condition: Box<Node<'input>>,
+        stmt: Box<Node<'input>>,
     },
     DoStatement {
-        span: Span,
-        condition: Box<Node>,
-        stmt: Box<Node>,
+        condition: Box<Node<'input>>,
+        stmt: Box<Node<'input>>,
     },
     BreakStatement {
-        span: Span,
-        label: Option<Identifier>,
+        label: Option<Identifier<'input>>,
     },
     ContinueStatement {
-        span: Span,
-        label: Option<Identifier>,
+        label: Option<Identifier<'input>>,
     },
     ReturnStatement {
-        span: Span,
-        value: Option<Box<Node>>,
+        value: Option<Box<Node<'input>>>,
     },
     SwitchStatement {
-        span: Span,
-        expr: Box<Node>,
-        case_list: Vec<SwitchCase>,
-        default_case: Option<DefaultCase>,
+        expr: Box<Node<'input>>,
+        case_list: Vec<SwitchCase<'input>>,
+        default_case: Option<DefaultCase<'input>>,
     },
     FunctionDeclaration {
-        span: Span,
-        signature: FunctionSignature,
-        body: Box<Node>,
+        signature: FunctionSignature<'input>,
+        body: Box<Node<'input>>,
     },
     ClassDeclaration {
-        span: Span,
-        identifier: Identifier,
-        member_list: Vec<Box<Node>>,
+        identifier: Identifier<'input>,
+        member_list: Vec<Box<Node<'input>>>,
     },
 }
 
 #[derive(Debug)]
-pub struct LibraryDeclaration {
-    pub import_list: Vec<LibraryImport>,
-    pub top_level_declaration_list: Vec<Box<Node>>,
+pub struct LibraryDeclaration<'input> {
+    pub import_list: Vec<LibraryImport<'input>>,
+    pub top_level_declaration_list: Vec<Box<Node<'input>>>,
 }
 
 #[derive(Debug)]
-pub struct LibraryImport {
-    pub uri: Span,
-    pub identifier: Option<Identifier>,
+pub struct LibraryImport<'input> {
+    pub uri: &'input str,
+    pub identifier: Option<Identifier<'input>>,
 }
 
 #[derive(Debug)]
-pub struct FunctionParameter {
-    pub identifier: Identifier,
-    pub expr: Option<Box<Node>>,
+pub struct FunctionParameter<'input> {
+    pub identifier: Identifier<'input>,
+    pub expr: Option<Box<Node<'input>>>,
 }
 
 #[derive(Debug)]
-pub struct SwitchCase {
-    pub label_list: Vec<Box<Node>>,
-    pub expr: Box<Node>,
-    pub stmt_list: Vec<Box<Node>>,
+pub struct SwitchCase<'input> {
+    pub label_list: Vec<Box<Node<'input>>>,
+    pub expr: Box<Node<'input>>,
+    pub stmt_list: Vec<Box<Node<'input>>>,
 }
 
 #[derive(Debug)]
-pub struct DefaultCase {
-    pub label_list: Vec<Box<Node>>,
-    pub stmt_list: Vec<Box<Node>>,
+pub struct DefaultCase<'input> {
+    pub label_list: Vec<Box<Node<'input>>>,
+    pub stmt_list: Vec<Box<Node<'input>>>,
 }
 
 #[derive(Debug)]
-pub struct TryOnPart {
-    pub catch_part: Option<TryCatchPart>,
-    pub exc_type: Option<DartType>,
-    pub block: Box<Node>,
+pub struct TryOnPart<'input> {
+    pub catch_part: Option<TryCatchPart<'input>>,
+    pub exc_type: Option<DartType<'input>>,
+    pub block: Box<Node<'input>>,
 }
 
 #[derive(Debug)]
-pub struct TryCatchPart {
-    pub id_error: Identifier,
-    pub id_trace: Option<Identifier>,
+pub struct TryCatchPart<'input> {
+    pub id_error: Identifier<'input>,
+    pub id_trace: Option<Identifier<'input>>,
 }
 
 #[derive(Debug)]
-pub enum CollectionElement {
+pub enum CollectionElement<'input> {
     ExpressionElement {
-        expr: Box<Node>,
+        expr: Box<Node<'input>>,
     },
     MapElement {
-        key_expr: Box<Node>,
-        value_expr: Box<Node>,
+        key_expr: Box<Node<'input>>,
+        value_expr: Box<Node<'input>>,
     },
 }
 
 #[derive(Debug)]
-pub enum Selector {
+pub enum Selector<'input> {
     Index {
-        span: Span,
-        expr: Box<Node>,
+        expr: Box<Node<'input>>,
     },
     Attr {
-        span: Span,
-        identifier: Identifier,
+        identifier: Identifier<'input>,
     },
     Method {
-        span: Span,
-        identifier: Identifier,
-        arguments: Box<Node>,
+        identifier: Identifier<'input>,
+        arguments: Box<Node<'input>>,
     },
     Args {
-        span: Span,
-        args: Box<Node>,
+        args: Box<Node<'input>>,
     }
 }
 
 #[derive(Debug)]
-pub struct TypeTest {
-    pub dart_type: DartType,
+pub struct TypeTest<'input> {
+    pub dart_type: DartType<'input>,
     pub check_matching: bool,
 }
 
 #[derive(Debug)]
-pub enum DartType {
+pub enum DartType<'input> {
     Named {
-        span: Span,
-        type_name: DartTypeName,
-        type_arguments: Vec<DartType>,
+        type_name: DartTypeName<'input>,
+        type_arguments: Vec<DartType<'input>>,
         is_nullable: bool,
     },
-    Void {
-        span: Span,
-    },
+    Void,
 }
 
 #[derive(Debug)]
-pub struct DartTypeName {
-    pub identifier: Identifier,
-    pub module: Option<Identifier>,
+pub struct DartTypeName<'input> {
+    pub identifier: Identifier<'input>,
+    pub module: Option<Identifier<'input>>,
 }
 
 #[derive(Debug)]
-pub struct FunctionSignature {
-    pub return_type: Option<DartType>,
-    pub name: Identifier,
-    pub param: FunctionParamSignature,
+pub struct FunctionSignature<'input> {
+    pub return_type: Option<DartType<'input>>,
+    pub name: Identifier<'input>,
+    pub param: FunctionParamSignature<'input>,
 }
 
 #[derive(Debug)]
-pub struct VariableDeclaration {
-    pub identifier: Identifier,
-    pub expr: Option<Box<Node>>,
+pub struct VariableDeclaration<'input> {
+    pub identifier: Identifier<'input>,
+    pub expr: Option<Box<Node<'input>>>,
 }
 
 #[derive(Debug)]
-pub struct FunctionParamSignature {
-    pub normal_list: Vec<FunctionParameter>,
-    pub option_list: Vec<FunctionParameter>,
-    pub named_list: Vec<FunctionParameter>,
+pub struct FunctionParamSignature<'input> {
+    pub normal_list: Vec<FunctionParameter<'input>>,
+    pub option_list: Vec<FunctionParameter<'input>>,
+    pub named_list: Vec<FunctionParameter<'input>>,
 }
 
 #[derive(Debug)]
-pub struct CallParameter {
-    pub identifier: Option<Identifier>,
-    pub expr: Box<Node>,
+pub struct CallParameter<'input> {
+    pub identifier: Option<Identifier<'input>>,
+    pub expr: Box<Node<'input>>,
 }
 
 #[derive(Debug)]
-pub struct Identifier {
-    pub span: Span,
+pub struct Identifier<'input> {
+    pub value: &'input str,
 }
