@@ -47,21 +47,16 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
 
         // uri形式
         // import A.B as C
-        // → import "py:A/B" as C;
+        // → import "elaphe/A/B.d.dart" as C;
         // from ..A.B import C as D
-        // → import "py:../A/B/C" as D;
-        if !uri.starts_with("py:") {
+        // → import "../A/B/C.d.dart" as D;
+        if uri.contains(":") {
             panic!("invalid import uri: {}", uri);
         }
 
-        let splitted: Vec<&str> = uri.split(':').collect();
-        if splitted.len() != 2 {
-            panic!("invalid import uri: {}", uri);
-        }
-        let mut path_splitted: Vec<&str> = splitted[1].split("/").collect();
-
-        if splitted[1].starts_with(".") {
+        if uri.starts_with(".") {
             // 相対パスの場合
+            let mut path_splitted: Vec<&str> = uri.split("/").collect();
 
             // ドットの数を積む
             let dot_len = path_splitted[0].len();
@@ -95,6 +90,16 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             self.push_op(OpCode::StoreName(store_name_p));
             self.push_op(OpCode::PopTop);
         } else {
+            // 絶対パスの場合はelaphe/から始まり、最後尾は.d.dartで終わる必要がある
+            if !uri.starts_with("elaphe/") {
+                panic!("invalid import uri: {}", uri);
+            }
+            if !uri.ends_with(".d.dart") {
+                // .d.dartで終わらないものは無視する
+                return;
+            }
+            let path_splitted: Vec<&str> = uri[7..uri.len()-7].split("/").collect();
+
             // 0を積む
             self.push_load_const(PyObject::Int(0, false));
 
