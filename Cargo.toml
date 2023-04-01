@@ -9,6 +9,7 @@ edition = "2021"
 cfgrammar = "0.13.1"
 lrlex = "0.13.1"
 lrpar = "0.13.1"
+copy_to_output = "2.1.0"
 
 [dependencies]
 cfgrammar = "0.13.1"
