@@ -1,5 +1,7 @@
 # Elaphe 
 
+![](assets/logo_wide.png)
+
 ElapheはDartのプログラムをPython VM上で動くバイトコードに変換するコンパイラです。Dartの文法や静的な型チェックを使いながらPythonの豊富なライブラリを利用することができます。
 
 ![](assets/overview.png)
@@ -251,3 +253,9 @@ https://docs.google.com/document/d/1c956nDwu3t9qNN0C4HBvl9U6WSvCUY3umqpzohqlrKs/
     - [x] Identifier
     - [ ] Identifier.Identifier
 - [ ] Other
+
+# Supplementary Information
+
+> Elaphe logo is designed by [Bing Image Creator](https://www.bing.com/create)
+> 
+> The font used in Elaphe's logo is [Confortaa](https://fonts.google.com/specimen/Comfortaa/)
