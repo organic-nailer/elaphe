@@ -1,6 +1,6 @@
 use getopts::Options;
 use std::error::Error;
-use std::path::PathBuf;
+use std::path::{PathBuf, Path};
 use std::process::Command;
 use std::str;
 use std::{env, fs};
@@ -104,7 +104,9 @@ fn elaphe_init(dir: &str) -> Result<(), Box<dyn Error>> {
     if !path.exists() {
         fs::create_dir(&path)?;
     }
-    copy_directory_contents("template", &path.to_str().unwrap())?;
+    let exec_path = env::current_exe()?;
+    let exec_dir = exec_path.parent().unwrap();
+    copy_directory_contents(&exec_dir.join("template"), &path)?;
     Ok(())
 }
 
@@ -124,7 +126,7 @@ fn elaphe_add(package_name: &str) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn copy_directory_contents(source: &str, destination: &str) -> Result<(), Box<dyn Error>> {
+fn copy_directory_contents(source: &Path, destination: &Path) -> Result<(), Box<dyn Error>> {
     for entry in fs::read_dir(source)? {
         let entry = entry?;
         let path = entry.path();
@@ -133,7 +135,7 @@ fn copy_directory_contents(source: &str, destination: &str) -> Result<(), Box<dy
 
         if path.is_dir() {
             fs::create_dir(&new_path)?;
-            copy_directory_contents(&path.to_str().unwrap(), &new_path.to_str().unwrap())?;
+            copy_directory_contents(&path, &new_path)?;
         } else {
             fs::copy(&path, &new_path)?;
         }
