@@ -1,20 +1,21 @@
 use std::rc::Rc;
 use std::{cell::RefCell, collections::HashMap};
 
-use crate::bytecode::{ByteCode};
-use crate::executioncontext::{
-    BlockContext, ExecutionContext, VariableScope,
-};
-use crate::parser::{LibraryImport};
-use crate::{bytecode::OpCode, parser::Node, pyobject::PyObject, parser::CollectionElement, parser::Selector, parser::DartType};
+use crate::bytecode::ByteCode;
+use crate::executioncontext::{BlockContext, ExecutionContext, VariableScope};
 use crate::parser::FunctionParamSignature;
+use crate::parser::LibraryImport;
+use crate::{
+    bytecode::OpCode, parser::CollectionElement, parser::DartType, parser::Node, parser::Selector,
+    pyobject::PyObject,
+};
 
 use self::runclass::run_class;
 use self::runfunction::run_function;
 
-pub mod runroot;
-pub mod runfunction;
 pub mod runclass;
+pub mod runfunction;
+pub mod runroot;
 
 struct DefaultScope {
     break_label: u32,
@@ -39,9 +40,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
         let uri = &uri[1..len - 1];
 
         let identifier = match &node.identifier {
-            Some(v) => {
-                Some(v.value)
-            }
+            Some(v) => Some(v.value),
             None => None,
         };
 
@@ -98,7 +97,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 // .d.dartで終わらないものは無視する
                 return;
             }
-            let path_splitted: Vec<&str> = uri[7..uri.len()-7].split("/").collect();
+            let path_splitted: Vec<&str> = uri[7..uri.len() - 7].split("/").collect();
 
             // 0を積む
             self.push_load_const(PyObject::Int(0, false));
@@ -225,10 +224,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 self.compile(if_false_expr, None);
                 self.set_jump_label_value(label_conditional_end);
             }
-            Node::UnaryOpExpression {
-                operator,
-                child,
-            } => {
+            Node::UnaryOpExpression { operator, child } => {
                 self.compile(child, None);
                 match *operator {
                     "-" => self.push_op(OpCode::UnaryNegative),
@@ -270,32 +266,39 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 } else {
                     panic!("Invalid AST. Increment target must be an identifier.");
                 }
-            },
+            }
             Node::TypeTestExpression { child, type_test } => {
                 // isinstance(child, type_test.)
                 self.push_load_var(&"isinstance".to_string());
                 self.compile(child, None);
-                if let DartType::Named { type_name, type_arguments:_, is_nullable:_ } = &type_test.dart_type {
+                if let DartType::Named {
+                    type_name,
+                    type_arguments: _,
+                    is_nullable: _,
+                } = &type_test.dart_type
+                {
                     let name = type_name.identifier.value;
                     let p = (**self.context_stack.last().unwrap())
                         .borrow_mut()
                         .register_or_get_name(&name.to_string());
                     self.push_op(OpCode::LoadName(p));
-                }
-                else {
+                } else {
                     panic!("Invalid Test Expression");
                 }
                 self.push_op(OpCode::CallFunction(2));
                 if !type_test.check_matching {
                     self.push_op(OpCode::UnaryNot);
                 }
-            },
-            Node::TypeCastExpression { child, type_cast:_ } => {
+            }
+            Node::TypeCastExpression {
+                child,
+                type_cast: _,
+            } => {
                 // 実行時には型がないので無視
                 self.compile(child, None);
-            },
+            }
             Node::AssignmentExpression {
-                                operator,
+                operator,
                 left,
                 right,
             } => {
@@ -309,214 +312,217 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                             Node::IdentifierNode { identifier } => {
                                 let value = identifier.value.to_string();
                                 self.push_store_var(&value);
-                            },
+                            }
                             Node::SelectorExpression { child, selector } => {
                                 self.compile(child, None);
 
                                 match selector {
-                                    Selector::Args { args:_ } => panic!("Invalid lhs value."),
-                                    Selector::Method { identifier:_, arguments:_ } => panic!("Invalid lhs value."),
+                                    Selector::Args { args: _ } => panic!("Invalid lhs value."),
+                                    Selector::Method {
+                                        identifier: _,
+                                        arguments: _,
+                                    } => panic!("Invalid lhs value."),
                                     Selector::Attr { identifier } => {
                                         let name = identifier.value;
                                         let p = (**self.context_stack.last().unwrap())
                                             .borrow_mut()
                                             .register_or_get_name(&name.to_string());
                                         self.push_op(OpCode::StoreAttr(p));
-                                    },
+                                    }
                                     Selector::Index { expr } => {
                                         self.compile(expr, None);
                                         self.push_op(OpCode::StoreSubScr);
                                     }
                                 }
-                            },
-                            _ => panic!("Invalid lhs value.")
-                        }
-                    },
-                    "*=" | "/=" | "~/=" | "%=" | "+=" | "-=" | "<<=" | ">>=" | "&=" | "^="
-                        | "|=" => {
-                        match &**left {
-                            Node::IdentifierNode { identifier } => {
-                                let value = identifier.value.to_string();
-                                self.push_load_var(&value);
-
-                                self.compile(right, None);
-                                match *operator {
-                                    "*=" => self.push_op(OpCode::InplaceMultiply),
-                                    "/=" => self.push_op(OpCode::InplaceTrueDivide),
-                                    "~/=" => self.push_op(OpCode::InplaceFloorDivide),
-                                    "%=" => self.push_op(OpCode::InplaceModulo),
-                                    "+=" => self.push_op(OpCode::InplaceAdd),
-                                    "-=" => self.push_op(OpCode::InplaceSubtract),
-                                    "<<=" => self.push_op(OpCode::InplaceLShift),
-                                    ">>=" => self.push_op(OpCode::InplaceRShift),
-                                    "&=" => self.push_op(OpCode::InplaceAnd),
-                                    "^=" => self.push_op(OpCode::InplaceXor),
-                                    "|=" => self.push_op(OpCode::InplaceOr),
-                                    _ => (),
-                                }
-                                self.push_op(OpCode::DupTop);
-
-                                self.push_store_var(&value);
-                            },
-                            Node::SelectorExpression { child, selector } => {
-                                self.compile(child, None);
-                                match selector {
-                                    Selector::Args { args:_ } => panic!("Invalid lhs value."),
-                                    Selector::Method { identifier:_, arguments:_ } => panic!("Invalid lhs value."),
-                                    Selector::Attr { identifier } => {
-                                        let name = identifier.value;
-                                        let p = (**self.context_stack.last().unwrap())
-                                            .borrow_mut()
-                                            .register_or_get_name(&name.to_string());
-
-                                        self.push_op(OpCode::DupTop);
-                                        self.push_op(OpCode::LoadAttr(p));
-
-                                        self.compile(right, None);
-                                        match *operator {
-                                            "*=" => self.push_op(OpCode::InplaceMultiply),
-                                            "/=" => self.push_op(OpCode::InplaceTrueDivide),
-                                            "~/=" => self.push_op(OpCode::InplaceFloorDivide),
-                                            "%=" => self.push_op(OpCode::InplaceModulo),
-                                            "+=" => self.push_op(OpCode::InplaceAdd),
-                                            "-=" => self.push_op(OpCode::InplaceSubtract),
-                                            "<<=" => self.push_op(OpCode::InplaceLShift),
-                                            ">>=" => self.push_op(OpCode::InplaceRShift),
-                                            "&=" => self.push_op(OpCode::InplaceAnd),
-                                            "^=" => self.push_op(OpCode::InplaceXor),
-                                            "|=" => self.push_op(OpCode::InplaceOr),
-                                            _ => (),
-                                        }
-                                        self.push_op(OpCode::DupTop);
-                                        
-                                        self.push_op(OpCode::RotThree);
-                                        self.push_op(OpCode::StoreAttr(p));
-                                    },
-                                    Selector::Index { expr } => {
-                                        self.compile(expr, None);
-                                        self.push_op(OpCode::DupTopTwo);
-                                        self.push_op(OpCode::BinarySubScr);
-
-                                        self.compile(right, None);
-                                        match *operator {
-                                            "*=" => self.push_op(OpCode::InplaceMultiply),
-                                            "/=" => self.push_op(OpCode::InplaceTrueDivide),
-                                            "~/=" => self.push_op(OpCode::InplaceFloorDivide),
-                                            "%=" => self.push_op(OpCode::InplaceModulo),
-                                            "+=" => self.push_op(OpCode::InplaceAdd),
-                                            "-=" => self.push_op(OpCode::InplaceSubtract),
-                                            "<<=" => self.push_op(OpCode::InplaceLShift),
-                                            ">>=" => self.push_op(OpCode::InplaceRShift),
-                                            "&=" => self.push_op(OpCode::InplaceAnd),
-                                            "^=" => self.push_op(OpCode::InplaceXor),
-                                            "|=" => self.push_op(OpCode::InplaceOr),
-                                            _ => (),
-                                        }
-                                        self.push_op(OpCode::DupTop);
-                                        self.push_op(OpCode::RotFour);
-                                        
-                                        self.push_op(OpCode::RotFour);
-                                        self.push_op(OpCode::StoreSubScr);
-                                    }
-                                }
-                            },
-                            _ => panic!("Invalid lhs value.")
-                        }
-                    },
-                    "??=" => {
-                        match &**left {
-                            Node::IdentifierNode { identifier } => {
-                                let value = identifier.value.to_string();
-
-                                self.push_load_var(&value);
-                                self.push_op(OpCode::DupTop);
-                                self.push_load_const(PyObject::None(false));
-                                self.push_op(OpCode::compare_op_from_str("=="));
-                                let label_end = self.gen_jump_label();
-                                self.push_op(OpCode::PopJumpIfFalse(label_end));
-
-                                self.push_op(OpCode::PopTop);
-                                self.compile(right, None);
-                                self.push_op(OpCode::DupTop);
-                                self.push_store_var(&value);
-                                self.set_jump_label_value(label_end);
-                            },
-                            Node::SelectorExpression { child, selector } => {
-                                self.compile(child, None);
-                                match selector {
-                                    Selector::Args { args:_ } => panic!("Invalid lhs value."),
-                                    Selector::Method { identifier:_, arguments:_ } => panic!("Invalid lhs value."),
-                                    Selector::Attr { identifier } => {
-                                        let name = identifier.value;
-                                        let p = (**self.context_stack.last().unwrap())
-                                            .borrow_mut()
-                                            .register_or_get_name(&name.to_string());
-
-                                        self.push_op(OpCode::DupTop);
-                                        self.push_op(OpCode::LoadAttr(p));
-
-                                        self.push_op(OpCode::DupTop);
-                                        self.push_load_const(PyObject::None(false));
-                                        self.push_op(OpCode::compare_op_from_str("=="));
-                                        let label_false = self.gen_jump_label();
-                                        self.push_op(OpCode::PopJumpIfFalse(label_false));
-
-                                        self.push_op(OpCode::PopTop);
-                                        self.compile(right, None);
-                                        self.push_op(OpCode::DupTop);
-                                        self.push_op(OpCode::RotThree);
-                                        self.push_op(OpCode::RotThree);
-                                        self.push_op(OpCode::StoreAttr(p));
-                                        let label_end = self.gen_jump_label();
-                                        self.push_op(OpCode::JumpAbsolute(label_end));
-
-                                        self.set_jump_label_value(label_false);
-                                        self.push_op(OpCode::RotTwo);
-                                        self.push_op(OpCode::PopTop);
-
-                                        self.set_jump_label_value(label_end);
-                                    },
-                                    Selector::Index { expr } => {
-                                        self.compile(expr, None);
-                                        self.push_op(OpCode::DupTopTwo);
-                                        self.push_op(OpCode::BinarySubScr);
-
-                                        self.push_op(OpCode::DupTop);
-                                        self.push_load_const(PyObject::None(false));
-                                        self.push_op(OpCode::compare_op_from_str("=="));
-                                        let label_false = self.gen_jump_label();
-                                        self.push_op(OpCode::PopJumpIfFalse(label_false));
-
-                                        self.push_op(OpCode::PopTop);
-                                        self.compile(right, None);
-                                        self.push_op(OpCode::DupTop);
-                                        self.push_op(OpCode::RotFour);
-                                        self.push_op(OpCode::RotFour);
-                                        self.push_op(OpCode::StoreSubScr);
-                                        let label_end = self.gen_jump_label();
-                                        self.push_op(OpCode::JumpAbsolute(label_end));
-
-                                        self.set_jump_label_value(label_false);
-                                        self.push_op(OpCode::RotThree);
-                                        self.push_op(OpCode::PopTop);
-                                        self.push_op(OpCode::PopTop);
-
-                                        self.set_jump_label_value(label_end);
-                                    }
-                                }
-                            },
-                            _ => panic!("Invalid lhs value.")
+                            }
+                            _ => panic!("Invalid lhs value."),
                         }
                     }
+                    "*=" | "/=" | "~/=" | "%=" | "+=" | "-=" | "<<=" | ">>=" | "&=" | "^="
+                    | "|=" => match &**left {
+                        Node::IdentifierNode { identifier } => {
+                            let value = identifier.value.to_string();
+                            self.push_load_var(&value);
+
+                            self.compile(right, None);
+                            match *operator {
+                                "*=" => self.push_op(OpCode::InplaceMultiply),
+                                "/=" => self.push_op(OpCode::InplaceTrueDivide),
+                                "~/=" => self.push_op(OpCode::InplaceFloorDivide),
+                                "%=" => self.push_op(OpCode::InplaceModulo),
+                                "+=" => self.push_op(OpCode::InplaceAdd),
+                                "-=" => self.push_op(OpCode::InplaceSubtract),
+                                "<<=" => self.push_op(OpCode::InplaceLShift),
+                                ">>=" => self.push_op(OpCode::InplaceRShift),
+                                "&=" => self.push_op(OpCode::InplaceAnd),
+                                "^=" => self.push_op(OpCode::InplaceXor),
+                                "|=" => self.push_op(OpCode::InplaceOr),
+                                _ => (),
+                            }
+                            self.push_op(OpCode::DupTop);
+
+                            self.push_store_var(&value);
+                        }
+                        Node::SelectorExpression { child, selector } => {
+                            self.compile(child, None);
+                            match selector {
+                                Selector::Args { args: _ } => panic!("Invalid lhs value."),
+                                Selector::Method {
+                                    identifier: _,
+                                    arguments: _,
+                                } => panic!("Invalid lhs value."),
+                                Selector::Attr { identifier } => {
+                                    let name = identifier.value;
+                                    let p = (**self.context_stack.last().unwrap())
+                                        .borrow_mut()
+                                        .register_or_get_name(&name.to_string());
+
+                                    self.push_op(OpCode::DupTop);
+                                    self.push_op(OpCode::LoadAttr(p));
+
+                                    self.compile(right, None);
+                                    match *operator {
+                                        "*=" => self.push_op(OpCode::InplaceMultiply),
+                                        "/=" => self.push_op(OpCode::InplaceTrueDivide),
+                                        "~/=" => self.push_op(OpCode::InplaceFloorDivide),
+                                        "%=" => self.push_op(OpCode::InplaceModulo),
+                                        "+=" => self.push_op(OpCode::InplaceAdd),
+                                        "-=" => self.push_op(OpCode::InplaceSubtract),
+                                        "<<=" => self.push_op(OpCode::InplaceLShift),
+                                        ">>=" => self.push_op(OpCode::InplaceRShift),
+                                        "&=" => self.push_op(OpCode::InplaceAnd),
+                                        "^=" => self.push_op(OpCode::InplaceXor),
+                                        "|=" => self.push_op(OpCode::InplaceOr),
+                                        _ => (),
+                                    }
+                                    self.push_op(OpCode::DupTop);
+
+                                    self.push_op(OpCode::RotThree);
+                                    self.push_op(OpCode::StoreAttr(p));
+                                }
+                                Selector::Index { expr } => {
+                                    self.compile(expr, None);
+                                    self.push_op(OpCode::DupTopTwo);
+                                    self.push_op(OpCode::BinarySubScr);
+
+                                    self.compile(right, None);
+                                    match *operator {
+                                        "*=" => self.push_op(OpCode::InplaceMultiply),
+                                        "/=" => self.push_op(OpCode::InplaceTrueDivide),
+                                        "~/=" => self.push_op(OpCode::InplaceFloorDivide),
+                                        "%=" => self.push_op(OpCode::InplaceModulo),
+                                        "+=" => self.push_op(OpCode::InplaceAdd),
+                                        "-=" => self.push_op(OpCode::InplaceSubtract),
+                                        "<<=" => self.push_op(OpCode::InplaceLShift),
+                                        ">>=" => self.push_op(OpCode::InplaceRShift),
+                                        "&=" => self.push_op(OpCode::InplaceAnd),
+                                        "^=" => self.push_op(OpCode::InplaceXor),
+                                        "|=" => self.push_op(OpCode::InplaceOr),
+                                        _ => (),
+                                    }
+                                    self.push_op(OpCode::DupTop);
+                                    self.push_op(OpCode::RotFour);
+
+                                    self.push_op(OpCode::RotFour);
+                                    self.push_op(OpCode::StoreSubScr);
+                                }
+                            }
+                        }
+                        _ => panic!("Invalid lhs value."),
+                    },
+                    "??=" => match &**left {
+                        Node::IdentifierNode { identifier } => {
+                            let value = identifier.value.to_string();
+
+                            self.push_load_var(&value);
+                            self.push_op(OpCode::DupTop);
+                            self.push_load_const(PyObject::None(false));
+                            self.push_op(OpCode::compare_op_from_str("=="));
+                            let label_end = self.gen_jump_label();
+                            self.push_op(OpCode::PopJumpIfFalse(label_end));
+
+                            self.push_op(OpCode::PopTop);
+                            self.compile(right, None);
+                            self.push_op(OpCode::DupTop);
+                            self.push_store_var(&value);
+                            self.set_jump_label_value(label_end);
+                        }
+                        Node::SelectorExpression { child, selector } => {
+                            self.compile(child, None);
+                            match selector {
+                                Selector::Args { args: _ } => panic!("Invalid lhs value."),
+                                Selector::Method {
+                                    identifier: _,
+                                    arguments: _,
+                                } => panic!("Invalid lhs value."),
+                                Selector::Attr { identifier } => {
+                                    let name = identifier.value;
+                                    let p = (**self.context_stack.last().unwrap())
+                                        .borrow_mut()
+                                        .register_or_get_name(&name.to_string());
+
+                                    self.push_op(OpCode::DupTop);
+                                    self.push_op(OpCode::LoadAttr(p));
+
+                                    self.push_op(OpCode::DupTop);
+                                    self.push_load_const(PyObject::None(false));
+                                    self.push_op(OpCode::compare_op_from_str("=="));
+                                    let label_false = self.gen_jump_label();
+                                    self.push_op(OpCode::PopJumpIfFalse(label_false));
+
+                                    self.push_op(OpCode::PopTop);
+                                    self.compile(right, None);
+                                    self.push_op(OpCode::DupTop);
+                                    self.push_op(OpCode::RotThree);
+                                    self.push_op(OpCode::RotThree);
+                                    self.push_op(OpCode::StoreAttr(p));
+                                    let label_end = self.gen_jump_label();
+                                    self.push_op(OpCode::JumpAbsolute(label_end));
+
+                                    self.set_jump_label_value(label_false);
+                                    self.push_op(OpCode::RotTwo);
+                                    self.push_op(OpCode::PopTop);
+
+                                    self.set_jump_label_value(label_end);
+                                }
+                                Selector::Index { expr } => {
+                                    self.compile(expr, None);
+                                    self.push_op(OpCode::DupTopTwo);
+                                    self.push_op(OpCode::BinarySubScr);
+
+                                    self.push_op(OpCode::DupTop);
+                                    self.push_load_const(PyObject::None(false));
+                                    self.push_op(OpCode::compare_op_from_str("=="));
+                                    let label_false = self.gen_jump_label();
+                                    self.push_op(OpCode::PopJumpIfFalse(label_false));
+
+                                    self.push_op(OpCode::PopTop);
+                                    self.compile(right, None);
+                                    self.push_op(OpCode::DupTop);
+                                    self.push_op(OpCode::RotFour);
+                                    self.push_op(OpCode::RotFour);
+                                    self.push_op(OpCode::StoreSubScr);
+                                    let label_end = self.gen_jump_label();
+                                    self.push_op(OpCode::JumpAbsolute(label_end));
+
+                                    self.set_jump_label_value(label_false);
+                                    self.push_op(OpCode::RotThree);
+                                    self.push_op(OpCode::PopTop);
+                                    self.push_op(OpCode::PopTop);
+
+                                    self.set_jump_label_value(label_end);
+                                }
+                            }
+                        }
+                        _ => panic!("Invalid lhs value."),
+                    },
                     _ => panic!("Unknown assignment operator: {}", operator),
                 }
             }
             Node::NumericLiteral { value } => {
                 self.push_load_const(PyObject::new_numeric(value, false));
             }
-            Node::StringLiteral {
-                                literal_list,
-            } => {
+            Node::StringLiteral { literal_list } => {
                 let value = literal_list
                     .iter()
                     .map(|v| {
@@ -533,64 +539,77 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             }
             Node::NullLiteral => {
                 self.push_load_const(PyObject::None(false));
-            },
+            }
             Node::ListLiteral { element_list } => {
                 let size = element_list.len() as u8;
                 for elem in element_list {
                     match elem {
                         CollectionElement::ExpressionElement { expr } => {
                             self.compile(expr, None);
-                        },
-                        CollectionElement::MapElement { key_expr:_, value_expr:_ } => {
+                        }
+                        CollectionElement::MapElement {
+                            key_expr: _,
+                            value_expr: _,
+                        } => {
                             panic!("Invalid List Literal");
                         }
                     }
                 }
                 self.push_op(OpCode::BuildList(size));
-            },
+            }
             Node::SetOrMapLiteral { element_list } => {
                 let first_elem = element_list.first();
                 let is_map = if let Some(elem) = first_elem {
                     match elem {
-                        CollectionElement::ExpressionElement { expr:_ } => { false },
-                        CollectionElement::MapElement { key_expr:_, value_expr:_ } => { true }
+                        CollectionElement::ExpressionElement { expr: _ } => false,
+                        CollectionElement::MapElement {
+                            key_expr: _,
+                            value_expr: _,
+                        } => true,
                     }
-                } else { true };
+                } else {
+                    true
+                };
 
                 if is_map {
                     let size = element_list.len() as u8;
                     for elem in element_list {
                         match elem {
-                            CollectionElement::ExpressionElement { expr:_ } => {
+                            CollectionElement::ExpressionElement { expr: _ } => {
                                 panic!("Invalid Map Literal");
-                            },
-                            CollectionElement::MapElement { key_expr, value_expr } => {
+                            }
+                            CollectionElement::MapElement {
+                                key_expr,
+                                value_expr,
+                            } => {
                                 self.compile(key_expr, None);
                                 self.compile(value_expr, None);
                             }
                         }
                     }
                     self.push_op(OpCode::BuildMap(size));
-                }
-                else {
+                } else {
                     let size = element_list.len() as u8;
                     for elem in element_list {
                         match elem {
                             CollectionElement::ExpressionElement { expr } => {
                                 self.compile(expr, None);
-                            },
-                            CollectionElement::MapElement { key_expr:_, value_expr:_ } => {
+                            }
+                            CollectionElement::MapElement {
+                                key_expr: _,
+                                value_expr: _,
+                            } => {
                                 panic!("Invalid Set Literal");
                             }
                         }
                     }
                     self.push_op(OpCode::BuildSet(size));
                 }
-            },
+            }
             Node::IdentifierNode { identifier } => {
                 let value = identifier.value.to_string();
                 self.push_load_var(&value);
-            },
+            }
             Node::Arguments { children } => {
                 let mut name_list: Vec<&str> = vec![];
                 for param in children {
@@ -601,17 +620,17 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 }
                 if !name_list.is_empty() {
                     self.push_load_const(PyObject::SmallTuple {
-                        children: name_list.iter().map(|v| {
-                            PyObject::new_string(v.to_string(), false)
-                        }).collect(),
-                        add_ref: false
+                        children: name_list
+                            .iter()
+                            .map(|v| PyObject::new_string(v.to_string(), false))
+                            .collect(),
+                        add_ref: false,
                     });
                     self.push_op(OpCode::CallFunctionKw(children.len() as u8));
-                }
-                else {
+                } else {
                     self.push_op(OpCode::CallFunction(children.len() as u8));
                 }
-            },
+            }
             Node::SelectorExpression { child, selector } => {
                 // 右辺値として処理される場合
                 self.compile(child, None);
@@ -620,26 +639,29 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     Selector::Args { args } => {
                         // Node::Argumentsがどうにかしてくれる
                         self.compile(args, None);
-                    },
+                    }
                     Selector::Attr { identifier } => {
                         let name = identifier.value;
                         let p = (**self.context_stack.last().unwrap())
                             .borrow_mut()
                             .register_or_get_name(&name.to_string());
                         self.push_op(OpCode::LoadAttr(p));
-                    },
+                    }
                     Selector::Index { expr } => {
                         self.compile(expr, None);
 
                         self.push_op(OpCode::BinarySubScr);
-                    },
-                    Selector::Method { identifier, arguments } => {
+                    }
+                    Selector::Method {
+                        identifier,
+                        arguments,
+                    } => {
                         let name = identifier.value;
                         let p = (**self.context_stack.last().unwrap())
                             .borrow_mut()
                             .register_or_get_name(&name.to_string());
                         self.push_op(OpCode::LoadMethod(p));
-    
+
                         if let Node::Arguments { children } = &**arguments {
                             let mut name_list: Vec<&str> = vec![];
                             for param in children {
@@ -650,25 +672,25 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                             }
                             if !name_list.is_empty() {
                                 self.push_load_const(PyObject::SmallTuple {
-                                    children: name_list.iter().map(|v| {
-                                        PyObject::new_string(v.to_string(), false)
-                                    }).collect(),
-                                    add_ref: false
+                                    children: name_list
+                                        .iter()
+                                        .map(|v| PyObject::new_string(v.to_string(), false))
+                                        .collect(),
+                                    add_ref: false,
                                 });
                                 self.push_op(OpCode::CallFunctionKw(children.len() as u8));
-                            }
-                            else {
+                            } else {
                                 self.push_op(OpCode::CallMethod(children.len() as u8))
                             }
                         }
                     }
                 }
-            },
+            }
             Node::SliceExpression { start, end, step } => {
                 match start {
                     Some(v) => {
                         self.compile(v, None);
-                    },
+                    }
                     None => {
                         self.push_load_const(PyObject::None(false));
                     }
@@ -677,7 +699,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 match end {
                     Some(v) => {
                         self.compile(v, None);
-                    },
+                    }
                     None => {
                         self.push_load_const(PyObject::None(false));
                     }
@@ -687,16 +709,16 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     Some(v) => {
                         self.compile(v, None);
                         self.push_op(OpCode::BuildSlice(3));
-                    },
+                    }
                     None => {
                         self.push_op(OpCode::BuildSlice(2));
                     }
                 }
-            },
+            }
             Node::ThrowExpression { expr } => {
                 self.compile(expr, None);
                 self.push_op(OpCode::RaiseVarargs(1));
-            },
+            }
             Node::ThisExpression => {
                 let p = self
                     .context_stack
@@ -705,12 +727,9 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     .borrow()
                     .get_local_variable(&"self".to_string());
                 self.push_op(OpCode::LoadFast(p));
-            },
+            }
 
-            Node::LabeledStatement {
-                                label,
-                stmt,
-            } => {
+            Node::LabeledStatement { label, stmt } => {
                 let label_str = label.value.to_string();
                 let label_id = self.gen_jump_label();
 
@@ -783,11 +802,9 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             }
             Node::RethrowStatement => {
                 self.push_op(OpCode::Reraise);
-            },
+            }
 
-            Node::VariableDeclarationList {
-                                decl_list,
-            } => {
+            Node::VariableDeclarationList { decl_list } => {
                 for declaration in decl_list {
                     match &declaration.expr {
                         Some(e) => {
@@ -818,21 +835,21 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                         }
                     }
                 }
-            },
-            Node::FunctionDeclaration {
-                                signature,
-                body,
-            } => {
+            }
+            Node::FunctionDeclaration { signature, body } => {
                 self.comiple_declare_function(
                     &signature.name.value.to_string(),
-                    &signature.param, 
-                    body, 
-                    None, 
+                    &signature.param,
+                    body,
+                    None,
                     None,
                     |_| (),
                 );
-            },
-            Node::ClassDeclaration { identifier, member_list } => {
+            }
+            Node::ClassDeclaration {
+                identifier,
+                member_list,
+            } => {
                 self.push_op(OpCode::LoadBuildClass);
 
                 let name = identifier.value.to_string();
@@ -856,10 +873,10 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     .borrow_mut()
                     .declare_variable(&name);
                 self.push_op(OpCode::StoreName(p));
-            },
+            }
 
             Node::IfStatement {
-                                condition,
+                condition,
                 if_true_stmt,
                 if_false_stmt,
             } => {
@@ -912,7 +929,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             // finally S4
             //
             Node::TryFinallyStatement {
-                                block_try,
+                block_try,
                 block_finally,
             } => {
                 let label_finally = self.gen_jump_label();
@@ -935,7 +952,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 self.set_jump_label_value(label_end);
             }
             Node::TryOnStatement {
-                                block_try,
+                block_try,
                 on_part_list,
             } => {
                 let label_finally = self.gen_jump_label();
@@ -962,7 +979,12 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     // catchする型の指定がある場合はloadして検証する
                     match &on_part.exc_type {
                         Some(v) => {
-                            if let DartType::Named { type_name, type_arguments:_, is_nullable:_ } = v {
+                            if let DartType::Named {
+                                type_name,
+                                type_arguments: _,
+                                is_nullable: _,
+                            } = v
+                            {
                                 let name = type_name.identifier.value.to_string();
                                 let p = (**self.context_stack.last().unwrap())
                                     .borrow_mut()
@@ -1002,7 +1024,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                                     self.push_op(OpCode::PopTop);
                                 }
                             }
-                            
+
                             self.push_op(OpCode::PopTop);
                         }
                         None => {
@@ -1027,7 +1049,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 self.set_jump_label_value(label_end);
             }
             Node::ForStatement {
-                                init,
+                init,
                 condition,
                 update,
                 stmt,
@@ -1074,10 +1096,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     self.continue_label_table.remove(stmt_label);
                 }
             }
-            Node::WhileStatement {
-                                condition,
-                stmt,
-            } => {
+            Node::WhileStatement { condition, stmt } => {
                 let label_while_end = self.gen_jump_label();
                 let label_loop_start = self.gen_jump_label();
                 self.default_scope_stack.push(DefaultScope {
@@ -1108,10 +1127,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     self.continue_label_table.remove(stmt_label);
                 }
             }
-            Node::DoStatement {
-                                condition,
-                stmt,
-            } => {
+            Node::DoStatement { condition, stmt } => {
                 let label_do_start = self.gen_jump_label();
                 let label_do_end = self.gen_jump_label();
                 self.default_scope_stack.push(DefaultScope {
@@ -1119,7 +1135,8 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     continue_label: Some(label_do_start),
                 });
                 if let Some(stmt_label) = label {
-                    self.continue_label_table.insert(stmt_label.to_string(), label_do_start);
+                    self.continue_label_table
+                        .insert(stmt_label.to_string(), label_do_start);
                 }
                 self.set_jump_label_value(label_do_start);
 
@@ -1140,7 +1157,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 }
             }
             Node::SwitchStatement {
-                                expr,
+                expr,
                 case_list,
                 default_case,
             } => {
@@ -1187,9 +1204,10 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
         }
     }
 
-    fn comiple_declare_function<F: FnOnce(&mut ByteCompiler<'ctx, 'value>)>(&mut self, 
+    fn comiple_declare_function<F: FnOnce(&mut ByteCompiler<'ctx, 'value>)>(
+        &mut self,
         name: &String,
-        param: &'value FunctionParamSignature, 
+        param: &'value FunctionParamSignature,
         body: &'value Box<Node>,
         function_name_prefix: Option<String>,
         implicit_arg: Option<&String>,
@@ -1212,23 +1230,22 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             argument_list.push(name);
         }
 
-        let mut num_normal_args = param.normal_list.len() as u32
-             + param.option_list.len() as u32;
+        let mut num_normal_args = param.normal_list.len() as u32 + param.option_list.len() as u32;
         if implicit_arg.is_some() {
             num_normal_args += 1;
         }
         let num_kw_only_args = param.named_list.len() as u32;
         let py_code = run_function(
-            &"main.py".to_string(), 
-            &name, 
-            argument_list, 
+            &"main.py".to_string(),
+            &name,
+            argument_list,
             num_normal_args,
             0,
             num_kw_only_args,
-            self, 
-            body, 
+            self,
+            body,
             self.source,
-            preface
+            preface,
         );
 
         // 通常引数のデフォルト値の設定
@@ -1239,7 +1256,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 match &v.expr {
                     Some(expr) => {
                         self.compile(expr, None);
-                    },
+                    }
                     None => {
                         self.push_load_const(PyObject::None(false));
                     }
@@ -1249,9 +1266,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
         }
 
         // キーワード引数のデフォルト値の設定
-        let has_kw_default = param.named_list.iter().any(|v| {
-            v.expr.is_some()
-        });
+        let has_kw_default = param.named_list.iter().any(|v| v.expr.is_some());
         if has_kw_default {
             let mut name_list: Vec<&str> = vec![];
             for v in &param.named_list {
@@ -1259,15 +1274,16 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     Some(expr) => {
                         self.compile(expr, None);
                         name_list.push(v.identifier.value);
-                    },
-                    None => ()
+                    }
+                    None => (),
                 }
             }
             self.push_load_const(PyObject::SmallTuple {
-                children: name_list.iter().map(|v| {
-                    PyObject::new_string(v.to_string(), false)
-                }).collect(),
-                add_ref: false
+                children: name_list
+                    .iter()
+                    .map(|v| PyObject::new_string(v.to_string(), false))
+                    .collect(),
+                add_ref: false,
             });
             let size = name_list.len() as u8;
             self.push_op(OpCode::BuildConstKeyMap(size));
@@ -1282,7 +1298,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
         match function_name_prefix {
             Some(prefix) => {
                 self.push_load_const(PyObject::new_string(format!("{}{}", prefix, name), false));
-            },
+            }
             None => {
                 self.push_load_const(PyObject::new_string(name.to_string(), false));
             }
@@ -1317,8 +1333,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             .borrow()
             .check_variable_scope(value);
         match scope {
-            VariableScope::Global |
-            VariableScope::NotDefined => {
+            VariableScope::Global | VariableScope::NotDefined => {
                 if self.context_stack.last().unwrap().borrow().is_global() {
                     let p = (**self.context_stack.last().unwrap())
                         .borrow_mut()
@@ -1364,8 +1379,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             .borrow()
             .check_variable_scope(value);
         match scope {
-            VariableScope::Global |
-            VariableScope::NotDefined => {
+            VariableScope::Global | VariableScope::NotDefined => {
                 if self.context_stack.last().unwrap().borrow().is_global() {
                     let p = (**self.context_stack.last().unwrap())
                         .borrow_mut()

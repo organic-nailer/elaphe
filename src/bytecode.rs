@@ -261,13 +261,17 @@ impl OpCode {
             OpCode::BinarySubScr => -1,
             OpCode::StoreSubScr => -3,
 
-            OpCode::BuildList(v) 
-            | OpCode::BuildTuple(v)
-            | OpCode::BuildSet(v) => 1 - (v as i32),
+            OpCode::BuildList(v) | OpCode::BuildTuple(v) | OpCode::BuildSet(v) => 1 - (v as i32),
 
             OpCode::BuildMap(v) => 1 - 2 * (v as i32),
 
-            OpCode::BuildSlice(v) => if v == 3 { -2 } else { -1 },
+            OpCode::BuildSlice(v) => {
+                if v == 3 {
+                    -2
+                } else {
+                    -1
+                }
+            }
 
             OpCode::ImportName(_) => -1,
             OpCode::ImportFrom(_) => 1,
@@ -283,9 +287,9 @@ impl OpCode {
             | OpCode::LoadFast(_)
             | OpCode::LoadGlobal(_) => 1,
 
-            OpCode::CallMethod(n) 
-            | OpCode::CallFunction(n)
-            | OpCode::CallFunctionKw(n) => -(n as i32),
+            OpCode::CallMethod(n) | OpCode::CallFunction(n) | OpCode::CallFunctionKw(n) => {
+                -(n as i32)
+            }
 
             OpCode::SetupFinally(_) => {
                 if jump {
@@ -305,11 +309,12 @@ impl OpCode {
             OpCode::PopJumpIfFalse(_) | OpCode::PopJumpIfTrue(_) => -1,
             OpCode::JumpIfNotExcMatch(_) => 0,
 
-            OpCode::MakeFunction(v) => 0
-                 - ((v & 0x01) != 0) as i32
-                 - ((v & 0x02) != 0) as i32
-                 - ((v & 0x04) != 0) as i32
-                 - ((v & 0x08) != 0) as i32,
+            OpCode::MakeFunction(v) => {
+                0 - ((v & 0x01) != 0) as i32
+                    - ((v & 0x02) != 0) as i32
+                    - ((v & 0x04) != 0) as i32
+                    - ((v & 0x08) != 0) as i32
+            }
 
             OpCode::BuildConstKeyMap(v) => -(v as i32),
 

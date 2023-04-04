@@ -1,9 +1,9 @@
-use std::{rc::Rc, cell::RefCell, collections::HashMap};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-use crate::bytecode::{OpCode, calc_stack_size};
-use crate::executioncontext::{GlobalContext, ExecutionContext};
+use crate::bytecode::{calc_stack_size, OpCode};
+use crate::executioncontext::{ExecutionContext, GlobalContext};
+use crate::parser::LibraryDeclaration;
 use crate::pyobject::PyObject;
-use crate::parser::{LibraryDeclaration};
 
 use super::ByteCompiler;
 

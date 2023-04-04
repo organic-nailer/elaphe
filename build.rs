@@ -1,7 +1,7 @@
 use cfgrammar::yacc::YaccKind;
+use copy_to_output::copy_to_output;
 use lrlex::CTLexerBuilder;
 use std::env;
-use copy_to_output::copy_to_output;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Build the lexer and parser.
@@ -14,7 +14,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .lexer_in_src_dir("grammar.l")?
         .build()?;
 
-    copy_to_output("template", &env::var("PROFILE").unwrap()).expect("failed to copy template files");
+    copy_to_output("template", &env::var("PROFILE").unwrap())
+        .expect("failed to copy template files");
     copy_to_output("script", &env::var("PROFILE").unwrap()).expect("failed to copy script files");
     Ok(())
 }

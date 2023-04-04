@@ -1,6 +1,6 @@
 use getopts::Options;
 use std::error::Error;
-use std::path::{PathBuf, Path};
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::str;
 use std::{env, fs};
@@ -21,14 +21,14 @@ fn main() -> Result<(), Box<dyn Error>> {
                 panic!("{}", f.to_string())
             }
         };
-    
+
         let output = "main.pyc";
-    
+
         if !matches.free.is_empty() {
             // ファイル名で実行
             let file_name = matches.free[0].clone();
             let source = fs::read_to_string(file_name)?;
-    
+
             compile_and_run(output, &source)?;
             Ok(())
         } else {
@@ -42,25 +42,21 @@ fn main() -> Result<(), Box<dyn Error>> {
                 None => Err("invalid arguments".into()),
             }
         }
-    }
-    else if command == "build" {
+    } else if command == "build" {
         let output = "main.pyc";
         let file_name = args[2].clone();
         let source = fs::read_to_string(file_name)?;
         compile_only(output, &source)?;
         Ok(())
-    }
-    else if command == "init" {
+    } else if command == "init" {
         let dir = &args[2];
         elaphe_init(dir)?;
         Ok(())
-    }
-    else if command == "add" {
+    } else if command == "add" {
         let package_name = &args[2];
         elaphe_add(package_name)?;
         Ok(())
-    }
-    else {
+    } else {
         Err("invalid command".into())
     }
 }
@@ -130,7 +126,13 @@ fn copy_directory_contents(source: &Path, destination: &Path) -> Result<(), Box<
     for entry in fs::read_dir(source)? {
         let entry = entry?;
         let path = entry.path();
-        let new_file_name = path.file_name().unwrap().to_str().unwrap().trim_start_matches("_").to_string();
+        let new_file_name = path
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .trim_start_matches("_")
+            .to_string();
         let new_path = PathBuf::from(destination).join(new_file_name);
 
         if path.is_dir() {

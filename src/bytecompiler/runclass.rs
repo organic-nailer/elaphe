@@ -1,9 +1,11 @@
-use std::{rc::Rc, cell::RefCell, collections::HashMap};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-use crate::bytecode::{OpCode, calc_stack_size};
-use crate::executioncontext::{PyContext, ClassContext, ExecutionContext};
+use crate::bytecode::{calc_stack_size, OpCode};
+use crate::executioncontext::{ClassContext, ExecutionContext, PyContext};
+use crate::parser::{
+    ConstructorSignature, FunctionParamSignature, Member, Node, VariableDeclaration,
+};
 use crate::pyobject::PyObject;
-use crate::parser::{Node, VariableDeclaration, ConstructorSignature,FunctionParamSignature, Member};
 
 use super::ByteCompiler;
 
@@ -43,7 +45,7 @@ pub fn run_class<'ctx, 'value, 'cpl>(
         .borrow_mut()
         .register_or_get_name(&"__name__".to_string());
     compiler.push_op(OpCode::LoadName(p));
-    
+
     let p = (compiler.context_stack.last().unwrap())
         .borrow_mut()
         .register_or_get_name(&"__module__".to_string());
@@ -66,44 +68,54 @@ pub fn run_class<'ctx, 'value, 'cpl>(
                 instance_variable_declaration_list.push(&decl_list);
                 // インスタンス変数を登録
                 for decl in decl_list {
-                    class_context.borrow_mut().declare_variable(&decl.identifier.value.to_string());
+                    class_context
+                        .borrow_mut()
+                        .declare_variable(&decl.identifier.value.to_string());
                 }
-            },
-            Member::MethodImpl { signature, body:_ } => {
+            }
+            Member::MethodImpl { signature, body: _ } => {
                 if signature.name.value == code_name {
                     primary_constructor = Some(member);
-                }
-                else {
+                } else {
                     method_declaration_list.push(member);
                 }
-            },
-            Member::ConstructorImpl { signature:_, body:_ } => {
+            }
+            Member::ConstructorImpl {
+                signature: _,
+                body: _,
+            } => {
                 primary_constructor = Some(member);
             }
         }
     }
 
-    let dummy_constructor = Member::ConstructorImpl { 
-        signature: ConstructorSignature { 
-            name: None, 
-            param: FunctionParamSignature { 
-                normal_list: vec![], option_list: vec![], named_list: vec![] }
-        }, 
-        body: Box::new(Node::EmptyStatement)
+    let dummy_constructor = Member::ConstructorImpl {
+        signature: ConstructorSignature {
+            name: None,
+            param: FunctionParamSignature {
+                normal_list: vec![],
+                option_list: vec![],
+                named_list: vec![],
+            },
+        },
+        body: Box::new(Node::EmptyStatement),
     };
-    if !instance_variable_declaration_list.is_empty() 
-    && primary_constructor.is_none() {
+    if !instance_variable_declaration_list.is_empty() && primary_constructor.is_none() {
         primary_constructor = Some(&dummy_constructor);
     }
 
     if let Some(method) = primary_constructor {
-        compile_constructor(&mut compiler, method, code_name, instance_variable_declaration_list);
+        compile_constructor(
+            &mut compiler,
+            method,
+            code_name,
+            instance_variable_declaration_list,
+        );
     }
 
     for method in method_declaration_list {
         compile_method(&mut compiler, &method, code_name)
     }
-
 
     // 終わり
     compiler.push_load_const(PyObject::None(false));
@@ -147,8 +159,8 @@ pub fn run_class<'ctx, 'value, 'cpl>(
 }
 
 fn compile_method<'ctx, 'value, 'cpl>(
-    compiler: &'cpl mut ByteCompiler<'ctx, 'value>, 
-    node: &'value Member, 
+    compiler: &'cpl mut ByteCompiler<'ctx, 'value>,
+    node: &'value Member,
     class_name: &'value str,
 ) {
     if let Member::MethodImpl { signature, body } = node {
@@ -156,13 +168,17 @@ fn compile_method<'ctx, 'value, 'cpl>(
         compiler.comiple_declare_function(
             &signature.name.value.to_string(),
             &signature.param,
-            &body, Some(prefix), Some(&"self".to_string()), |_| ());
+            &body,
+            Some(prefix),
+            Some(&"self".to_string()),
+            |_| (),
+        );
     }
 }
 
 fn compile_constructor<'ctx, 'value, 'cpl>(
-    compiler: &'cpl mut ByteCompiler<'ctx, 'value>, 
-    node: &'value Member, 
+    compiler: &'cpl mut ByteCompiler<'ctx, 'value>,
+    node: &'value Member,
     class_name: &'value str,
     instance_variable_declaration_list: Vec<&'value Vec<VariableDeclaration>>,
 ) {
@@ -170,8 +186,10 @@ fn compile_constructor<'ctx, 'value, 'cpl>(
         for decl_list in instance_variable_declaration_list {
             for decl in decl_list {
                 match &decl.expr {
-                    Some(expr) => { compiler.compile(&*expr, None) },
-                    None => { compiler.push_load_const(PyObject::None(false)); }
+                    Some(expr) => compiler.compile(&*expr, None),
+                    None => {
+                        compiler.push_load_const(PyObject::None(false));
+                    }
                 }
                 let p = compiler
                     .context_stack
@@ -194,23 +212,23 @@ fn compile_constructor<'ctx, 'value, 'cpl>(
             compiler.comiple_declare_function(
                 &"__init__".to_string(),
                 &signature.param,
-                &body, 
-                Some(prefix), 
+                &body,
+                Some(prefix),
                 Some(&"self".to_string()),
                 preface,
             );
-        },
+        }
         Member::ConstructorImpl { signature, body } => {
             let prefix = format!("{}{}", class_name, ".");
             compiler.comiple_declare_function(
                 &"__init__".to_string(),
                 &signature.param,
-                &body, 
-                Some(prefix), 
+                &body,
+                Some(prefix),
                 Some(&"self".to_string()),
                 preface,
             );
         }
-        _ => ()
+        _ => (),
     }
 }
