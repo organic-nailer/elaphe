@@ -84,8 +84,8 @@ fn compile_and_run(output: &str, source: &str) -> Result<(), Box<dyn Error>> {
     }
 
     println!("run {}", output);
-    match Command::new("bash")
-        .args(&["-c", "python main.pyc"])
+    match Command::new("python")
+        .args(&["main.pyc"])
         .output()
     {
         Ok(e) => {

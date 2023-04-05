@@ -10,7 +10,9 @@ ElapheはDartのプログラムをPython VM上で動くバイトコードに変�
 
 # Install
 
-Elaphe currently only supports Linux. Please download the source code from GitHub and build it locally.
+Elaphe currently supports Linux and Windows. Elaphe requires [Rust](https://www.rust-lang.org/tools/install) for installation.
+
+## Linux(bash)
 
 - `git clone https://github.com/organic-nailer/elaphe.git`
 - `cd ./elaphe`
@@ -18,6 +20,15 @@ Elaphe currently only supports Linux. Please download the source code from GitHu
 - `mkdir -p ~/.elaphe/bin && cp -r ./target/release/elaphe ~/.elaphe/bin && cp -r ./target/release/template ~/.elaphe/bin && cp -r ./target/release/script ~/.elaphe/bin`
 - `echo 'export PATH="$PATH:$HOME/.elaphe/bin"' >> ~/.bashrc`
 - `source ~/.bashrc`
+
+## Windows(PowerShell)
+
+- `git clone https://github.com/organic-nailer/elaphe.git`
+- `cd ./elaphe`
+- `cargo build --release`
+- `mkdir -Force ~/.elaphe/bin; cp -r -Force ./target/release/elaphe.exe ~/.elaphe/bin; cp -r -Force ./target/release/template ~/.elaphe/bin; cp -r -Force ./target/release/script ~/.elaphe/bin`
+- `[Environment]::SetEnvironmentVariable("PATH", [Environment]::GetEnvironmentVariable("PATH", "USER") + ";" + $HOME + "\.elaphe\bin", "USER")`
+- `$ENV:PATH = [Environment]::GetEnvironmentVariable("PATH", "MACHINE") + ";" + [Environment]::GetEnvironmentVariable("PATH", "USER")`
 
 # Getting Started
 
