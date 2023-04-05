@@ -80,10 +80,7 @@ fn compile_and_run(output: &str, source: &str) -> Result<(), Box<dyn Error>> {
     }
 
     println!("run {}", output);
-    match Command::new("python")
-        .args(&["main.pyc"])
-        .output()
-    {
+    match Command::new("python").args(&["main.pyc"]).output() {
         Ok(e) => {
             println!("----- result -----");
             println!("{}", str::from_utf8(&e.stdout).unwrap());
