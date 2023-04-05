@@ -1059,8 +1059,25 @@ LibraryImportList -> Result<Vec<LibraryImport<'input>>, ()>:
     ;
 
 LibraryImport -> Result<LibraryImport<'input>, ()>:
-      "import" Uri ";" { Ok(LibraryImport { uri: $2?, identifier: None }) }
-    | "import" Uri "as" Identifier ";" { Ok(LibraryImport { uri: $2?, identifier: Some($4?) }) }
+      "import" Uri ";" { Ok(LibraryImport { uri: $2?, identifier: None, combinator_list: vec![] }) }
+    | "import" Uri "as" Identifier ";" { Ok(LibraryImport { uri: $2?, identifier: Some($4?), combinator_list: vec![] }) }
+    | "import" Uri CombinatorList ";" { Ok(LibraryImport { uri: $2?, identifier: None, combinator_list: $3? }) }
+    | "import" Uri "as" Identifier CombinatorList ";" { Ok(LibraryImport { uri: $2?, identifier: Some($4?), combinator_list: $5? }) }
+    ;
+
+CombinatorList -> Result<Vec<Combinator<'input>>, ()>:
+      Combinator { Ok(vec![$1?]) }
+    | CombinatorList Combinator { flatten($1, $2?) }
+    ;
+
+// show と hide はidentifierとして処理したい場合があるのでkeyword指定しない
+Combinator -> Result<Combinator<'input>, ()>:
+    Identifier IdentifierList { Ok(Combinator { operator: $1?, target_list: $2? }) }
+    ;
+
+IdentifierList -> Result<Vec<Identifier<'input>>, ()>:
+      Identifier { Ok(vec![$1?]) }
+    | IdentifierList "," Identifier { flatten($1, $3?) }
     ;
 
 Uri -> Result<&'input str, ()>:
@@ -1341,6 +1358,7 @@ pub struct LibraryDeclaration<'input> {
 pub struct LibraryImport<'input> {
     pub uri: &'input str,
     pub identifier: Option<Identifier<'input>>,
+    pub combinator_list: Vec<Combinator<'input>>,
 }
 
 #[derive(Debug)]
@@ -1475,4 +1493,10 @@ pub enum Member<'input> {
     VariableDecl {
         decl_list: Vec<VariableDeclaration<'input>>,
     }
+}
+
+#[derive(Debug)]
+pub struct Combinator<'input> {
+    pub operator: Identifier<'input>,
+    pub target_list: Vec<Identifier<'input>>,
 }

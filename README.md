@@ -265,10 +265,10 @@ https://docs.google.com/document/d/1c956nDwu3t9qNN0C4HBvl9U6WSvCUY3umqpzohqlrKs/
 - [ ] Libraries and Scripts
     - [ ] part keyword
     - [ ] export keyword
-    - [ ] import keyword
+    - [x] import keyword
         - [x] Normal
         - [x] as
-        - [ ] show/hide
+        - [x] show/hide
 - [ ] Static Types
     - [x] void
     - [ ] function type
