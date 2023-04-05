@@ -21,6 +21,15 @@ Elaphe currently supports Linux and Windows. Elaphe requires [Rust](https://www.
 - `echo 'export PATH="$PATH:$HOME/.elaphe/bin"' >> ~/.bashrc`
 - `source ~/.bashrc`
 
+## macOS(zsh)
+
+- `git clone https://github.com/organic-nailer/elaphe.git`
+- `cd ./elaphe`
+- `cargo build --release`
+- `mkdir -p ~/.elaphe/bin && cp -r ./target/release/elaphe ~/.elaphe/bin && cp -r ./target/release/template ~/.elaphe/bin && cp -r ./target/release/script ~/.elaphe/bin`
+- `echo 'export PATH="$PATH:$HOME/.elaphe/bin"' >> ~/.zshrc`
+- `source ~/.zshrc`
+
 ## Windows(PowerShell)
 
 - `git clone https://github.com/organic-nailer/elaphe.git`
