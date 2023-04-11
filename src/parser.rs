@@ -1,5 +1,8 @@
-use std::{fmt, error::Error};
-use dart_parser_generator::{parser_generator::{TransitionMap, TransitionKind}, grammar::EPSILON};
+use dart_parser_generator::{
+    grammar::EPSILON,
+    parser_generator::{TransitionKind, TransitionMap},
+};
+use std::{error::Error, fmt};
 
 use crate::tokenizer::{Token, TokenKind};
 
@@ -7,7 +10,10 @@ use self::node::NodeExpression;
 
 pub mod node;
 
-pub fn parse<'input>(input: Vec<Token<'input>>, transition_map: TransitionMap) -> Result<NodeExpression, Box<dyn Error>> {
+pub fn parse<'input>(
+    input: Vec<Token<'input>>,
+    transition_map: TransitionMap,
+) -> Result<NodeExpression, Box<dyn Error>> {
     let internal_node = parse_internally(input, transition_map);
 
     parse_expression(&internal_node)
@@ -18,14 +24,14 @@ fn parse_internally(input: Vec<Token>, transition_map: TransitionMap) -> NodeInt
     let mut node_stack: Vec<NodeInternal> = Vec::new();
     let mut parse_index = 0;
     let mut accepted = false;
-    
+
     // Stackの先頭のTokenは使わないのでなんでもよい
     stack.push((String::from("I0"), "".to_string()));
     while parse_index < input.len() || !stack.is_empty() {
         println!("stack: {:?}, index: {}", stack, parse_index);
         let transition = transition_map.transitions.get(&(
-            stack.last().unwrap().0.clone(), 
-            input[parse_index].kind_str()
+            stack.last().unwrap().0.clone(),
+            input[parse_index].kind_str(),
         ));
 
         if transition.is_none() {
@@ -36,8 +42,9 @@ fn parse_internally(input: Vec<Token>, transition_map: TransitionMap) -> NodeInt
         match transition.kind {
             TransitionKind::Shift => {
                 stack.push((
-                    transition.target.clone().unwrap(), 
-                    input[parse_index].kind_str()));
+                    transition.target.clone().unwrap(),
+                    input[parse_index].kind_str(),
+                ));
                 node_stack.push(NodeInternal::Leaf {
                     rule_name: input[parse_index].kind_str(),
                     value: input[parse_index].clone(),
@@ -62,13 +69,18 @@ fn parse_internally(input: Vec<Token>, transition_map: TransitionMap) -> NodeInt
                     children,
                 };
 
-                let next_transition = transition_map.transitions.get(&(stack.last().unwrap().0.clone(), rule.left.to_string()));
+                let next_transition = transition_map
+                    .transitions
+                    .get(&(stack.last().unwrap().0.clone(), rule.left.to_string()));
                 if next_transition.is_none() {
                     println!("Shift-Reduce Conflict: {:?}", rule);
                     break;
                 }
                 let next_transition = next_transition.unwrap();
-                stack.push((next_transition.target.clone().unwrap(), rule.left.to_string()));
+                stack.push((
+                    next_transition.target.clone().unwrap(),
+                    rule.left.to_string(),
+                ));
 
                 node_stack.push(new_node);
             }
@@ -97,48 +109,40 @@ pub enum NodeInternal<'input> {
     },
 }
 
-fn parse_expression<'input>(node: &NodeInternal<'input>) -> Result<NodeExpression<'input>, Box<dyn Error>> {
+fn parse_expression<'input>(
+    node: &NodeInternal<'input>,
+) -> Result<NodeExpression<'input>, Box<dyn Error>> {
     match node {
-        NodeInternal::Parent { rule_name, children } => {
-            match rule_name.as_str() {
-                "AdditiveExpression" |
-                "MultiplicativeExpression" => {
-                    if children.len() == 1 {
-                        parse_expression(&children[0])
-                    } else {
-                        let left = parse_expression(&children[0])?;
-                        let right = parse_expression(&children[2])?;
-                        Ok(NodeExpression::Binary {
-                            left: Box::new(left),
-                            right: Box::new(right),
-                            operator: get_value_unsafe(&children[1]).value,
-                        })
-                    }
-                }
-                "PrimaryExpression" => {
-                    if children.len() == 1 {
-                        parse_expression(&children[0])
-                    } else {
-                        parse_expression(&children[1])
-                    }
-                }
-                v => {
-                    Err(format!("Parse Error: {} is not valid rule", v).into())
-                }
-            }
-        }
-        NodeInternal::Leaf { rule_name, value } => {
-            match rule_name.as_str() {
-                "Number" => {
-                    Ok(NodeExpression::NumericLiteral { 
-                        value: value.value
+        NodeInternal::Parent {
+            rule_name,
+            children,
+        } => match rule_name.as_str() {
+            "AdditiveExpression" | "MultiplicativeExpression" => {
+                if children.len() == 1 {
+                    parse_expression(&children[0])
+                } else {
+                    let left = parse_expression(&children[0])?;
+                    let right = parse_expression(&children[2])?;
+                    Ok(NodeExpression::Binary {
+                        left: Box::new(left),
+                        right: Box::new(right),
+                        operator: get_value_unsafe(&children[1]).value,
                     })
                 }
-                v => {
-                    Err(format!("Parse Error: {} is not valid rule", v).into())
+            }
+            "PrimaryExpression" => {
+                if children.len() == 1 {
+                    parse_expression(&children[0])
+                } else {
+                    parse_expression(&children[1])
                 }
             }
-        }
+            v => Err(format!("Parse Error: {} is not valid rule", v).into()),
+        },
+        NodeInternal::Leaf { rule_name, value } => match rule_name.as_str() {
+            "Number" => Ok(NodeExpression::NumericLiteral { value: value.value }),
+            v => Err(format!("Parse Error: {} is not valid rule", v).into()),
+        },
     }
 }
 

@@ -45,18 +45,26 @@ pub fn run_root<'value>(
     compiler.compile(root_node, None);
 
     // print(x); return None;
-    let print_position = (*global_context).borrow_mut().register_or_get_name(&"print".to_string());
+    let print_position = (*global_context)
+        .borrow_mut()
+        .register_or_get_name(&"print".to_string());
     compiler
         .byte_operations
         .borrow_mut()
         .insert(0, OpCode::LoadName(print_position));
-    compiler.byte_operations.borrow_mut().push(OpCode::CallFunction(1));
+    compiler
+        .byte_operations
+        .borrow_mut()
+        .push(OpCode::CallFunction(1));
     compiler.byte_operations.borrow_mut().push(OpCode::PopTop);
     compiler
         .byte_operations
         .borrow_mut()
         .push(OpCode::LoadConst(0));
-    compiler.byte_operations.borrow_mut().push(OpCode::ReturnValue);
+    compiler
+        .byte_operations
+        .borrow_mut()
+        .push(OpCode::ReturnValue);
 
     // // main関数を実行
     // let main_position = (*global_context)

@@ -1,14 +1,14 @@
+use ciborium::ser;
 use copy_to_output::copy_to_output;
 use dart_parser_generator::{grammar, parser_generator};
 use std::{env, path::Path};
-use ciborium::ser;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         // generate parser
         let rules = grammar::get_dart_grammar();
         let transition_map = parser_generator::generate_parser(&rules, grammar::START_SYMBOL);
-    
+
         // write binary to file
         let out_dir = env::var("OUT_DIR").unwrap();
         let dest_path = Path::new(&out_dir).join("parser.bin");

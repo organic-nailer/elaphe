@@ -4,8 +4,8 @@ use std::io::Write;
 use std::path::Path;
 use std::time::SystemTime;
 
-use dart_parser_generator::parser_generator;
 use ciborium::de;
+use dart_parser_generator::parser_generator;
 use parser::node::NodeExpression;
 
 mod bytecode;

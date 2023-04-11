@@ -4,9 +4,7 @@ use std::{cell::RefCell, collections::HashMap};
 use crate::bytecode::ByteCode;
 use crate::executioncontext::{BlockContext, ExecutionContext, VariableScope};
 use crate::parser::node::NodeExpression;
-use crate::{
-    bytecode::OpCode, pyobject::PyObject,
-};
+use crate::{bytecode::OpCode, pyobject::PyObject};
 
 // use self::runclass::run_class;
 // use self::runfunction::run_function;
@@ -154,26 +152,30 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
 
     fn compile(&mut self, node: &'value NodeExpression, label: Option<&String>) {
         match node {
-            NodeExpression::Binary { left, operator, right } => {
-                    self.compile(left, None);
-                    self.compile(right, None);
-                    match *operator {
-                        "==" | "!=" | ">=" | ">" | "<=" | "<" => {
-                            self.push_op(OpCode::compare_op_from_str(operator))
-                        }
-                        "<<" => self.push_op(OpCode::BinaryLShift),
-                        ">>" => self.push_op(OpCode::BinaryRShift),
-                        "&" => self.push_op(OpCode::BinaryAnd),
-                        "^" => self.push_op(OpCode::BinaryXor),
-                        "|" => self.push_op(OpCode::BinaryOr),
-                        "+" => self.push_op(OpCode::BinaryAdd),
-                        "-" => self.push_op(OpCode::BinarySubtract),
-                        "*" => self.push_op(OpCode::BinaryMultiply),
-                        "/" => self.push_op(OpCode::BinaryTrueDivide),
-                        "%" => self.push_op(OpCode::BinaryModulo),
-                        "~/" => self.push_op(OpCode::BinaryFloorDivide),
-                        _ => panic!("unknown operator: {}", *operator),
+            NodeExpression::Binary {
+                left,
+                operator,
+                right,
+            } => {
+                self.compile(left, None);
+                self.compile(right, None);
+                match *operator {
+                    "==" | "!=" | ">=" | ">" | "<=" | "<" => {
+                        self.push_op(OpCode::compare_op_from_str(operator))
                     }
+                    "<<" => self.push_op(OpCode::BinaryLShift),
+                    ">>" => self.push_op(OpCode::BinaryRShift),
+                    "&" => self.push_op(OpCode::BinaryAnd),
+                    "^" => self.push_op(OpCode::BinaryXor),
+                    "|" => self.push_op(OpCode::BinaryOr),
+                    "+" => self.push_op(OpCode::BinaryAdd),
+                    "-" => self.push_op(OpCode::BinarySubtract),
+                    "*" => self.push_op(OpCode::BinaryMultiply),
+                    "/" => self.push_op(OpCode::BinaryTrueDivide),
+                    "%" => self.push_op(OpCode::BinaryModulo),
+                    "~/" => self.push_op(OpCode::BinaryFloorDivide),
+                    _ => panic!("unknown operator: {}", *operator),
+                }
             }
             NodeExpression::NumericLiteral { value } => {
                 self.push_load_const(PyObject::new_numeric(value, false));
