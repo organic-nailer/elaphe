@@ -16,13 +16,13 @@ pub enum TokenKind {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Token<'input> {
     pub kind: TokenKind,
-    pub value: &'input str,
+    pub str: &'input str,
 }
 
 impl Token<'_> {
     pub fn kind_str(&self) -> String {
         match self.kind {
-            TokenKind::Keyword | TokenKind::Symbol => self.value.to_string(),
+            TokenKind::Keyword | TokenKind::Symbol => self.str.to_string(),
             TokenKind::Number => String::from("Number"),
             TokenKind::String => String::from("String"),
             TokenKind::Boolean => String::from("Boolean"),
@@ -91,7 +91,7 @@ pub fn tokenize<'input>(input: &'input str) -> Vec<Token<'input>> {
             Some(string) => {
                 tokens.push(Token {
                     kind: TokenKind::String,
-                    value: &input[current_index..current_index + string.end()],
+                    str: &input[current_index..current_index + string.end()],
                 });
                 current_index += string.end();
                 continue 'tokenize;
@@ -103,7 +103,7 @@ pub fn tokenize<'input>(input: &'input str) -> Vec<Token<'input>> {
             Some(number) => {
                 tokens.push(Token {
                     kind: TokenKind::Number,
-                    value: &input[current_index..current_index + number.end()],
+                    str: &input[current_index..current_index + number.end()],
                 });
                 current_index += number.end();
                 continue 'tokenize;
@@ -115,7 +115,7 @@ pub fn tokenize<'input>(input: &'input str) -> Vec<Token<'input>> {
             Some(boolean) => {
                 tokens.push(Token {
                     kind: TokenKind::Boolean,
-                    value: &input[current_index..current_index + boolean.end()],
+                    str: &input[current_index..current_index + boolean.end()],
                 });
                 current_index += boolean.end();
                 continue 'tokenize;
@@ -126,7 +126,7 @@ pub fn tokenize<'input>(input: &'input str) -> Vec<Token<'input>> {
         if input[current_index..].starts_with("null") {
             tokens.push(Token {
                 kind: TokenKind::Null,
-                value: "null",
+                str: "null",
             });
             current_index += 4;
             continue 'tokenize;
@@ -136,7 +136,7 @@ pub fn tokenize<'input>(input: &'input str) -> Vec<Token<'input>> {
             if input[current_index..].starts_with(keyword) {
                 tokens.push(Token {
                     kind: TokenKind::Keyword,
-                    value: keyword,
+                    str: keyword,
                 });
                 current_index += keyword.len();
                 continue 'tokenize;
@@ -147,7 +147,7 @@ pub fn tokenize<'input>(input: &'input str) -> Vec<Token<'input>> {
             Some(identifier) => {
                 tokens.push(Token {
                     kind: TokenKind::Identifier,
-                    value: &input[current_index..current_index + identifier.end()],
+                    str: &input[current_index..current_index + identifier.end()],
                 });
                 current_index += identifier.end();
                 continue 'tokenize;
@@ -159,7 +159,7 @@ pub fn tokenize<'input>(input: &'input str) -> Vec<Token<'input>> {
             if input[current_index..].starts_with(symbol) {
                 tokens.push(Token {
                     kind: TokenKind::Symbol,
-                    value: symbol,
+                    str: symbol,
                 });
                 current_index += symbol.len();
                 continue 'tokenize;
@@ -170,7 +170,7 @@ pub fn tokenize<'input>(input: &'input str) -> Vec<Token<'input>> {
     }
     tokens.push(Token {
         kind: TokenKind::EOF,
-        value: "",
+        str: "",
     });
     tokens
 }
@@ -188,43 +188,43 @@ mod tests {
             vec![
                 Token {
                     kind: TokenKind::Number,
-                    value: "1",
+                    str: "1",
                 },
                 Token {
                     kind: TokenKind::Symbol,
-                    value: "+",
+                    str: "+",
                 },
                 Token {
                     kind: TokenKind::Number,
-                    value: "2.3",
+                    str: "2.3",
                 },
                 Token {
                     kind: TokenKind::Symbol,
-                    value: "*",
+                    str: "*",
                 },
                 Token {
                     kind: TokenKind::Number,
-                    value: ".9e+3",
+                    str: ".9e+3",
                 },
                 Token {
                     kind: TokenKind::Symbol,
-                    value: "/",
+                    str: "/",
                 },
                 Token {
                     kind: TokenKind::Number,
-                    value: "10.2e-20",
+                    str: "10.2e-20",
                 },
                 Token {
                     kind: TokenKind::Symbol,
-                    value: "+",
+                    str: "+",
                 },
                 Token {
                     kind: TokenKind::Number,
-                    value: "0x2A",
+                    str: "0x2A",
                 },
                 Token {
                     kind: TokenKind::EOF,
-                    value: ""
+                    str: ""
                 }
             ]
         );
@@ -236,35 +236,35 @@ mod tests {
             vec![
                 Token {
                     kind: TokenKind::String,
-                    value: "'hoge ho123.4'",
+                    str: "'hoge ho123.4'",
                 },
                 Token {
                     kind: TokenKind::Symbol,
-                    value: "+",
+                    str: "+",
                 },
                 Token {
                     kind: TokenKind::Boolean,
-                    value: "true",
+                    str: "true",
                 },
                 Token {
                     kind: TokenKind::Symbol,
-                    value: "+",
+                    str: "+",
                 },
                 Token {
                     kind: TokenKind::Boolean,
-                    value: "false",
+                    str: "false",
                 },
                 Token {
                     kind: TokenKind::Symbol,
-                    value: "+",
+                    str: "+",
                 },
                 Token {
                     kind: TokenKind::Null,
-                    value: "null",
+                    str: "null",
                 },
                 Token {
                     kind: TokenKind::EOF,
-                    value: ""
+                    str: ""
                 }
             ]
         );

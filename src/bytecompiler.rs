@@ -3,7 +3,7 @@ use std::{cell::RefCell, collections::HashMap};
 
 use crate::bytecode::ByteCode;
 use crate::executioncontext::{BlockContext, ExecutionContext, VariableScope};
-use crate::parser::node::NodeExpression;
+use crate::parser::node::{NodeExpression, Selector};
 use crate::{bytecode::OpCode, pyobject::PyObject};
 
 // use self::runclass::run_class;
@@ -179,6 +179,38 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             }
             NodeExpression::NumericLiteral { value } => {
                 self.push_load_const(PyObject::new_numeric(value, false));
+            }
+            NodeExpression::Identifier { identifier } => {
+                let value = identifier.value.to_string();
+                self.push_load_var(&value);
+            }
+            NodeExpression::Selector { left, operator } => {
+                // 右辺値として処理される場合
+                self.compile(left, None);
+
+                match operator {
+                    Selector::Args { args } => {
+                        let mut name_list: Vec<&str> = vec![];
+                        for param in args {
+                            self.compile(&param.expr, None);
+                            if let Some(v) = &param.identifier {
+                                name_list.push(v.value);
+                            }
+                        }
+                        if !name_list.is_empty() {
+                            self.push_load_const(PyObject::SmallTuple {
+                                children: name_list
+                                    .iter()
+                                    .map(|v| PyObject::new_string(v.to_string(), false))
+                                    .collect(),
+                                add_ref: false,
+                            });
+                            self.push_op(OpCode::CallFunctionKw(args.len() as u8));
+                        } else {
+                            self.push_op(OpCode::CallFunction(args.len() as u8));
+                        }
+                    }
+                }
             }
         }
         // match node {

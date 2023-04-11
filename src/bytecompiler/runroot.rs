@@ -45,17 +45,17 @@ pub fn run_root<'value>(
     compiler.compile(root_node, None);
 
     // print(x); return None;
-    let print_position = (*global_context)
-        .borrow_mut()
-        .register_or_get_name(&"print".to_string());
-    compiler
-        .byte_operations
-        .borrow_mut()
-        .insert(0, OpCode::LoadName(print_position));
-    compiler
-        .byte_operations
-        .borrow_mut()
-        .push(OpCode::CallFunction(1));
+    // let print_position = (*global_context)
+    //     .borrow_mut()
+    //     .register_or_get_name(&"print".to_string());
+    // compiler
+    //     .byte_operations
+    //     .borrow_mut()
+    //     .insert(0, OpCode::LoadName(print_position));
+    // compiler
+    //     .byte_operations
+    //     .borrow_mut()
+    //     .push(OpCode::CallFunction(1));
     compiler.byte_operations.borrow_mut().push(OpCode::PopTop);
     compiler
         .byte_operations

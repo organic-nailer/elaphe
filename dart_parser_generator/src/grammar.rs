@@ -5,15 +5,24 @@ pub const START_SYMBOL: &'static str = "AdditiveExpression";
 pub const EPSILON: &'static str = "[EMPTY]";
 pub const END: &'static str = "[END]";
 
-const DART_GRAMMARS: [&'static str; 3] = [
+const DART_GRAMMARS: [&'static str; 8] = [
 "AdditiveExpression ::= AdditiveExpression '+' MultiplicativeExpression
     |/ AdditiveExpression '-' MultiplicativeExpression
     |/ MultiplicativeExpression",
 "MultiplicativeExpression ::= MultiplicativeExpression '*' PrimaryExpression
     |/ MultiplicativeExpression '/' PrimaryExpression
-    |/ PrimaryExpression",
+    |/ PostfixExpression",
+"PostfixExpression ::= PrimaryExpression
+    |/ PostfixExpression Selector",
+"Selector ::= Arguments",
+"Arguments ::= '(' ')'
+    |/ '(' ArgumentList ')'",
+"ArgumentList ::= NormalArgument
+    |/ ArgumentList ',' NormalArgument",
+"NormalArgument ::= AdditiveExpression",
 "PrimaryExpression ::= '(' AdditiveExpression ')'
-    |/ 'Number'"
+    |/ 'Number'
+    |/ 'Identifier'",
 ];
 
 // const DART_GRAMMARS: [&'static str; 3] = [
