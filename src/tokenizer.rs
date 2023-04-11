@@ -91,7 +91,7 @@ pub fn tokenize<'input>(input: &'input str) -> Vec<Token<'input>> {
             Some(string) => {
                 tokens.push(Token {
                     kind: TokenKind::String,
-                    value: &input[current_index + 1..current_index + string.end() - 1],
+                    value: &input[current_index..current_index + string.end()],
                 });
                 current_index += string.end();
                 continue 'tokenize;
@@ -121,6 +121,15 @@ pub fn tokenize<'input>(input: &'input str) -> Vec<Token<'input>> {
                 continue 'tokenize;
             }
             None => {}
+        }
+
+        if input[current_index..].starts_with("null") {
+            tokens.push(Token {
+                kind: TokenKind::Null,
+                value: "null",
+            });
+            current_index += 4;
+            continue 'tokenize;
         }
 
         for keyword in RESERVED_KEYWORDS.iter() {
@@ -212,6 +221,10 @@ mod tests {
                 Token {
                     kind: TokenKind::Number,
                     value: "0x2A",
+                },
+                Token {
+                    kind: TokenKind::EOF,
+                    value: ""
                 }
             ]
         );
@@ -248,6 +261,10 @@ mod tests {
                 Token {
                     kind: TokenKind::Null,
                     value: "null",
+                },
+                Token {
+                    kind: TokenKind::EOF,
+                    value: ""
                 }
             ]
         );
