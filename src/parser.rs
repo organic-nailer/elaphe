@@ -1,76 +1,150 @@
-use std::error::Error;
+use std::{fmt, error::Error};
+use dart_parser_generator::{parser_generator::{TransitionMap, TransitionKind}, grammar::EPSILON};
 
-use lrlex::lrlex_mod;
-use lrpar::lrpar_mod;
+use crate::tokenizer::{Token, TokenKind};
 
-lrlex_mod!("grammar.l");
-lrpar_mod!("grammar.y");
+use self::node::NodeExpression;
 
-pub use grammar_y::*;
+pub mod node;
 
-pub fn parse(source: &str) -> Result<LibraryDeclaration, Box<dyn Error>> {
-    let lexerdef = grammar_l::lexerdef();
-    if source.trim().is_empty() {
-        return Err("source is empty".into());
-    }
-    let lexer = lexerdef.lexer(source);
-    let (res, err) = grammar_y::parse(&lexer);
-    if !err.is_empty() {
-        for e in err {
-            println!("{}", e.pp(&lexer, &grammar_y::token_epp));
-        }
-        return Err("there are parse error. aborting...".into());
-    }
+pub fn parse<'input>(input: Vec<Token<'input>>, transition_map: TransitionMap) -> Result<NodeExpression, Box<dyn Error>> {
+    let internal_node = parse_internally(input, transition_map);
 
-    match res {
-        Some(Ok(r)) => return Ok(r),
-        _ => return Err("parse failed".into()),
-    };
+    parse_expression(&internal_node)
 }
 
-#[cfg(test)]
-mod tests {
-    use lrlex::{DefaultLexerTypes, LRNonStreamingLexer};
-    use lrpar::{Lexeme, Lexer};
+fn parse_internally(input: Vec<Token>, transition_map: TransitionMap) -> NodeInternal {
+    let mut stack: Vec<(String, String)> = Vec::new();
+    let mut node_stack: Vec<NodeInternal> = Vec::new();
+    let mut parse_index = 0;
+    let mut accepted = false;
+    
+    // Stackの先頭のTokenは使わないのでなんでもよい
+    stack.push((String::from("I0"), "".to_string()));
+    while parse_index < input.len() || !stack.is_empty() {
+        println!("stack: {:?}, index: {}", stack, parse_index);
+        let transition = transition_map.transitions.get(&(
+            stack.last().unwrap().0.clone(), 
+            input[parse_index].kind_str()
+        ));
 
-    use super::*;
+        if transition.is_none() {
+            println!("No Transition Error: {:?}", input[parse_index]);
+            break;
+        }
+        let transition = transition.unwrap();
+        match transition.kind {
+            TransitionKind::Shift => {
+                stack.push((
+                    transition.target.clone().unwrap(), 
+                    input[parse_index].kind_str()));
+                node_stack.push(NodeInternal::Leaf {
+                    rule_name: input[parse_index].kind_str(),
+                    value: input[parse_index].clone(),
+                });
+                parse_index += 1;
+            }
+            TransitionKind::Reduce => {
+                let rule = transition.rule.clone().unwrap();
+                let mut children = Vec::new();
+                let child_size = if rule.right.len() == 1 && rule.right[0] == EPSILON {
+                    0
+                } else {
+                    rule.right.len()
+                };
+                for _ in 0..child_size {
+                    stack.pop();
+                    children.push(node_stack.pop().unwrap());
+                }
+                children.reverse();
+                let new_node = NodeInternal::Parent {
+                    rule_name: rule.left.to_string(),
+                    children,
+                };
 
-    fn lexer_result_to_vec<'a>(
-        result: LRNonStreamingLexer<DefaultLexerTypes>,
-        source: &'a str,
-    ) -> Vec<&'a str> {
-        result
-            .iter()
-            .map(|r| match r {
-                Ok(lexeme) => {
-                    let span = lexeme.span();
-                    return &source[span.start()..span.end()];
+                let next_transition = transition_map.transitions.get(&(stack.last().unwrap().0.clone(), rule.left.to_string()));
+                if next_transition.is_none() {
+                    println!("Shift-Reduce Conflict: {:?}", rule);
+                    break;
                 }
-                Err(e) => {
-                    panic!("Lex Error: {:?}", e);
-                }
-            })
-            .collect()
+                let next_transition = next_transition.unwrap();
+                stack.push((next_transition.target.clone().unwrap(), rule.left.to_string()));
+
+                node_stack.push(new_node);
+            }
+            TransitionKind::Accept => {
+                accepted = true;
+                break;
+            }
+        }
     }
 
-    #[test]
-    fn lexer() {
-        let lexerdef = grammar_l::lexerdef();
+    if accepted {
+        node_stack.pop().unwrap()
+    } else {
+        panic!("Parse Error");
+    }
+}
 
-        let source = "1 + 2.3*.9e+3/10.2e-20 + 0x2A";
-        let result = lexerdef.lexer(source);
-        let result: Vec<&str> = lexer_result_to_vec(result, source);
-        assert_eq!(
-            result,
-            vec!["1", "+", "2.3", "*", ".9e+3", "/", "10.2e-20", "+", "0x2A"]
-        );
+pub enum NodeInternal<'input> {
+    Parent {
+        rule_name: String,
+        children: Vec<NodeInternal<'input>>,
+    },
+    Leaf {
+        rule_name: String,
+        value: Token<'input>,
+    },
+}
 
-        let source = "'hoge ho123.4' + true + false +null";
-        let result = lexerdef.lexer(source);
-        let result: Vec<&str> = lexer_result_to_vec(result, source);
-        assert_eq!(
-            result,
-            vec!["'hoge ho123.4'", "+", "true", "+", "false", "+", "null"]
-        );
+fn parse_expression<'input>(node: &NodeInternal<'input>) -> Result<NodeExpression<'input>, Box<dyn Error>> {
+    match node {
+        NodeInternal::Parent { rule_name, children } => {
+            match rule_name.as_str() {
+                "AdditiveExpression" |
+                "MultiplicativeExpression" => {
+                    if children.len() == 1 {
+                        parse_expression(&children[0])
+                    } else {
+                        let left = parse_expression(&children[0])?;
+                        let right = parse_expression(&children[2])?;
+                        Ok(NodeExpression::Binary {
+                            left: Box::new(left),
+                            right: Box::new(right),
+                            operator: get_value_unsafe(&children[1]).value,
+                        })
+                    }
+                }
+                "PrimaryExpression" => {
+                    if children.len() == 1 {
+                        parse_expression(&children[0])
+                    } else {
+                        parse_expression(&children[1])
+                    }
+                }
+                v => {
+                    Err(format!("Parse Error: {} is not valid rule", v).into())
+                }
+            }
+        }
+        NodeInternal::Leaf { rule_name, value } => {
+            match rule_name.as_str() {
+                "Number" => {
+                    Ok(NodeExpression::NumericLiteral { 
+                        value: value.value
+                    })
+                }
+                v => {
+                    Err(format!("Parse Error: {} is not valid rule", v).into())
+                }
+            }
+        }
+    }
+}
+
+fn get_value_unsafe<'input>(node: &NodeInternal<'input>) -> Token<'input> {
+    match node {
+        NodeInternal::Parent { .. } => panic!("NodeInternal::Parent is not Leaf"),
+        NodeInternal::Leaf { value, .. } => value.clone(),
     }
 }

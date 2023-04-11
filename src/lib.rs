@@ -4,16 +4,25 @@ use std::io::Write;
 use std::path::Path;
 use std::time::SystemTime;
 
+use dart_parser_generator::parser_generator;
+use ciborium::de;
+use parser::node::NodeExpression;
+
 mod bytecode;
 mod bytecompiler;
 mod executioncontext;
 mod parser;
 mod pyobject;
-
-use crate::parser::LibraryDeclaration;
+mod tokenizer;
 
 pub fn run(output: &str, source: &str) -> Result<(), ()> {
-    let node = parser::parse(source);
+    // Tokenize
+    let token_list = tokenizer::tokenize(source);
+
+    // Parse
+    let reader = std::fs::File::open(concat!(env!("OUT_DIR"), "/parser.bin")).unwrap();
+    let transition_map: parser_generator::TransitionMap = de::from_reader(reader).unwrap();
+    let node = parser::parse(token_list, transition_map);
     if node.is_err() {
         println!("{:?}", node.err());
         println!("failed to parse the passed source: {}", source);
@@ -52,7 +61,7 @@ fn write_header(file: &mut File) {
     file.write(&(file_size.to_le_bytes())).unwrap();
 }
 
-fn write_root_py_code(file: &mut File, source: &str, node: LibraryDeclaration) {
+fn write_root_py_code(file: &mut File, source: &str, node: NodeExpression) {
     let code = bytecompiler::runroot::run_root(&"main.py".to_string(), &node, source);
 
     code.write(file);

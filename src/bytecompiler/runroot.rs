@@ -2,14 +2,14 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::bytecode::{calc_stack_size, OpCode};
 use crate::executioncontext::{ExecutionContext, GlobalContext};
-use crate::parser::LibraryDeclaration;
+use crate::parser::node::NodeExpression;
 use crate::pyobject::PyObject;
 
 use super::ByteCompiler;
 
 pub fn run_root<'value>(
     file_name: &String,
-    root_node: &'value LibraryDeclaration,
+    root_node: &'value NodeExpression,
     source: &'value str,
 ) -> PyObject {
     let global_context = Rc::new(RefCell::new(GlobalContext {
@@ -35,23 +35,38 @@ pub fn run_root<'value>(
         .borrow_mut()
         .push_const(PyObject::None(false));
 
-    for node in &root_node.import_list {
-        compiler.compile_import(node);
-    }
+    // for node in &root_node.import_list {
+    //     compiler.compile_import(node);
+    // }
 
-    for node in &root_node.top_level_declaration_list {
-        compiler.compile(&node, None);
-    }
+    // for node in &root_node.top_level_declaration_list {
+    //     compiler.compile(&node, None);
+    // }
+    compiler.compile(root_node, None);
 
-    // main関数を実行
-    let main_position = (*global_context)
+    // print(x); return None;
+    let print_position = (*global_context).borrow_mut().register_or_get_name(&"print".to_string());
+    compiler
+        .byte_operations
         .borrow_mut()
-        .register_or_get_name(&"main".to_string());
-    compiler.push_op(OpCode::LoadName(main_position));
-    compiler.push_op(OpCode::CallFunction(0));
-    compiler.push_op(OpCode::PopTop);
-    compiler.push_op(OpCode::LoadConst(0));
-    compiler.push_op(OpCode::ReturnValue);
+        .insert(0, OpCode::LoadName(print_position));
+    compiler.byte_operations.borrow_mut().push(OpCode::CallFunction(1));
+    compiler.byte_operations.borrow_mut().push(OpCode::PopTop);
+    compiler
+        .byte_operations
+        .borrow_mut()
+        .push(OpCode::LoadConst(0));
+    compiler.byte_operations.borrow_mut().push(OpCode::ReturnValue);
+
+    // // main関数を実行
+    // let main_position = (*global_context)
+    //     .borrow_mut()
+    //     .register_or_get_name(&"main".to_string());
+    // compiler.push_op(OpCode::LoadName(main_position));
+    // compiler.push_op(OpCode::CallFunction(0));
+    // compiler.push_op(OpCode::PopTop);
+    // compiler.push_op(OpCode::LoadConst(0));
+    // compiler.push_op(OpCode::ReturnValue);
 
     let stack_size = calc_stack_size(&compiler.byte_operations.borrow()) as u32;
     let operation_list = compiler.resolve_references();
