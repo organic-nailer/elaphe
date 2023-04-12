@@ -162,6 +162,38 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     |_| (),
                 );
             }
+            NodeStatement::VariableDeclarationList { decl_list } => {
+                for declaration in decl_list {
+                    match &declaration.expr {
+                        Some(e) => {
+                            self.compile_expr(e, None);
+                            let value = declaration.identifier.value.to_string();
+                            let position = (**self.context_stack.last().unwrap())
+                                .borrow_mut()
+                                .declare_variable(&value);
+                            if self.context_stack.last().unwrap().borrow().is_global() {
+                                // トップレベル変数の場合
+                                self.push_op(OpCode::StoreName(position));
+                            } else {
+                                // ローカル変数の場合
+                                let local_position = self
+                                    .context_stack
+                                    .last()
+                                    .unwrap()
+                                    .borrow()
+                                    .get_local_variable(&value);
+                                self.push_op(OpCode::StoreFast(local_position));
+                            }
+                        }
+                        None => {
+                            let value = declaration.identifier.value.to_string();
+                            (**self.context_stack.last().unwrap())
+                                .borrow_mut()
+                                .declare_variable(&value);
+                        }
+                    }
+                }
+            }
             NodeStatement::ExpressionStatement { expr } => {
                 self.compile_expr(expr, None);
                 self.push_op(OpCode::PopTop);

@@ -139,7 +139,15 @@ fn parse_top_level_declaration<'input>(
     node: &NodeInternal<'input>,
 ) -> Result<NodeStatement<'input>, Box<dyn Error>> {
     if node.rule_name == "TopLevelDeclaration" {
-        return parse_top_function_declaration(&node.children[0]);
+        match node.children[0].rule_name.as_str() {
+            "TopFunctionDeclaration" => {
+                return Ok(parse_top_function_declaration(&node.children[0])?);
+            }
+            "TopVariableDeclaration" => {
+                return Ok(parse_top_variable_declaration(&node.children[0])?);
+            }
+            _ => {}
+        }
     }
 
     Err(gen_error("parse_top_level_declaration", &node.rule_name))
@@ -509,4 +517,66 @@ fn parse_identifier<'input>(
 
 fn gen_error(func: &str, rule: &str) -> Box<dyn Error> {
     format!("Parse Error in {}: {}", func, rule).into()
+}
+
+fn parse_initialized_identifier<'input>(
+    node: &NodeInternal<'input>,
+) -> Result<VariableDeclaration<'input>, Box<dyn Error>> {
+    if node.rule_name == "InitializedIdentifier" {
+        if node.children.len() == 1 {
+            return Ok(VariableDeclaration {
+                identifier: parse_identifier(&node.children[0])?,
+                expr: None,
+            });
+        } else {
+            return Ok(VariableDeclaration {
+                identifier: parse_identifier(&node.children[0])?,
+                expr: Some(Box::new(parse_expression(&node.children[2])?)),
+            });
+        }
+    }
+
+    Err(gen_error("parse_initialized_identifier", &node.rule_name))
+}
+
+fn parse_initialized_identifier_list<'input>(
+    node: &NodeInternal<'input>,
+) -> Result<Vec<VariableDeclaration<'input>>, Box<dyn Error>> {
+    if node.rule_name == "InitializedIdentifierList" {
+        if node.children.len() == 1 {
+            return Ok(vec![parse_initialized_identifier(&node.children[0])?]);
+        } else {
+            return flatten(
+                parse_initialized_identifier_list(&node.children[0]),
+                parse_initialized_identifier(&node.children[2])?,
+            );
+        }
+    }
+
+    Err(gen_error(
+        "parse_initialized_identifier_list",
+        &node.rule_name,
+    ))
+}
+
+fn parse_top_variable_declaration<'input>(
+    node: &NodeInternal<'input>,
+) -> Result<NodeStatement<'input>, Box<dyn Error>> {
+    if node.rule_name == "TopVariableDeclaration" {
+        if node.children.len() == 3 {
+            return Ok(NodeStatement::VariableDeclarationList {
+                decl_list: parse_initialized_identifier_list(&node.children[1])?,
+            });
+        } else if node.children.len() == 4 {
+            return Ok(NodeStatement::VariableDeclarationList {
+                decl_list: parse_initialized_identifier_list(&node.children[2])?,
+            });
+        } else if node.children.len() == 5 {
+            return Ok(NodeStatement::VariableDeclarationList {
+                decl_list: parse_initialized_identifier_list(&node.children[3])?,
+            });
+        }
+    }
+
+    Err(gen_error("parse_top_variable_declaration", &node.rule_name))
 }

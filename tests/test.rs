@@ -185,7 +185,7 @@ fn statement_list() {
 fn global_variable() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
-        elaphe::run(&output, "main() { {var x = 4;print(x*x);} }").expect("execution failed.");
+        elaphe::run(&output, "var x = 4; main() { {print(x*x);} }").expect("execution failed.");
         exec_py_and_assert(&output, "16\n");
     });
     clean(&output);

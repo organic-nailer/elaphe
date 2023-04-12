@@ -5,7 +5,12 @@ pub const START_SYMBOL: &'static str = "LibraryDeclaration";
 pub const EPSILON: &'static str = "[EMPTY]";
 pub const END: &'static str = "[END]";
 
-const DART_GRAMMARS: [&'static str; 47] = [
+const DART_GRAMMARS: [&'static str; 50] = [
+// Variables
+"InitializedIdentifier ::= 'Identifier'
+    |/ 'Identifier' '=' Expression",
+"InitializedIdentifierList ::= InitializedIdentifier
+    |/ InitializedIdentifierList ',' InitializedIdentifier",
 // Functions
 "FunctionSignature ::= 'Identifier' FormalParameterList
     |/ Type 'Identifier' FormalParameterList",
@@ -78,8 +83,15 @@ const DART_GRAMMARS: [&'static str; 47] = [
 "LibraryDeclaration ::= TopLevelDeclarationList",
 "TopLevelDeclarationList ::= [EMPTY]
     |/ TopLevelDeclarationList TopLevelDeclaration",
-"TopLevelDeclaration ::= TopFunctionDeclaration",
+"TopLevelDeclaration ::= TopFunctionDeclaration
+    |/ TopVariableDeclaration",
 "TopFunctionDeclaration ::= FunctionSignature FunctionBody",
+"TopVariableDeclaration ::= 'var' InitializedIdentifierList ';'
+    |/ Type InitializedIdentifierList ';'
+    |/ 'late' 'var' InitializedIdentifierList ';'
+    |/ 'late' Type InitializedIdentifierList ';'
+    |/ 'late' 'final' InitializedIdentifierList ';'
+    |/ 'late' 'final' Type InitializedIdentifierList ';'",
 // Static Types
 "Type ::= TypeNotFunction",
 "TypeNotVoid ::= TypeNotVoidNotFunction",

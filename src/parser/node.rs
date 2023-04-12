@@ -36,6 +36,9 @@ pub enum NodeStatement<'input> {
         signature: FunctionSignature<'input>,
         body: Box<NodeStatement<'input>>,
     },
+    VariableDeclarationList {
+        decl_list: Vec<VariableDeclaration<'input>>,
+    },
     ExpressionStatement {
         expr: Box<NodeExpression<'input>>,
     },
@@ -78,4 +81,9 @@ pub enum DartType<'input> {
 pub struct DartTypeName<'input> {
     pub identifier: Identifier<'input>,
     pub module: Option<Identifier<'input>>,
+}
+
+pub struct VariableDeclaration<'input> {
+    pub identifier: Identifier<'input>,
+    pub expr: Option<Box<NodeExpression<'input>>>,
 }
