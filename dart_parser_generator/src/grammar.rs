@@ -5,7 +5,7 @@ pub const START_SYMBOL: &'static str = "LibraryDeclaration";
 pub const EPSILON: &'static str = "[EMPTY]";
 pub const END: &'static str = "[END]";
 
-const DART_GRAMMARS: [&'static str; 22] = [
+const DART_GRAMMARS: [&'static str; 37] = [
 // Functions
 "FunctionSignature ::= 'Identifier' FormalParameterList",
 "FunctionBody ::= BlockStatement
@@ -17,19 +17,43 @@ const DART_GRAMMARS: [&'static str; 22] = [
     |/ NormalFormalParameterList ',' NormalFormalParameter",
 "NormalFormalParameter ::= 'Identifier'",
 // Expressions
-"PrimaryExpression ::= '(' AdditiveExpression ')'
+"Expression ::= ConditionalExpression",
+"PrimaryExpression ::= '(' Expression ')'
     |/ 'Boolean'
     |/ 'Number'
     |/ StringLiteralList
     |/ 'Identifier'",
 "StringLiteralList ::= 'String'
     |/ StringLiteralList 'String'",
+"ConditionalExpression ::= IfNullExpression
+    |/ IfNullExpression '?' Expression : Expression",
+"IfNullExpression ::= LogicalOrExpression
+    |/ IfNullExpression '??' LogicalOrExpression",
+"LogicalOrExpression ::= LogicalAndExpression
+    |/ LogicalOrExpression '||' LogicalAndExpression",
+"LogicalAndExpression ::= EqualityExpression
+    |/ LogicalAndExpression '&&' EqualityExpression",
+"EqualityExpression ::= RelationalExpression
+    |/ RelationalExpression EqualityOperator RelationalExpression",
+"EqualityOperator ::= '==' |/ '!='",
+"RelationalExpression ::= BitwiseOrExpression
+    |/ BitwiseOrExpression RelationalOperator BitwiseOrExpression",
+"RelationalOperator ::= '<' |/ '>' |/ '<=' |/ '>='",
+"BitwiseOrExpression ::= BitwiseXorExpression
+    |/ BitwiseOrExpression '|' BitwiseXorExpression",
+"BitwiseXorExpression ::= BitwiseAndExpression
+    |/ BitwiseXorExpression '^' BitwiseAndExpression",
+"BitwiseAndExpression ::= ShiftExpression
+    |/ BitwiseAndExpression '&' ShiftExpression",
+"ShiftExpression ::= AdditiveExpression
+    |/ ShiftExpression ShiftOperator AdditiveExpression",
+"ShiftOperator ::= '<<' |/ '>>'",
 "AdditiveExpression ::= AdditiveExpression '+' MultiplicativeExpression
     |/ AdditiveExpression '-' MultiplicativeExpression
     |/ MultiplicativeExpression",
-"MultiplicativeExpression ::= MultiplicativeExpression '*' PrimaryExpression
-    |/ MultiplicativeExpression '/' PrimaryExpression
+"MultiplicativeExpression ::= MultiplicativeExpression MultiplicativeOperator PrimaryExpression
     |/ PostfixExpression",
+"MultiplicativeOperator ::= '*' |/ '/' |/ '%' |/ '~/'",
 "PostfixExpression ::= PrimaryExpression
     |/ PostfixExpression Selector",
 "Selector ::= Arguments",
@@ -37,12 +61,12 @@ const DART_GRAMMARS: [&'static str; 22] = [
     |/ '(' ArgumentList ')'",
 "ArgumentList ::= NormalArgument
     |/ ArgumentList ',' NormalArgument",
-"NormalArgument ::= AdditiveExpression",
+"NormalArgument ::= Expression",
 // Statements
 "Statements ::= [EMPTY]
     |/ Statements Statement",
 "Statement ::= ExpressionStatement",
-"ExpressionStatement ::= AdditiveExpression ';'",
+"ExpressionStatement ::= Expression ';'",
 // Libraries and Scripts
 "LibraryDeclaration ::= TopLevelDeclarationList",
 "TopLevelDeclarationList ::= [EMPTY]

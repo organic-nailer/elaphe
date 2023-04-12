@@ -4,6 +4,11 @@ pub enum NodeExpression<'input> {
         operator: &'input str,
         right: Box<NodeExpression<'input>>,
     },
+    Conditional {
+        condition: Box<NodeExpression<'input>>,
+        true_expr: Box<NodeExpression<'input>>,
+        false_expr: Box<NodeExpression<'input>>,
+    },
     BooleanLiteral {
         value: &'input str,
     },

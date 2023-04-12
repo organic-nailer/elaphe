@@ -233,30 +233,7 @@ fn parse_expression<'input>(
     node: &NodeInternal<'input>,
 ) -> Result<NodeExpression<'input>, Box<dyn Error>> {
     match node.rule_name.as_str() {
-        "AdditiveExpression" | "MultiplicativeExpression" => {
-            if node.children.len() == 1 {
-                parse_expression(&node.children[0])
-            } else {
-                let left = parse_expression(&node.children[0])?;
-                let right = parse_expression(&node.children[2])?;
-                Ok(NodeExpression::Binary {
-                    left: Box::new(left),
-                    right: Box::new(right),
-                    operator: &node.children[1].token.clone().unwrap().str,
-                })
-            }
-        }
-        "PostfixExpression" => {
-            if node.children.len() == 1 {
-                parse_expression(&node.children[0])
-            } else {
-                let left = parse_expression(&node.children[0])?;
-                Ok(NodeExpression::Selector {
-                    left: Box::new(left),
-                    operator: parse_selector(&node.children[1])?,
-                })
-            }
-        }
+        "Expression" => parse_expression(&node.children[0]),
         "PrimaryExpression" => {
             if node.children.len() == 1 {
                 parse_expression(&node.children[0])
@@ -276,6 +253,67 @@ fn parse_expression<'input>(
         "Identifier" => Ok(NodeExpression::Identifier {
             identifier: parse_identifier(node)?,
         }),
+        "ConditionalExpression" => {
+            if node.children.len() == 1 {
+                parse_expression(&node.children[0])
+            } else {
+                let condition = parse_expression(&node.children[0])?;
+                let then = parse_expression(&node.children[2])?;
+                let otherwise = parse_expression(&node.children[4])?;
+                Ok(NodeExpression::Conditional {
+                    condition: Box::new(condition),
+                    true_expr: Box::new(then),
+                    false_expr: Box::new(otherwise),
+                })
+            }
+        }
+        "IfNullExpression"
+        | "LogicalOrExpression"
+        | "LogicalAndExpression"
+        | "BitwiseOrExpression"
+        | "BitwiseXorExpression"
+        | "BitwiseAndExpression"
+        | "AdditiveExpression" => {
+            if node.children.len() == 1 {
+                parse_expression(&node.children[0])
+            } else {
+                let left = parse_expression(&node.children[0])?;
+                let right = parse_expression(&node.children[2])?;
+                Ok(NodeExpression::Binary {
+                    left: Box::new(left),
+                    right: Box::new(right),
+                    operator: &node.children[1].token.clone().unwrap().str,
+                })
+            }
+        }
+        "EqualityExpression"
+        | "RelationalExpression"
+        | "ShiftExpression"
+        | "MultiplicativeExpression" => {
+            if node.children.len() == 1 {
+                parse_expression(&node.children[0])
+            } else {
+                let left = parse_expression(&node.children[0])?;
+                let right = parse_expression(&node.children[2])?;
+                let operator = &node.children[1].children[0].token.clone().unwrap().str;
+                Ok(NodeExpression::Binary {
+                    left: Box::new(left),
+                    right: Box::new(right),
+                    operator,
+                })
+            }
+        }
+        "PostfixExpression" => {
+            if node.children.len() == 1 {
+                parse_expression(&node.children[0])
+            } else {
+                let left = parse_expression(&node.children[0])?;
+                Ok(NodeExpression::Selector {
+                    left: Box::new(left),
+                    operator: parse_selector(&node.children[1])?,
+                })
+            }
+        }
         v => Err(gen_error("parse_expression", v)),
     }
 }

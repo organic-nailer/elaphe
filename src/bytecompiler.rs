@@ -206,6 +206,21 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     _ => panic!("unknown operator: {}", *operator),
                 }
             }
+            NodeExpression::Conditional {
+                condition,
+                true_expr,
+                false_expr,
+            } => {
+                let label_conditional_end = self.gen_jump_label();
+                let label_false_start = self.gen_jump_label();
+                self.compile_expr(condition, None);
+                self.push_op(OpCode::PopJumpIfFalse(label_false_start));
+                self.compile_expr(true_expr, None);
+                self.push_op(OpCode::JumpAbsolute(label_conditional_end));
+                self.set_jump_label_value(label_false_start);
+                self.compile_expr(false_expr, None);
+                self.set_jump_label_value(label_conditional_end);
+            }
             NodeExpression::BooleanLiteral { value } => {
                 self.push_load_const(PyObject::new_boolean(value, false));
             }
