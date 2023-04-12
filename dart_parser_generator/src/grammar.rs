@@ -5,7 +5,7 @@ pub const START_SYMBOL: &'static str = "LibraryDeclaration";
 pub const EPSILON: &'static str = "[EMPTY]";
 pub const END: &'static str = "[END]";
 
-const DART_GRAMMARS: [&'static str; 21] = [
+const DART_GRAMMARS: [&'static str; 22] = [
 // Functions
 "FunctionSignature ::= 'Identifier' FormalParameterList",
 "FunctionBody ::= BlockStatement
@@ -20,7 +20,10 @@ const DART_GRAMMARS: [&'static str; 21] = [
 "PrimaryExpression ::= '(' AdditiveExpression ')'
     |/ 'Boolean'
     |/ 'Number'
+    |/ StringLiteralList
     |/ 'Identifier'",
+"StringLiteralList ::= 'String'
+    |/ StringLiteralList 'String'",
 "AdditiveExpression ::= AdditiveExpression '+' MultiplicativeExpression
     |/ AdditiveExpression '-' MultiplicativeExpression
     |/ MultiplicativeExpression",

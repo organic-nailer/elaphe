@@ -10,6 +10,9 @@ pub enum NodeExpression<'input> {
     NumericLiteral {
         value: &'input str,
     },
+    StringLiteral {
+        str_list: Vec<&'input str>,
+    },
     Identifier {
         identifier: Identifier<'input>,
     },

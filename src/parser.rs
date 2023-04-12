@@ -264,11 +264,31 @@ fn parse_expression<'input>(
         "Number" => Ok(NodeExpression::NumericLiteral {
             value: node.token.clone().unwrap().str,
         }),
+        "StringLiteralList" => Ok(NodeExpression::StringLiteral {
+            str_list: parse_string_literal_list(&node)?,
+        }),
         "Identifier" => Ok(NodeExpression::Identifier {
             identifier: parse_identifier(node)?,
         }),
         v => Err(format!("Parse Error: {} is not valid rule in expression", v).into()),
     }
+}
+
+fn parse_string_literal_list<'input>(
+    node: &NodeInternal<'input>,
+) -> Result<Vec<&'input str>, Box<dyn Error>> {
+    if node.rule_name == "StringLiteralList" {
+        if node.children.len() == 1 {
+            return Ok(vec![&node.children[0].token.clone().unwrap().str]);
+        } else {
+            return flatten(
+                parse_string_literal_list(&node.children[0]),
+                &node.children[1].token.clone().unwrap().str,
+            );
+        }
+    }
+
+    Err(format!("Parse Error parse_string_literal_list: {}", node.rule_name).into())
 }
 
 fn parse_statement<'input>(

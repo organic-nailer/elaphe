@@ -212,6 +212,18 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             NodeExpression::NumericLiteral { value } => {
                 self.push_load_const(PyObject::new_numeric(value, false));
             }
+            NodeExpression::StringLiteral { str_list } => {
+                let value = str_list
+                    .iter()
+                    .map(|v| {
+                        let len = v.len();
+                        &v[1..len - 1]
+                    })
+                    .collect::<Vec<&'value str>>()
+                    .join("");
+
+                self.push_load_const(PyObject::new_string(value.to_string(), false));
+            }
             NodeExpression::Identifier { identifier } => {
                 let value = identifier.value.to_string();
                 self.push_load_var(&value);
