@@ -70,7 +70,8 @@ const DART_GRAMMARS: [&'static str; 40] = [
 // Statements
 "Statements ::= [EMPTY]
     |/ Statements Statement",
-"Statement ::= ExpressionStatement",
+"Statement ::= ExpressionStatement
+    |/ BlockStatement",
 "ExpressionStatement ::= Expression ';'",
 // Libraries and Scripts
 "LibraryDeclaration ::= TopLevelDeclarationList",
