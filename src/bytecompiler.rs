@@ -3,11 +3,11 @@ use std::{cell::RefCell, collections::HashMap};
 
 use crate::bytecode::ByteCode;
 use crate::executioncontext::{BlockContext, ExecutionContext, VariableScope};
-use crate::parser::node::{NodeExpression, Selector};
+use crate::parser::node::{Identifier, NodeExpression, NodeStatement, Selector};
 use crate::{bytecode::OpCode, pyobject::PyObject};
 
 // use self::runclass::run_class;
-// use self::runfunction::run_function;
+use self::runfunction::run_function;
 
 pub mod runclass;
 pub mod runfunction;
@@ -150,15 +150,44 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
     //     }
     // }
 
-    fn compile(&mut self, node: &'value NodeExpression, label: Option<&String>) {
+    fn compile_stmt(&mut self, node: &'value NodeStatement, label: Option<&String>) {
+        match node {
+            NodeStatement::FunctionDeclaration { signature, body } => {
+                self.compile_declare_function(
+                    &signature.name.value.to_string(),
+                    &signature.param,
+                    body,
+                    None,
+                    None,
+                    |_| (),
+                );
+            }
+            NodeStatement::ExpressionStatement { expr } => {
+                self.compile_expr(expr, None);
+                self.push_op(OpCode::PopTop);
+            }
+            NodeStatement::BlockStatement { statements } => {
+                self.context_stack.push(Rc::new(RefCell::new(BlockContext {
+                    outer: self.context_stack.last().unwrap().clone(),
+                    variables: vec![],
+                })));
+                for child in statements {
+                    self.compile_stmt(child, None);
+                }
+                self.context_stack.pop();
+            }
+        }
+    }
+
+    fn compile_expr(&mut self, node: &'value NodeExpression, label: Option<&String>) {
         match node {
             NodeExpression::Binary {
                 left,
                 operator,
                 right,
             } => {
-                self.compile(left, None);
-                self.compile(right, None);
+                self.compile_expr(left, None);
+                self.compile_expr(right, None);
                 match *operator {
                     "==" | "!=" | ">=" | ">" | "<=" | "<" => {
                         self.push_op(OpCode::compare_op_from_str(operator))
@@ -186,13 +215,13 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             }
             NodeExpression::Selector { left, operator } => {
                 // 右辺値として処理される場合
-                self.compile(left, None);
+                self.compile_expr(left, None);
 
                 match operator {
                     Selector::Args { args } => {
                         let mut name_list: Vec<&str> = vec![];
                         for param in args {
-                            self.compile(&param.expr, None);
+                            self.compile_expr(&param.expr, None);
                             if let Some(v) = &param.identifier {
                                 name_list.push(v.value);
                             }
@@ -1262,113 +1291,121 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
         // }
     }
 
-    // fn comiple_declare_function<F: FnOnce(&mut ByteCompiler<'ctx, 'value>)>(
-    //     &mut self,
-    //     name: &String,
-    //     param: &'value FunctionParamSignature,
-    //     body: &'value Box<Node>,
-    //     function_name_prefix: Option<String>,
-    //     implicit_arg: Option<&String>,
-    //     preface: F,
-    // ) {
-    //     let mut argument_list: Vec<String> = vec![];
-    //     if let Some(name) = implicit_arg {
-    //         argument_list.push(name.clone());
-    //     }
-    //     for p in &param.normal_list {
-    //         let name = p.identifier.value.to_string();
-    //         argument_list.push(name);
-    //     }
-    //     for p in &param.option_list {
-    //         let name = p.identifier.value.to_string();
-    //         argument_list.push(name);
-    //     }
-    //     for p in &param.named_list {
-    //         let name = p.identifier.value.to_string();
-    //         argument_list.push(name);
-    //     }
+    fn compile_declare_function<F: FnOnce(&mut ByteCompiler<'ctx, 'value>)>(
+        &mut self,
+        name: &String,
+        param: &Vec<Identifier<'value>>,
+        // param: &'value FunctionParamSignature,
+        body: &'value Box<NodeStatement>,
+        function_name_prefix: Option<String>,
+        implicit_arg: Option<&String>,
+        preface: F,
+    ) {
+        let mut argument_list: Vec<String> = vec![];
+        if let Some(name) = implicit_arg {
+            argument_list.push(name.clone());
+        }
+        for p in param {
+            let name = p.value.to_string();
+            argument_list.push(name);
+        }
+        let num_normal_args = param.len() as u32;
+        let num_kw_only_args = 0;
+        // for p in &param.normal_list {
+        //     let name = p.identifier.value.to_string();
+        //     argument_list.push(name);
+        // }
+        // for p in &param.option_list {
+        //     let name = p.identifier.value.to_string();
+        //     argument_list.push(name);
+        // }
+        // for p in &param.named_list {
+        //     let name = p.identifier.value.to_string();
+        //     argument_list.push(name);
+        // }
 
-    //     let mut num_normal_args = param.normal_list.len() as u32 + param.option_list.len() as u32;
-    //     if implicit_arg.is_some() {
-    //         num_normal_args += 1;
-    //     }
-    //     let num_kw_only_args = param.named_list.len() as u32;
-    //     let py_code = run_function(
-    //         &"main.py".to_string(),
-    //         &name,
-    //         argument_list,
-    //         num_normal_args,
-    //         0,
-    //         num_kw_only_args,
-    //         self,
-    //         body,
-    //         self.source,
-    //         preface,
-    //     );
+        // let mut num_normal_args = param.normal_list.len() as u32 + param.option_list.len() as u32;
+        // if implicit_arg.is_some() {
+        //     num_normal_args += 1;
+        // }
+        // let num_kw_only_args = param.named_list.len() as u32;
+        let py_code = run_function(
+            &"main.py".to_string(),
+            &name,
+            argument_list,
+            num_normal_args,
+            0,
+            num_kw_only_args,
+            self,
+            body,
+            self.source,
+            preface,
+        );
 
-    //     // 通常引数のデフォルト値の設定
-    //     let has_default = !param.option_list.is_empty();
-    //     if has_default {
-    //         let size = param.option_list.len() as u8;
-    //         for v in &param.option_list {
-    //             match &v.expr {
-    //                 Some(expr) => {
-    //                     self.compile(expr, None);
-    //                 }
-    //                 None => {
-    //                     self.push_load_const(PyObject::None(false));
-    //                 }
-    //             }
-    //         }
-    //         self.push_op(OpCode::BuildTuple(size));
-    //     }
+        // // 通常引数のデフォルト値の設定
+        // let has_default = !param.option_list.is_empty();
+        // if has_default {
+        //     let size = param.option_list.len() as u8;
+        //     for v in &param.option_list {
+        //         match &v.expr {
+        //             Some(expr) => {
+        //                 self.compile(expr, None);
+        //             }
+        //             None => {
+        //                 self.push_load_const(PyObject::None(false));
+        //             }
+        //         }
+        //     }
+        //     self.push_op(OpCode::BuildTuple(size));
+        // }
 
-    //     // キーワード引数のデフォルト値の設定
-    //     let has_kw_default = param.named_list.iter().any(|v| v.expr.is_some());
-    //     if has_kw_default {
-    //         let mut name_list: Vec<&str> = vec![];
-    //         for v in &param.named_list {
-    //             match &v.expr {
-    //                 Some(expr) => {
-    //                     self.compile(expr, None);
-    //                     name_list.push(v.identifier.value);
-    //                 }
-    //                 None => (),
-    //             }
-    //         }
-    //         self.push_load_const(PyObject::SmallTuple {
-    //             children: name_list
-    //                 .iter()
-    //                 .map(|v| PyObject::new_string(v.to_string(), false))
-    //                 .collect(),
-    //             add_ref: false,
-    //         });
-    //         let size = name_list.len() as u8;
-    //         self.push_op(OpCode::BuildConstKeyMap(size));
-    //     }
+        // // キーワード引数のデフォルト値の設定
+        // let has_kw_default = param.named_list.iter().any(|v| v.expr.is_some());
+        // if has_kw_default {
+        //     let mut name_list: Vec<&str> = vec![];
+        //     for v in &param.named_list {
+        //         match &v.expr {
+        //             Some(expr) => {
+        //                 self.compile(expr, None);
+        //                 name_list.push(v.identifier.value);
+        //             }
+        //             None => (),
+        //         }
+        //     }
+        //     self.push_load_const(PyObject::SmallTuple {
+        //         children: name_list
+        //             .iter()
+        //             .map(|v| PyObject::new_string(v.to_string(), false))
+        //             .collect(),
+        //         add_ref: false,
+        //     });
+        //     let size = name_list.len() as u8;
+        //     self.push_op(OpCode::BuildConstKeyMap(size));
+        // }
 
-    //     // アノテーションは未実装
-    //     // クロージャは未実装
+        // アノテーションは未実装
+        // クロージャは未実装
 
-    //     // コードオブジェクトの読み込み
-    //     self.push_load_const(py_code);
-    //     // 関数名の読み込み
-    //     match function_name_prefix {
-    //         Some(prefix) => {
-    //             self.push_load_const(PyObject::new_string(format!("{}{}", prefix, name), false));
-    //         }
-    //         None => {
-    //             self.push_load_const(PyObject::new_string(name.to_string(), false));
-    //         }
-    //     }
-    //     // 関数作成と収納
-    //     let make_flag = (has_default as u8) | ((has_kw_default as u8) << 1);
-    //     self.push_op(OpCode::MakeFunction(make_flag));
-    //     let p = (**self.context_stack.last().unwrap())
-    //         .borrow_mut()
-    //         .declare_variable(&name);
-    //     self.push_op(OpCode::StoreName(p));
-    // }
+        // コードオブジェクトの読み込み
+        self.push_load_const(py_code);
+        // 関数名の読み込み
+        match function_name_prefix {
+            Some(prefix) => {
+                self.push_load_const(PyObject::new_string(format!("{}{}", prefix, name), false));
+            }
+            None => {
+                self.push_load_const(PyObject::new_string(name.to_string(), false));
+            }
+        }
+        // 関数作成と収納
+        // let make_flag = (has_default as u8) | ((has_kw_default as u8) << 1);
+        let make_flag = 0;
+        self.push_op(OpCode::MakeFunction(make_flag));
+        let p = (**self.context_stack.last().unwrap())
+            .borrow_mut()
+            .declare_variable(&name);
+        self.push_op(OpCode::StoreName(p));
+    }
 
     fn push_op(&self, op: OpCode) {
         self.byte_operations.borrow_mut().push(op);

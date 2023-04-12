@@ -6,7 +6,7 @@ use std::time::SystemTime;
 
 use ciborium::de;
 use dart_parser_generator::parser_generator;
-use parser::node::NodeExpression;
+use parser::node::{LibraryDeclaration, NodeExpression};
 
 mod bytecode;
 mod bytecompiler;
@@ -61,7 +61,7 @@ fn write_header(file: &mut File) {
     file.write(&(file_size.to_le_bytes())).unwrap();
 }
 
-fn write_root_py_code(file: &mut File, source: &str, node: NodeExpression) {
+fn write_root_py_code(file: &mut File, source: &str, node: LibraryDeclaration) {
     let code = bytecompiler::runroot::run_root(&"main.py".to_string(), &node, source);
 
     code.write(file);

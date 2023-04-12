@@ -1,11 +1,29 @@
 use crate::parser_generator_lr0::ProductionRuleData;
 
-pub const START_SYMBOL: &'static str = "AdditiveExpression";
+pub const START_SYMBOL: &'static str = "LibraryDeclaration";
 
 pub const EPSILON: &'static str = "[EMPTY]";
 pub const END: &'static str = "[END]";
 
-const DART_GRAMMARS: [&'static str; 8] = [
+const DART_GRAMMARS: [&'static str; 21] = [
+"LibraryDeclaration ::= TopLevelDeclarationList",
+"TopLevelDeclarationList ::= [EMPTY]
+    |/ TopLevelDeclarationList TopLevelDeclaration",
+"TopLevelDeclaration ::= TopFunctionDeclaration",
+"TopFunctionDeclaration ::= FunctionSignature FunctionBody",
+"FormalParameterList ::= '(' ')'
+    |/ '(' NormalFormalParameterList ')'",
+"NormalFormalParameterList ::= NormalFormalParameter
+    |/ NormalFormalParameterList ',' NormalFormalParameter",
+"NormalFormalParameter ::= 'Identifier'",
+"FunctionSignature ::= 'Identifier' FormalParameterList",
+"FunctionBody ::= BlockStatement
+    |/ '=>' Expression ';'",
+"BlockStatement ::= '{' Statements '}'",
+"Statements ::= [EMPTY]
+    |/ Statements Statement",
+"Statement ::= ExpressionStatement",
+"ExpressionStatement ::= AdditiveExpression ';'",
 "AdditiveExpression ::= AdditiveExpression '+' MultiplicativeExpression
     |/ AdditiveExpression '-' MultiplicativeExpression
     |/ MultiplicativeExpression",

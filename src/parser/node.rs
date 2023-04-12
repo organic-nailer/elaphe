@@ -16,6 +16,19 @@ pub enum NodeExpression<'input> {
     },
 }
 
+pub enum NodeStatement<'input> {
+    FunctionDeclaration {
+        signature: FunctionSignature<'input>,
+        body: Box<NodeStatement<'input>>,
+    },
+    ExpressionStatement {
+        expr: Box<NodeExpression<'input>>,
+    },
+    BlockStatement {
+        statements: Vec<NodeStatement<'input>>,
+    },
+}
+
 pub enum Selector<'input> {
     Args { args: Vec<CallParameter<'input>> },
 }
@@ -27,4 +40,12 @@ pub struct CallParameter<'input> {
 
 pub struct Identifier<'input> {
     pub value: &'input str,
+}
+
+pub struct LibraryDeclaration<'input> {
+    pub top_level_declaration_list: Vec<Box<NodeStatement<'input>>>,
+}
+pub struct FunctionSignature<'input> {
+    pub name: Identifier<'input>,
+    pub param: Vec<Identifier<'input>>,
 }

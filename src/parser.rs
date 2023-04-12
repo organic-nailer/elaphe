@@ -6,18 +6,18 @@ use std::{error::Error, fmt};
 
 use crate::tokenizer::{Token, TokenKind};
 
-use self::node::{CallParameter, Identifier, NodeExpression, Selector};
+use self::node::*;
 
 pub mod node;
 
 pub fn parse<'input>(
     input: Vec<Token<'input>>,
     transition_map: TransitionMap,
-) -> Result<NodeExpression, Box<dyn Error>> {
+) -> Result<LibraryDeclaration, Box<dyn Error>> {
     let internal_node = parse_internally(input, transition_map);
     println!("accepted from the parser");
 
-    parse_expression(&internal_node)
+    parse_library(&internal_node)
 }
 
 fn parse_internally(input: Vec<Token>, transition_map: TransitionMap) -> NodeInternal {
@@ -107,6 +107,122 @@ pub struct NodeInternal<'input> {
     token: Option<Token<'input>>,
 }
 
+fn parse_library<'input>(
+    node: &NodeInternal<'input>,
+) -> Result<LibraryDeclaration<'input>, Box<dyn Error>> {
+    Ok(LibraryDeclaration {
+        top_level_declaration_list: parse_top_level_declaration_list(&node.children[0])?,
+    })
+}
+
+fn parse_top_level_declaration_list<'input>(
+    node: &NodeInternal<'input>,
+) -> Result<Vec<Box<NodeStatement<'input>>>, Box<dyn Error>> {
+    if node.rule_name == "TopLevelDeclarationList" {
+        if node.children.len() == 0 {
+            return Ok(vec![]);
+        } else {
+            return flatten(
+                parse_top_level_declaration_list(&node.children[0]),
+                Box::new(parse_top_level_declaration(&node.children[1])?),
+            );
+        }
+    }
+
+    Err("Parse Error parse_top_level_declaration_list".into())
+}
+
+fn parse_top_level_declaration<'input>(
+    node: &NodeInternal<'input>,
+) -> Result<NodeStatement<'input>, Box<dyn Error>> {
+    if node.rule_name == "TopLevelDeclaration" {
+        return parse_top_function_declaration(&node.children[0]);
+    }
+
+    Err("Parse Error argument_list".into())
+}
+
+fn parse_top_function_declaration<'input>(
+    node: &NodeInternal<'input>,
+) -> Result<NodeStatement<'input>, Box<dyn Error>> {
+    if node.rule_name == "TopFunctionDeclaration" {
+        return Ok(NodeStatement::FunctionDeclaration {
+            signature: parse_function_signature(&node.children[0])?,
+            body: Box::new(parse_function_body(&node.children[1])?),
+        });
+    }
+
+    Err("Parse Error argument_list".into())
+}
+
+fn parse_formal_parameter_list<'input>(
+    node: &NodeInternal<'input>,
+) -> Result<Vec<Identifier<'input>>, Box<dyn Error>> {
+    if node.rule_name == "FormalParameterList" {
+        if node.children.len() == 2 {
+            return Ok(vec![]);
+        } else {
+            return parse_normal_formal_parameter_list(&node.children[1]);
+        }
+    }
+
+    Err("Parse Error parse_formal_parameter_list".into())
+}
+
+fn parse_normal_formal_parameter_list<'input>(
+    node: &NodeInternal<'input>,
+) -> Result<Vec<Identifier<'input>>, Box<dyn Error>> {
+    if node.rule_name == "NormalFormalParameterList" {
+        if node.children.len() == 1 {
+            return Ok(vec![parse_normal_formal_parameter(&node.children[0])?]);
+        } else {
+            return flatten(
+                parse_normal_formal_parameter_list(&node.children[0]),
+                parse_normal_formal_parameter(&node.children[2])?,
+            );
+        }
+    }
+
+    Err("Parse Error parse_normal_formal_parameter_list".into())
+}
+
+fn parse_normal_formal_parameter<'input>(
+    node: &NodeInternal<'input>,
+) -> Result<Identifier<'input>, Box<dyn Error>> {
+    if node.rule_name == "NormalFormalParameter" {
+        return Ok(parse_identifier(&node.children[0])?);
+    }
+
+    Err("Parse Error parse_normal_formal_parameter".into())
+}
+
+fn parse_function_signature<'input>(
+    node: &NodeInternal<'input>,
+) -> Result<FunctionSignature<'input>, Box<dyn Error>> {
+    if node.rule_name == "FunctionSignature" {
+        return Ok(FunctionSignature {
+            name: parse_identifier(&node.children[0])?,
+            param: parse_formal_parameter_list(&node.children[1])?,
+        });
+    }
+
+    Err("Parse Error parse_function_signature".into())
+}
+
+fn parse_function_body<'input>(
+    node: &NodeInternal<'input>,
+) -> Result<NodeStatement<'input>, Box<dyn Error>> {
+    if node.rule_name == "FunctionBody" {
+        if node.children.len() == 1 {
+            return parse_statement(&node.children[0]);
+        } else {
+            return parse_statement(&node.children[1]);
+        }
+    }
+
+    Err("Parse Error parse_function_body".into())
+}
+
 fn parse_expression<'input>(
     node: &NodeInternal<'input>,
 ) -> Result<NodeExpression<'input>, Box<dyn Error>> {
@@ -146,12 +262,42 @@ fn parse_expression<'input>(
             value: node.token.clone().unwrap().str,
         }),
         "Identifier" => Ok(NodeExpression::Identifier {
-            identifier: Identifier {
-                value: node.token.clone().unwrap().str,
-            },
+            identifier: parse_identifier(node)?,
         }),
         v => Err(format!("Parse Error: {} is not valid rule in expression", v).into()),
     }
+}
+
+fn parse_statement<'input>(
+    node: &NodeInternal<'input>,
+) -> Result<NodeStatement<'input>, Box<dyn Error>> {
+    match node.rule_name.as_str() {
+        "Statement" => parse_statement(&node.children[0]),
+        "BlockStatement" => Ok(NodeStatement::BlockStatement {
+            statements: parse_statement_list(&node.children[1])?,
+        }),
+        "ExpressionStatement" => Ok(NodeStatement::ExpressionStatement {
+            expr: Box::new(parse_expression(&node.children[0])?),
+        }),
+        v => Err(format!("Parse Error: {} is not valid rule in statement", v).into()),
+    }
+}
+
+fn parse_statement_list<'input>(
+    node: &NodeInternal<'input>,
+) -> Result<Vec<NodeStatement<'input>>, Box<dyn Error>> {
+    if node.rule_name == "Statements" {
+        if node.children.len() == 0 {
+            return Ok(vec![]);
+        } else {
+            return flatten(
+                parse_statement_list(&node.children[0]),
+                parse_statement(&node.children[1])?,
+            );
+        }
+    }
+
+    Err("Parse Error parse_statement_list".into())
 }
 
 fn flatten<T>(left: Result<Vec<T>, Box<dyn Error>>, right: T) -> Result<Vec<T>, Box<dyn Error>> {
@@ -207,4 +353,16 @@ fn parse_argument_list<'input>(
     }
 
     Err("Parse Error argument_list".into())
+}
+
+fn parse_identifier<'input>(
+    node: &NodeInternal<'input>,
+) -> Result<Identifier<'input>, Box<dyn Error>> {
+    if node.rule_name == "Identifier" {
+        return Ok(Identifier {
+            value: node.token.clone().unwrap().str,
+        });
+    }
+
+    Err("Parse Error in identifier".into())
 }
