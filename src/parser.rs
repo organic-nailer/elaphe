@@ -2,9 +2,9 @@ use dart_parser_generator::{
     grammar::EPSILON,
     parser_generator::{TransitionKind, TransitionMap},
 };
-use std::{error::Error, fmt};
+use std::error::Error;
 
-use crate::tokenizer::{Token, TokenKind};
+use crate::tokenizer::Token;
 
 use self::node::*;
 
@@ -129,7 +129,10 @@ fn parse_top_level_declaration_list<'input>(
         }
     }
 
-    Err("Parse Error parse_top_level_declaration_list".into())
+    Err(gen_error(
+        "parse_top_level_declaration_list",
+        &node.rule_name,
+    ))
 }
 
 fn parse_top_level_declaration<'input>(
@@ -139,7 +142,7 @@ fn parse_top_level_declaration<'input>(
         return parse_top_function_declaration(&node.children[0]);
     }
 
-    Err("Parse Error argument_list".into())
+    Err(gen_error("parse_top_level_declaration", &node.rule_name))
 }
 
 fn parse_top_function_declaration<'input>(
@@ -152,7 +155,7 @@ fn parse_top_function_declaration<'input>(
         });
     }
 
-    Err("Parse Error argument_list".into())
+    Err(gen_error("parse_top_function_declaration", &node.rule_name))
 }
 
 fn parse_formal_parameter_list<'input>(
@@ -166,7 +169,7 @@ fn parse_formal_parameter_list<'input>(
         }
     }
 
-    Err("Parse Error parse_formal_parameter_list".into())
+    Err(gen_error("parse_formal_parameter_list", &node.rule_name))
 }
 
 fn parse_normal_formal_parameter_list<'input>(
@@ -183,7 +186,10 @@ fn parse_normal_formal_parameter_list<'input>(
         }
     }
 
-    Err("Parse Error parse_normal_formal_parameter_list".into())
+    Err(gen_error(
+        "parse_normal_formal_parameter_list",
+        &node.rule_name,
+    ))
 }
 
 fn parse_normal_formal_parameter<'input>(
@@ -193,7 +199,7 @@ fn parse_normal_formal_parameter<'input>(
         return Ok(parse_identifier(&node.children[0])?);
     }
 
-    Err("Parse Error parse_normal_formal_parameter".into())
+    Err(gen_error("parse_normal_formal_parameter", &node.rule_name))
 }
 
 fn parse_function_signature<'input>(
@@ -206,7 +212,7 @@ fn parse_function_signature<'input>(
         });
     }
 
-    Err("Parse Error parse_function_signature".into())
+    Err(gen_error("parse_function_signature", &node.rule_name))
 }
 
 fn parse_function_body<'input>(
@@ -220,7 +226,7 @@ fn parse_function_body<'input>(
         }
     }
 
-    Err("Parse Error parse_function_body".into())
+    Err(gen_error("parse_function_body", &node.rule_name))
 }
 
 fn parse_expression<'input>(
@@ -270,7 +276,7 @@ fn parse_expression<'input>(
         "Identifier" => Ok(NodeExpression::Identifier {
             identifier: parse_identifier(node)?,
         }),
-        v => Err(format!("Parse Error: {} is not valid rule in expression", v).into()),
+        v => Err(gen_error("parse_expression", v)),
     }
 }
 
@@ -288,7 +294,7 @@ fn parse_string_literal_list<'input>(
         }
     }
 
-    Err(format!("Parse Error parse_string_literal_list: {}", node.rule_name).into())
+    Err(gen_error("parse_string_literal_list", &node.rule_name))
 }
 
 fn parse_statement<'input>(
@@ -302,7 +308,7 @@ fn parse_statement<'input>(
         "ExpressionStatement" => Ok(NodeStatement::ExpressionStatement {
             expr: Box::new(parse_expression(&node.children[0])?),
         }),
-        v => Err(format!("Parse Error: {} is not valid rule in statement", v).into()),
+        v => Err(gen_error("parse_statement", v)),
     }
 }
 
@@ -320,7 +326,7 @@ fn parse_statement_list<'input>(
         }
     }
 
-    Err("Parse Error parse_statement_list".into())
+    Err(gen_error("parse_statement_list", &node.rule_name))
 }
 
 fn flatten<T>(left: Result<Vec<T>, Box<dyn Error>>, right: T) -> Result<Vec<T>, Box<dyn Error>> {
@@ -331,7 +337,7 @@ fn flatten<T>(left: Result<Vec<T>, Box<dyn Error>>, right: T) -> Result<Vec<T>, 
 
 fn parse_selector<'input>(node: &NodeInternal<'input>) -> Result<Selector<'input>, Box<dyn Error>> {
     if node.rule_name != "Selector" {
-        return Err("Parse Error in selector".into());
+        return Err(gen_error("parse_selector", &node.rule_name));
     }
     let node = &node.children[0];
     match node.rule_name.as_str() {
@@ -344,7 +350,7 @@ fn parse_selector<'input>(node: &NodeInternal<'input>) -> Result<Selector<'input
                 })
             }
         }
-        v => Err(format!("Parse Error: {} is not valid rule in selector", v).into()),
+        v => Err(gen_error("parse_selector", v)),
     }
 }
 
@@ -358,7 +364,7 @@ fn parse_normal_argument<'input>(
         });
     }
 
-    Err("Parse Error in normal_argument".into())
+    Err(gen_error("parse_normal_argument", &node.rule_name))
 }
 
 fn parse_argument_list<'input>(
@@ -375,7 +381,7 @@ fn parse_argument_list<'input>(
         }
     }
 
-    Err("Parse Error argument_list".into())
+    Err(gen_error("parse_argument_list", &node.rule_name))
 }
 
 fn parse_identifier<'input>(
@@ -387,5 +393,9 @@ fn parse_identifier<'input>(
         });
     }
 
-    Err("Parse Error in identifier".into())
+    Err(gen_error("parse_identifier", &node.rule_name))
+}
+
+fn gen_error(func: &str, rule: &str) -> Box<dyn Error> {
+    format!("Parse Error in {}: {}", func, rule).into()
 }
