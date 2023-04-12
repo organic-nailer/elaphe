@@ -6,24 +6,20 @@ pub const EPSILON: &'static str = "[EMPTY]";
 pub const END: &'static str = "[END]";
 
 const DART_GRAMMARS: [&'static str; 21] = [
-"LibraryDeclaration ::= TopLevelDeclarationList",
-"TopLevelDeclarationList ::= [EMPTY]
-    |/ TopLevelDeclarationList TopLevelDeclaration",
-"TopLevelDeclaration ::= TopFunctionDeclaration",
-"TopFunctionDeclaration ::= FunctionSignature FunctionBody",
+// Functions
+"FunctionSignature ::= 'Identifier' FormalParameterList",
+"FunctionBody ::= BlockStatement
+    |/ '=>' Expression ';'",
+"BlockStatement ::= '{' Statements '}'",
 "FormalParameterList ::= '(' ')'
     |/ '(' NormalFormalParameterList ')'",
 "NormalFormalParameterList ::= NormalFormalParameter
     |/ NormalFormalParameterList ',' NormalFormalParameter",
 "NormalFormalParameter ::= 'Identifier'",
-"FunctionSignature ::= 'Identifier' FormalParameterList",
-"FunctionBody ::= BlockStatement
-    |/ '=>' Expression ';'",
-"BlockStatement ::= '{' Statements '}'",
-"Statements ::= [EMPTY]
-    |/ Statements Statement",
-"Statement ::= ExpressionStatement",
-"ExpressionStatement ::= AdditiveExpression ';'",
+// Expressions
+"PrimaryExpression ::= '(' AdditiveExpression ')'
+    |/ 'Number'
+    |/ 'Identifier'",
 "AdditiveExpression ::= AdditiveExpression '+' MultiplicativeExpression
     |/ AdditiveExpression '-' MultiplicativeExpression
     |/ MultiplicativeExpression",
@@ -38,9 +34,17 @@ const DART_GRAMMARS: [&'static str; 21] = [
 "ArgumentList ::= NormalArgument
     |/ ArgumentList ',' NormalArgument",
 "NormalArgument ::= AdditiveExpression",
-"PrimaryExpression ::= '(' AdditiveExpression ')'
-    |/ 'Number'
-    |/ 'Identifier'",
+// Statements
+"Statements ::= [EMPTY]
+    |/ Statements Statement",
+"Statement ::= ExpressionStatement",
+"ExpressionStatement ::= AdditiveExpression ';'",
+// Libraries and Scripts
+"LibraryDeclaration ::= TopLevelDeclarationList",
+"TopLevelDeclarationList ::= [EMPTY]
+    |/ TopLevelDeclarationList TopLevelDeclaration",
+"TopLevelDeclaration ::= TopFunctionDeclaration",
+"TopFunctionDeclaration ::= FunctionSignature FunctionBody",
 ];
 
 // const DART_GRAMMARS: [&'static str; 3] = [
