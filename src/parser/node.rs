@@ -9,6 +9,10 @@ pub enum NodeExpression<'input> {
         true_expr: Box<NodeExpression<'input>>,
         false_expr: Box<NodeExpression<'input>>,
     },
+    Unary {
+        operator: &'input str,
+        expr: Box<NodeExpression<'input>>,
+    },
     BooleanLiteral {
         value: &'input str,
     },

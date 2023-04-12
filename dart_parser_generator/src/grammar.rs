@@ -5,7 +5,7 @@ pub const START_SYMBOL: &'static str = "LibraryDeclaration";
 pub const EPSILON: &'static str = "[EMPTY]";
 pub const END: &'static str = "[END]";
 
-const DART_GRAMMARS: [&'static str; 37] = [
+const DART_GRAMMARS: [&'static str; 40] = [
 // Functions
 "FunctionSignature ::= 'Identifier' FormalParameterList",
 "FunctionBody ::= BlockStatement
@@ -52,8 +52,13 @@ const DART_GRAMMARS: [&'static str; 37] = [
     |/ AdditiveExpression '-' MultiplicativeExpression
     |/ MultiplicativeExpression",
 "MultiplicativeExpression ::= MultiplicativeExpression MultiplicativeOperator PrimaryExpression
-    |/ PostfixExpression",
+    |/ UnaryExpression",
 "MultiplicativeOperator ::= '*' |/ '/' |/ '%' |/ '~/'",
+"UnaryExpression ::= PostfixExpression
+    |/ PrefixOperator UnaryExpression
+    |/ IncrementOperator UnaryExpression",
+"PrefixOperator ::= '!' |/ '-' |/ '~'",
+"IncrementOperator ::= '++' |/ '--'",
 "PostfixExpression ::= PrimaryExpression
     |/ PostfixExpression Selector",
 "Selector ::= Arguments",

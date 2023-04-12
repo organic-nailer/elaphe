@@ -303,6 +303,18 @@ fn parse_expression<'input>(
                 })
             }
         }
+        "UnaryExpression" => {
+            if node.children.len() == 1 {
+                parse_expression(&node.children[0])
+            } else {
+                let expr = parse_expression(&node.children[1])?;
+                let operator = &node.children[0].children[0].token.clone().unwrap().str;
+                Ok(NodeExpression::Unary {
+                    expr: Box::new(expr),
+                    operator,
+                })
+            }
+        }
         "PostfixExpression" => {
             if node.children.len() == 1 {
                 parse_expression(&node.children[0])

@@ -221,6 +221,15 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 self.compile_expr(false_expr, None);
                 self.set_jump_label_value(label_conditional_end);
             }
+            NodeExpression::Unary { operator, expr } => {
+                self.compile_expr(expr, None);
+                match *operator {
+                    "-" => self.push_op(OpCode::UnaryNegative),
+                    "!" => self.push_op(OpCode::UnaryNot),
+                    "~" => self.push_op(OpCode::UnaryInvert),
+                    _ => panic!("unknown unary operator: {}", *operator),
+                }
+            }
             NodeExpression::BooleanLiteral { value } => {
                 self.push_load_const(PyObject::new_boolean(value, false));
             }
