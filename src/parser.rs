@@ -258,6 +258,9 @@ fn parse_expression<'input>(
                 parse_expression(&node.children[1])
             }
         }
+        "Boolean" => Ok(NodeExpression::BooleanLiteral {
+            value: node.token.clone().unwrap().str,
+        }),
         "Number" => Ok(NodeExpression::NumericLiteral {
             value: node.token.clone().unwrap().str,
         }),

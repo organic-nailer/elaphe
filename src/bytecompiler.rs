@@ -206,6 +206,9 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     _ => panic!("unknown operator: {}", *operator),
                 }
             }
+            NodeExpression::BooleanLiteral { value } => {
+                self.push_load_const(PyObject::new_boolean(value, false));
+            }
             NodeExpression::NumericLiteral { value } => {
                 self.push_load_const(PyObject::new_numeric(value, false));
             }

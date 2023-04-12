@@ -4,6 +4,9 @@ pub enum NodeExpression<'input> {
         operator: &'input str,
         right: Box<NodeExpression<'input>>,
     },
+    BooleanLiteral {
+        value: &'input str,
+    },
     NumericLiteral {
         value: &'input str,
     },

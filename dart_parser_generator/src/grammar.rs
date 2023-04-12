@@ -18,6 +18,7 @@ const DART_GRAMMARS: [&'static str; 21] = [
 "NormalFormalParameter ::= 'Identifier'",
 // Expressions
 "PrimaryExpression ::= '(' AdditiveExpression ')'
+    |/ 'Boolean'
     |/ 'Number'
     |/ 'Identifier'",
 "AdditiveExpression ::= AdditiveExpression '+' MultiplicativeExpression
