@@ -40,6 +40,36 @@ const RESERVED_KEYWORDS: [&'static str; 33] = [
     "with",
 ];
 
+const BUILT_IN_IDENTIFIER: [&'static str; 23] = [
+    "abstract",
+    "as",
+    "covariant",
+    "deferred",
+    "dynamic",
+    "export",
+    "external",
+    "extension",
+    "factory",
+    "Function",
+    "get",
+    "implements",
+    "import",
+    "interface",
+    "late",
+    "library",
+    "mixin",
+    "operator",
+    "part",
+    "required",
+    "set",
+    "static",
+    "typedef",
+];
+
+const OTHER_IDENTIFIER: [&'static str; 8] = [
+    "async", "hide", "of", "on", "show", "sync", "await", "yield",
+];
+
 const SYMBOLS: [&'static str; 49] = [
     "<<=", ">>=", "??=", "~/=", "??", "&&", "||", "==", "!=", "<<", ">>", ">=", "<=", "*=", "/=",
     "%=", "+=", "-=", "&=", "^=", "|=", "=>", "~/", "++", "--", "?", ":", ">", ";", "=", "{", "}",

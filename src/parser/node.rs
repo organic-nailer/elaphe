@@ -61,6 +61,21 @@ pub struct LibraryDeclaration<'input> {
     pub top_level_declaration_list: Vec<Box<NodeStatement<'input>>>,
 }
 pub struct FunctionSignature<'input> {
+    pub return_type: Option<DartType<'input>>,
     pub name: Identifier<'input>,
     pub param: Vec<Identifier<'input>>,
+}
+
+pub enum DartType<'input> {
+    Named {
+        type_name: DartTypeName<'input>,
+        type_arguments: Vec<DartType<'input>>,
+        is_nullable: bool,
+    },
+    Void,
+}
+
+pub struct DartTypeName<'input> {
+    pub identifier: Identifier<'input>,
+    pub module: Option<Identifier<'input>>,
 }

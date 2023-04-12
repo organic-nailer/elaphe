@@ -206,13 +206,74 @@ fn parse_function_signature<'input>(
     node: &NodeInternal<'input>,
 ) -> Result<FunctionSignature<'input>, Box<dyn Error>> {
     if node.rule_name == "FunctionSignature" {
-        return Ok(FunctionSignature {
-            name: parse_identifier(&node.children[0])?,
-            param: parse_formal_parameter_list(&node.children[1])?,
-        });
+        if node.children.len() == 2 {
+            return Ok(FunctionSignature {
+                return_type: None,
+                name: parse_identifier(&node.children[0])?,
+                param: parse_formal_parameter_list(&node.children[1])?,
+            });
+        } else {
+            return Ok(FunctionSignature {
+                return_type: Some(parse_type(&node.children[0])?),
+                name: parse_identifier(&node.children[1])?,
+                param: parse_formal_parameter_list(&node.children[2])?,
+            });
+        }
     }
 
     Err(gen_error("parse_function_signature", &node.rule_name))
+}
+
+fn parse_type<'input>(node: &NodeInternal<'input>) -> Result<DartType<'input>, Box<dyn Error>> {
+    if node.rule_name == "Type" {
+        return parse_type_not_function(&node.children[0]);
+    }
+
+    Err(gen_error("parse_type", &node.rule_name))
+}
+
+fn parse_type_not_function<'input>(
+    node: &NodeInternal<'input>,
+) -> Result<DartType<'input>, Box<dyn Error>> {
+    if node.rule_name == "TypeNotFunction" {
+        if node.children[0].token.clone().unwrap().str == "void" {
+            return Ok(DartType::Void);
+        } else {
+            return parse_type_not_void_not_function(&node.children[0]);
+        }
+    }
+
+    Err(gen_error("parse_type_not_function", &node.rule_name))
+}
+
+fn parse_type_not_void_not_function<'input>(
+    node: &NodeInternal<'input>,
+) -> Result<DartType<'input>, Box<dyn Error>> {
+    if node.rule_name == "TypeNotVoidNotFunction" {
+        return Ok(DartType::Named {
+            type_name: parse_type_name(&node.children[0])?,
+            type_arguments: vec![],
+            is_nullable: false,
+        });
+    }
+
+    Err(gen_error(
+        "parse_type_not_void_not_function",
+        &node.rule_name,
+    ))
+}
+
+fn parse_type_name<'input>(
+    node: &NodeInternal<'input>,
+) -> Result<DartTypeName<'input>, Box<dyn Error>> {
+    if node.rule_name == "TypeName" {
+        return Ok(DartTypeName {
+            identifier: parse_identifier(&node.children[0])?,
+            module: None,
+        });
+    }
+
+    Err(gen_error("parse_type_name", &node.rule_name))
 }
 
 fn parse_function_body<'input>(

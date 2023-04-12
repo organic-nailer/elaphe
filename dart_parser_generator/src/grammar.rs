@@ -5,9 +5,10 @@ pub const START_SYMBOL: &'static str = "LibraryDeclaration";
 pub const EPSILON: &'static str = "[EMPTY]";
 pub const END: &'static str = "[END]";
 
-const DART_GRAMMARS: [&'static str; 40] = [
+const DART_GRAMMARS: [&'static str; 47] = [
 // Functions
-"FunctionSignature ::= 'Identifier' FormalParameterList",
+"FunctionSignature ::= 'Identifier' FormalParameterList
+    |/ Type 'Identifier' FormalParameterList",
 "FunctionBody ::= BlockStatement
     |/ '=>' Expression ';'",
 "BlockStatement ::= '{' Statements '}'",
@@ -79,6 +80,16 @@ const DART_GRAMMARS: [&'static str; 40] = [
     |/ TopLevelDeclarationList TopLevelDeclaration",
 "TopLevelDeclaration ::= TopFunctionDeclaration",
 "TopFunctionDeclaration ::= FunctionSignature FunctionBody",
+// Static Types
+"Type ::= TypeNotFunction",
+"TypeNotVoid ::= TypeNotVoidNotFunction",
+"TypeNotFunction ::= 'void'
+    |/ TypeNotVoidNotFunction",
+"TypeNotVoidNotFunction ::= TypeName",
+"TypeName ::= 'Identifier'",
+"TypeArguments ::= '<' TypeList '>'",
+"TypeList ::= Type
+    |/ TypeList ',' Type",
 ];
 
 // const DART_GRAMMARS: [&'static str; 3] = [
