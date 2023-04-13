@@ -3,7 +3,7 @@ use std::{cell::RefCell, collections::HashMap};
 
 use crate::bytecode::ByteCode;
 use crate::executioncontext::{BlockContext, ExecutionContext, VariableScope};
-use crate::parser::node::{Identifier, NodeExpression, NodeStatement, Selector};
+use crate::parser::node::{DartType, Identifier, NodeExpression, NodeStatement, Selector};
 use crate::{bytecode::OpCode, pyobject::PyObject};
 
 // use self::runclass::run_class;
@@ -207,6 +207,335 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     self.compile_stmt(child, None);
                 }
                 self.context_stack.pop();
+            }
+            NodeStatement::IfStatement {
+                condition,
+                if_true_stmt,
+                if_false_stmt,
+            } => {
+                match if_false_stmt {
+                    Some(if_false_stmt) => {
+                        // if expr stmt else stmt
+                        self.compile_expr(condition, None);
+                        let label_false_starts = self.gen_jump_label();
+                        self.push_op(OpCode::PopJumpIfFalse(label_false_starts));
+
+                        self.context_stack.push(Rc::new(RefCell::new(BlockContext {
+                            outer: self.context_stack.last().unwrap().clone(),
+                            variables: vec![],
+                        })));
+                        self.compile_stmt(if_true_stmt, None);
+                        self.context_stack.pop();
+
+                        let label_if_ends = self.gen_jump_label();
+                        self.push_op(OpCode::JumpAbsolute(label_if_ends));
+
+                        self.set_jump_label_value(label_false_starts);
+
+                        self.context_stack.push(Rc::new(RefCell::new(BlockContext {
+                            outer: self.context_stack.last().unwrap().clone(),
+                            variables: vec![],
+                        })));
+                        self.compile_stmt(if_false_stmt, None);
+                        self.context_stack.pop();
+
+                        self.set_jump_label_value(label_if_ends);
+                    }
+                    None => {
+                        // if expr stmt
+                        self.compile_expr(condition, None);
+                        let label_if_ends = self.gen_jump_label();
+                        self.push_op(OpCode::PopJumpIfFalse(label_if_ends));
+                        self.compile_stmt(if_true_stmt, None);
+
+                        self.set_jump_label_value(label_if_ends);
+                    }
+                }
+            }
+            NodeStatement::RethrowStatement => {
+                self.push_op(OpCode::Reraise);
+            }
+            NodeStatement::TryFinallyStatement {
+                block_try,
+                block_finally,
+            } => {
+                let label_finally = self.gen_jump_label();
+                let label_end = self.gen_jump_label();
+
+                self.push_op(OpCode::SetupFinally(label_finally));
+                let label_finally_zero = self.byte_operations.borrow().len() as u8;
+
+                // 通常フロー
+                self.compile_stmt(block_try, None);
+                self.push_op(OpCode::PopBlock);
+                self.compile_stmt(block_finally, None);
+                self.push_op(OpCode::JumpAbsolute(label_end));
+
+                // 例外が起きたときのフロー
+                self.set_jump_label_value_offset(label_finally, label_finally_zero);
+                self.compile_stmt(block_finally, None);
+                self.push_op(OpCode::Reraise);
+
+                self.set_jump_label_value(label_end);
+            }
+            NodeStatement::TryOnStatement {
+                block_try,
+                on_part_list,
+            } => {
+                let label_finally = self.gen_jump_label();
+                let label_end = self.gen_jump_label();
+
+                self.push_op(OpCode::SetupFinally(label_finally));
+                let label_finally_zero = self.byte_operations.borrow().len() as u8;
+
+                // 通常のフロー
+                self.compile_stmt(block_try, None);
+                self.push_op(OpCode::PopBlock);
+                self.push_op(OpCode::JumpAbsolute(label_end));
+
+                // 例外時のフロー
+                self.set_jump_label_value_offset(label_finally, label_finally_zero);
+                for on_part in on_part_list {
+                    let label_next = self.gen_jump_label();
+
+                    self.context_stack.push(Rc::new(RefCell::new(BlockContext {
+                        outer: self.context_stack.last().unwrap().clone(),
+                        variables: vec![],
+                    })));
+
+                    // catchする型の指定がある場合はloadして検証する
+                    match &on_part.exc_type {
+                        Some(v) => {
+                            if let DartType::Named {
+                                type_name,
+                                type_arguments: _,
+                                is_nullable: _,
+                            } = v
+                            {
+                                let name = type_name.identifier.value.to_string();
+                                let p = (**self.context_stack.last().unwrap())
+                                    .borrow_mut()
+                                    .register_or_get_name(&name);
+                                self.push_op(OpCode::LoadName(p));
+                                self.push_op(OpCode::JumpIfNotExcMatch(label_next));
+                            }
+                        }
+                        None => (),
+                    }
+
+                    // スタックの状態:
+                    // [trace_back, value, exception] -> TOP
+                    match &on_part.catch_part {
+                        Some(catch_part) => {
+                            // on E catch() { }
+                            // self.push_op(OpCode::PopTop);
+                            // 実行してみると最初にpopしたものがexception、
+                            // 2番目がtraceback objectになっている
+                            // なぜ？
+
+                            let name = catch_part.id_error.value.to_string();
+                            (**self.context_stack.last().unwrap())
+                                .borrow_mut()
+                                .declare_variable(&name);
+                            self.push_store_var(&name);
+
+                            match &catch_part.id_trace {
+                                Some(id_trace) => {
+                                    let name = id_trace.value.to_string();
+                                    (**self.context_stack.last().unwrap())
+                                        .borrow_mut()
+                                        .declare_variable(&name);
+                                    self.push_store_var(&name);
+                                }
+                                None => {
+                                    self.push_op(OpCode::PopTop);
+                                }
+                            }
+
+                            self.push_op(OpCode::PopTop);
+                        }
+                        None => {
+                            // on E { }
+                            self.push_op(OpCode::PopTop);
+                            self.push_op(OpCode::PopTop);
+                            self.push_op(OpCode::PopTop);
+                        }
+                    }
+
+                    self.compile_stmt(&on_part.block, None);
+                    self.push_op(OpCode::PopExcept);
+                    self.push_op(OpCode::JumpAbsolute(label_end));
+
+                    self.set_jump_label_value(label_next);
+
+                    self.context_stack.pop();
+                }
+
+                self.push_op(OpCode::Reraise);
+
+                self.set_jump_label_value(label_end);
+            }
+            NodeStatement::ForStatement {
+                init,
+                condition,
+                update,
+                stmt,
+            } => {
+                // init is statement
+                // condition is expression
+                // update is expression list
+                let label_for_end = self.gen_jump_label();
+                let label_loop_start = self.gen_jump_label();
+                self.default_scope_stack.push(DefaultScope {
+                    break_label: label_for_end,
+                    continue_label: Some(label_loop_start),
+                });
+                if let Some(stmt_label) = label {
+                    self.continue_label_table
+                        .insert(stmt_label.to_string(), label_loop_start);
+                }
+                if let Some(node) = init {
+                    self.compile_stmt(node, None);
+                }
+                self.set_jump_label_value(label_loop_start);
+                if let Some(node) = condition {
+                    self.compile_expr(node, None);
+                    self.push_op(OpCode::PopJumpIfFalse(label_for_end));
+                }
+
+                self.context_stack.push(Rc::new(RefCell::new(BlockContext {
+                    outer: self.context_stack.last().unwrap().clone(),
+                    variables: vec![],
+                })));
+                self.compile_stmt(stmt, None);
+                self.context_stack.pop();
+
+                if let Some(node_list) = update {
+                    for node in node_list {
+                        self.compile_expr(node, None);
+                        self.push_op(OpCode::PopTop);
+                    }
+                }
+                self.push_op(OpCode::JumpAbsolute(label_loop_start));
+                self.set_jump_label_value(label_for_end);
+                self.default_scope_stack.pop();
+                if let Some(stmt_label) = label {
+                    self.continue_label_table.remove(stmt_label);
+                }
+            }
+            NodeStatement::WhileStatement { condition, stmt } => {
+                let label_while_end = self.gen_jump_label();
+                let label_loop_start = self.gen_jump_label();
+                self.default_scope_stack.push(DefaultScope {
+                    break_label: label_while_end,
+                    continue_label: Some(label_loop_start),
+                });
+                if let Some(stmt_label) = label {
+                    self.continue_label_table
+                        .insert(stmt_label.to_string(), label_loop_start);
+                }
+                self.set_jump_label_value(label_loop_start);
+                self.compile_expr(condition, None);
+                self.push_op(OpCode::PopJumpIfFalse(label_while_end));
+
+                self.context_stack.push(Rc::new(RefCell::new(BlockContext {
+                    outer: self.context_stack.last().unwrap().clone(),
+                    variables: vec![],
+                })));
+                self.compile_stmt(stmt, None);
+                self.context_stack.pop();
+
+                self.push_op(OpCode::JumpAbsolute(label_loop_start));
+
+                self.set_jump_label_value(label_while_end);
+
+                self.default_scope_stack.pop();
+                if let Some(stmt_label) = label {
+                    self.continue_label_table.remove(stmt_label);
+                }
+            }
+            NodeStatement::DoStatement { condition, stmt } => {
+                let label_do_start = self.gen_jump_label();
+                let label_do_end = self.gen_jump_label();
+                self.default_scope_stack.push(DefaultScope {
+                    break_label: label_do_end,
+                    continue_label: Some(label_do_start),
+                });
+                if let Some(stmt_label) = label {
+                    self.continue_label_table
+                        .insert(stmt_label.to_string(), label_do_start);
+                }
+                self.set_jump_label_value(label_do_start);
+
+                self.context_stack.push(Rc::new(RefCell::new(BlockContext {
+                    outer: self.context_stack.last().unwrap().clone(),
+                    variables: vec![],
+                })));
+                self.compile_stmt(stmt, None);
+                self.context_stack.pop();
+
+                self.compile_expr(condition, None);
+                self.push_op(OpCode::PopJumpIfTrue(label_do_start));
+                self.set_jump_label_value(label_do_end);
+
+                self.default_scope_stack.pop();
+                if let Some(stmt_label) = label {
+                    self.continue_label_table.remove(stmt_label);
+                }
+            }
+            NodeStatement::ReturnStatement { value } => {
+                match value {
+                    Some(v) => self.compile_expr(v, None),
+                    None => {
+                        self.push_load_const(PyObject::None(false));
+                    }
+                }
+                self.push_op(OpCode::ReturnValue);
+            }
+            NodeStatement::SwitchStatement {
+                expr,
+                case_list,
+                default_case,
+            } => {
+                self.compile_expr(expr, None);
+                let label_switch_end = self.gen_jump_label();
+                self.default_scope_stack.push(DefaultScope {
+                    break_label: label_switch_end,
+                    continue_label: match self.default_scope_stack.last() {
+                        Some(v) => v.continue_label,
+                        None => None,
+                    },
+                });
+                let case_labels: Vec<u32> =
+                    case_list.iter().map(|_| self.gen_jump_label()).collect();
+                for case_index in 0..case_list.len() {
+                    let case = &case_list[case_index];
+                    let case_label = case_labels[case_index];
+                    self.push_op(OpCode::DupTop);
+                    self.compile_expr(&case.expr, None);
+                    self.push_op(OpCode::compare_op_from_str("=="));
+                    self.push_op(OpCode::PopJumpIfTrue(case_label));
+                }
+                let label_default_start = self.gen_jump_label();
+                if let Some(_) = default_case {
+                    self.push_op(OpCode::JumpAbsolute(label_default_start));
+                }
+                for case_index in 0..case_list.len() {
+                    let case = &case_list[case_index];
+                    let case_label = case_labels[case_index];
+                    self.set_jump_label_value(case_label);
+                    for stmt in &case.stmt_list {
+                        self.compile_stmt(stmt, None);
+                    }
+                }
+                if let Some(default_case) = default_case {
+                    self.set_jump_label_value(label_default_start);
+                    for stmt in &default_case.stmt_list {
+                        self.compile_stmt(stmt, None);
+                    }
+                }
+                self.set_jump_label_value(label_switch_end);
+                self.default_scope_stack.pop();
             }
         }
     }
@@ -934,33 +1263,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
         //             None => panic!("continue statement is not available here"),
         //         },
         //     },
-        //     Node::ReturnStatement { value } => {
-        //         match value {
-        //             Some(v) => self.compile(v, None),
-        //             None => {
-        //                 self.push_load_const(PyObject::None(false));
-        //             }
-        //         }
-        //         self.push_op(OpCode::ReturnValue);
-        //     }
         //     Node::EmptyStatement => {}
-        //     Node::ExpressionStatement { expr } => {
-        //         self.compile(expr, None);
-        //         self.push_op(OpCode::PopTop);
-        //     }
-        //     Node::BlockStatement { children } => {
-        //         self.context_stack.push(Rc::new(RefCell::new(BlockContext {
-        //             outer: self.context_stack.last().unwrap().clone(),
-        //             variables: vec![],
-        //         })));
-        //         for child in children {
-        //             self.compile(child, None);
-        //         }
-        //         self.context_stack.pop();
-        //     }
-        //     Node::RethrowStatement => {
-        //         self.push_op(OpCode::Reraise);
-        //     }
 
         //     Node::VariableDeclarationList { decl_list } => {
         //         for declaration in decl_list {
@@ -1031,333 +1334,6 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
         //             .borrow_mut()
         //             .declare_variable(&name);
         //         self.push_op(OpCode::StoreName(p));
-        //     }
-
-        //     Node::IfStatement {
-        //         condition,
-        //         if_true_stmt,
-        //         if_false_stmt,
-        //     } => {
-        //         match if_false_stmt {
-        //             Some(if_false_stmt) => {
-        //                 // if expr stmt else stmt
-        //                 self.compile(condition, None);
-        //                 let label_false_starts = self.gen_jump_label();
-        //                 self.push_op(OpCode::PopJumpIfFalse(label_false_starts));
-
-        //                 self.context_stack.push(Rc::new(RefCell::new(BlockContext {
-        //                     outer: self.context_stack.last().unwrap().clone(),
-        //                     variables: vec![],
-        //                 })));
-        //                 self.compile(if_true_stmt, None);
-        //                 self.context_stack.pop();
-
-        //                 let label_if_ends = self.gen_jump_label();
-        //                 self.push_op(OpCode::JumpAbsolute(label_if_ends));
-
-        //                 self.set_jump_label_value(label_false_starts);
-
-        //                 self.context_stack.push(Rc::new(RefCell::new(BlockContext {
-        //                     outer: self.context_stack.last().unwrap().clone(),
-        //                     variables: vec![],
-        //                 })));
-        //                 self.compile(if_false_stmt, None);
-        //                 self.context_stack.pop();
-
-        //                 self.set_jump_label_value(label_if_ends);
-        //             }
-        //             None => {
-        //                 // if expr stmt
-        //                 self.compile(condition, None);
-        //                 let label_if_ends = self.gen_jump_label();
-        //                 self.push_op(OpCode::PopJumpIfFalse(label_if_ends));
-        //                 self.compile(if_true_stmt, None);
-
-        //                 self.set_jump_label_value(label_if_ends);
-        //             }
-        //         }
-        //     }
-        //     // try S1 on EX catch(E1) S2 catch(E2) S3 finally S4
-        //     // は以下に分解する
-        //     // try {
-        //     //   try S1
-        //     //   on EX catch(E1) S2
-        //     //   catch(E2) S3
-        //     // }
-        //     // finally S4
-        //     //
-        //     Node::TryFinallyStatement {
-        //         block_try,
-        //         block_finally,
-        //     } => {
-        //         let label_finally = self.gen_jump_label();
-        //         let label_end = self.gen_jump_label();
-
-        //         self.push_op(OpCode::SetupFinally(label_finally));
-        //         let label_finally_zero = self.byte_operations.borrow().len() as u8;
-
-        //         // 通常フロー
-        //         self.compile(block_try, None);
-        //         self.push_op(OpCode::PopBlock);
-        //         self.compile(block_finally, None);
-        //         self.push_op(OpCode::JumpAbsolute(label_end));
-
-        //         // 例外が起きたときのフロー
-        //         self.set_jump_label_value_offset(label_finally, label_finally_zero);
-        //         self.compile(block_finally, None);
-        //         self.push_op(OpCode::Reraise);
-
-        //         self.set_jump_label_value(label_end);
-        //     }
-        //     Node::TryOnStatement {
-        //         block_try,
-        //         on_part_list,
-        //     } => {
-        //         let label_finally = self.gen_jump_label();
-        //         let label_end = self.gen_jump_label();
-
-        //         self.push_op(OpCode::SetupFinally(label_finally));
-        //         let label_finally_zero = self.byte_operations.borrow().len() as u8;
-
-        //         // 通常のフロー
-        //         self.compile(block_try, None);
-        //         self.push_op(OpCode::PopBlock);
-        //         self.push_op(OpCode::JumpAbsolute(label_end));
-
-        //         // 例外時のフロー
-        //         self.set_jump_label_value_offset(label_finally, label_finally_zero);
-        //         for on_part in on_part_list {
-        //             let label_next = self.gen_jump_label();
-
-        //             self.context_stack.push(Rc::new(RefCell::new(BlockContext {
-        //                 outer: self.context_stack.last().unwrap().clone(),
-        //                 variables: vec![],
-        //             })));
-
-        //             // catchする型の指定がある場合はloadして検証する
-        //             match &on_part.exc_type {
-        //                 Some(v) => {
-        //                     if let DartType::Named {
-        //                         type_name,
-        //                         type_arguments: _,
-        //                         is_nullable: _,
-        //                     } = v
-        //                     {
-        //                         let name = type_name.identifier.value.to_string();
-        //                         let p = (**self.context_stack.last().unwrap())
-        //                             .borrow_mut()
-        //                             .register_or_get_name(&name);
-        //                         self.push_op(OpCode::LoadName(p));
-        //                         self.push_op(OpCode::JumpIfNotExcMatch(label_next));
-        //                     }
-        //                 }
-        //                 None => (),
-        //             }
-
-        //             // スタックの状態:
-        //             // [trace_back, value, exception] -> TOP
-        //             match &on_part.catch_part {
-        //                 Some(catch_part) => {
-        //                     // on E catch() { }
-        //                     // self.push_op(OpCode::PopTop);
-        //                     // 実行してみると最初にpopしたものがexception、
-        //                     // 2番目がtraceback objectになっている
-        //                     // なぜ？
-
-        //                     let name = catch_part.id_error.value.to_string();
-        //                     (**self.context_stack.last().unwrap())
-        //                         .borrow_mut()
-        //                         .declare_variable(&name);
-        //                     self.push_store_var(&name);
-
-        //                     match &catch_part.id_trace {
-        //                         Some(id_trace) => {
-        //                             let name = id_trace.value.to_string();
-        //                             (**self.context_stack.last().unwrap())
-        //                                 .borrow_mut()
-        //                                 .declare_variable(&name);
-        //                             self.push_store_var(&name);
-        //                         }
-        //                         None => {
-        //                             self.push_op(OpCode::PopTop);
-        //                         }
-        //                     }
-
-        //                     self.push_op(OpCode::PopTop);
-        //                 }
-        //                 None => {
-        //                     // on E { }
-        //                     self.push_op(OpCode::PopTop);
-        //                     self.push_op(OpCode::PopTop);
-        //                     self.push_op(OpCode::PopTop);
-        //                 }
-        //             }
-
-        //             self.compile(&on_part.block, None);
-        //             self.push_op(OpCode::PopExcept);
-        //             self.push_op(OpCode::JumpAbsolute(label_end));
-
-        //             self.set_jump_label_value(label_next);
-
-        //             self.context_stack.pop();
-        //         }
-
-        //         self.push_op(OpCode::Reraise);
-
-        //         self.set_jump_label_value(label_end);
-        //     }
-        //     Node::ForStatement {
-        //         init,
-        //         condition,
-        //         update,
-        //         stmt,
-        //     } => {
-        //         // init is statement
-        //         // condition is expression
-        //         // update is expression list
-        //         let label_for_end = self.gen_jump_label();
-        //         let label_loop_start = self.gen_jump_label();
-        //         self.default_scope_stack.push(DefaultScope {
-        //             break_label: label_for_end,
-        //             continue_label: Some(label_loop_start),
-        //         });
-        //         if let Some(stmt_label) = label {
-        //             self.continue_label_table
-        //                 .insert(stmt_label.to_string(), label_loop_start);
-        //         }
-        //         if let Some(node) = init {
-        //             self.compile(node, None);
-        //         }
-        //         self.set_jump_label_value(label_loop_start);
-        //         if let Some(node) = condition {
-        //             self.compile(node, None);
-        //             self.push_op(OpCode::PopJumpIfFalse(label_for_end));
-        //         }
-
-        //         self.context_stack.push(Rc::new(RefCell::new(BlockContext {
-        //             outer: self.context_stack.last().unwrap().clone(),
-        //             variables: vec![],
-        //         })));
-        //         self.compile(stmt, None);
-        //         self.context_stack.pop();
-
-        //         if let Some(node_list) = update {
-        //             for node in node_list {
-        //                 self.compile(node, None);
-        //                 self.push_op(OpCode::PopTop);
-        //             }
-        //         }
-        //         self.push_op(OpCode::JumpAbsolute(label_loop_start));
-        //         self.set_jump_label_value(label_for_end);
-        //         self.default_scope_stack.pop();
-        //         if let Some(stmt_label) = label {
-        //             self.continue_label_table.remove(stmt_label);
-        //         }
-        //     }
-        //     Node::WhileStatement { condition, stmt } => {
-        //         let label_while_end = self.gen_jump_label();
-        //         let label_loop_start = self.gen_jump_label();
-        //         self.default_scope_stack.push(DefaultScope {
-        //             break_label: label_while_end,
-        //             continue_label: Some(label_loop_start),
-        //         });
-        //         if let Some(stmt_label) = label {
-        //             self.continue_label_table
-        //                 .insert(stmt_label.to_string(), label_loop_start);
-        //         }
-        //         self.set_jump_label_value(label_loop_start);
-        //         self.compile(condition, None);
-        //         self.push_op(OpCode::PopJumpIfFalse(label_while_end));
-
-        //         self.context_stack.push(Rc::new(RefCell::new(BlockContext {
-        //             outer: self.context_stack.last().unwrap().clone(),
-        //             variables: vec![],
-        //         })));
-        //         self.compile(stmt, None);
-        //         self.context_stack.pop();
-
-        //         self.push_op(OpCode::JumpAbsolute(label_loop_start));
-
-        //         self.set_jump_label_value(label_while_end);
-
-        //         self.default_scope_stack.pop();
-        //         if let Some(stmt_label) = label {
-        //             self.continue_label_table.remove(stmt_label);
-        //         }
-        //     }
-        //     Node::DoStatement { condition, stmt } => {
-        //         let label_do_start = self.gen_jump_label();
-        //         let label_do_end = self.gen_jump_label();
-        //         self.default_scope_stack.push(DefaultScope {
-        //             break_label: label_do_end,
-        //             continue_label: Some(label_do_start),
-        //         });
-        //         if let Some(stmt_label) = label {
-        //             self.continue_label_table
-        //                 .insert(stmt_label.to_string(), label_do_start);
-        //         }
-        //         self.set_jump_label_value(label_do_start);
-
-        //         self.context_stack.push(Rc::new(RefCell::new(BlockContext {
-        //             outer: self.context_stack.last().unwrap().clone(),
-        //             variables: vec![],
-        //         })));
-        //         self.compile(stmt, None);
-        //         self.context_stack.pop();
-
-        //         self.compile(condition, None);
-        //         self.push_op(OpCode::PopJumpIfTrue(label_do_start));
-        //         self.set_jump_label_value(label_do_end);
-
-        //         self.default_scope_stack.pop();
-        //         if let Some(stmt_label) = label {
-        //             self.continue_label_table.remove(stmt_label);
-        //         }
-        //     }
-        //     Node::SwitchStatement {
-        //         expr,
-        //         case_list,
-        //         default_case,
-        //     } => {
-        //         self.compile(expr, None);
-        //         let label_switch_end = self.gen_jump_label();
-        //         self.default_scope_stack.push(DefaultScope {
-        //             break_label: label_switch_end,
-        //             continue_label: match self.default_scope_stack.last() {
-        //                 Some(v) => v.continue_label,
-        //                 None => None,
-        //             },
-        //         });
-        //         let case_labels: Vec<u32> =
-        //             case_list.iter().map(|_| self.gen_jump_label()).collect();
-        //         for case_index in 0..case_list.len() {
-        //             let case = &case_list[case_index];
-        //             let case_label = case_labels[case_index];
-        //             self.push_op(OpCode::DupTop);
-        //             self.compile(&case.expr, None);
-        //             self.push_op(OpCode::compare_op_from_str("=="));
-        //             self.push_op(OpCode::PopJumpIfTrue(case_label));
-        //         }
-        //         let label_default_start = self.gen_jump_label();
-        //         if let Some(_) = default_case {
-        //             self.push_op(OpCode::JumpAbsolute(label_default_start));
-        //         }
-        //         for case_index in 0..case_list.len() {
-        //             let case = &case_list[case_index];
-        //             let case_label = case_labels[case_index];
-        //             self.set_jump_label_value(case_label);
-        //             for stmt in &case.stmt_list {
-        //                 self.compile(stmt, None);
-        //             }
-        //         }
-        //         if let Some(default_case) = default_case {
-        //             self.set_jump_label_value(label_default_start);
-        //             for stmt in &default_case.stmt_list {
-        //                 self.compile(stmt, None);
-        //             }
-        //         }
-        //         self.set_jump_label_value(label_switch_end);
-        //         self.default_scope_stack.pop();
         //     }
         // }
     }

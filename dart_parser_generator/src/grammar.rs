@@ -5,8 +5,11 @@ pub const START_SYMBOL: &'static str = "LibraryDeclaration";
 pub const EPSILON: &'static str = "[EMPTY]";
 pub const END: &'static str = "[END]";
 
-const DART_GRAMMARS: [&'static str; 50] = [
+const DART_GRAMMARS: [&'static str; 74] = [
 // Variables
+"InitializedVariableDeclaration ::= DeclaredIdentifier
+    |/ DeclaredIdentifier '=' Expression
+    |/ InitializedVariableDeclaration ',' InitializedIdentifier",
 "InitializedIdentifier ::= 'Identifier'
     |/ 'Identifier' '=' Expression",
 "InitializedIdentifierList ::= InitializedIdentifier
@@ -22,8 +25,24 @@ const DART_GRAMMARS: [&'static str; 50] = [
 "NormalFormalParameterList ::= NormalFormalParameter
     |/ NormalFormalParameterList ',' NormalFormalParameter",
 "NormalFormalParameter ::= 'Identifier'",
+"DeclaredIdentifier ::= 'var' Identifier
+    |/ Type Identifier
+    |/ 'late' 'var' Identifier
+    |/ 'late' Type Identifier
+    |/ 'const' Identifier
+    |/ 'const' Type Identifier
+    |/ 'final' Identifier
+    |/ 'final' Type Identifier
+    |/ 'late' 'final' Identifier
+    |/ 'late' 'final' Type Identifier",
 // Expressions
 "Expression ::= ConditionalExpression",
+"ExpressionOpt ::= [EMPTY]
+    |/ Expression",
+"ExpressionList ::= Expression
+    |/ ExpressionList ',' Expression",
+"ExpressionListOpt ::= [EMPTY]
+    |/ ExpressionList",
 "PrimaryExpression ::= '(' Expression ')'
     |/ 'Boolean'
     |/ 'Number'
@@ -77,8 +96,47 @@ const DART_GRAMMARS: [&'static str; 50] = [
 "Statements ::= [EMPTY]
     |/ Statements Statement",
 "Statement ::= ExpressionStatement
-    |/ BlockStatement",
+    |/ LocalVariableDeclaration
+    |/ BlockStatement
+    |/ IfStatement
+    |/ ForStatement
+    |/ WhileStatement
+    |/ DoStatement
+    |/ SwitchStatement
+    |/ RethrowStatement
+    |/ TryStatement
+    |/ ReturnStatement",
 "ExpressionStatement ::= Expression ';'",
+"LocalVariableDeclaration ::= InitializedVariableDeclaration ';'",
+"IfStatement ::= 'if' '(' Expression ')' Statement
+    |/ 'if' '(' Expression ')' Statement 'else' Statement",
+"ForStatement ::= 'for' '(' ForLoopParts ')' Statement",
+"ForLoopParts ::= ForInitializerStatement ExpressionOpt ';' ExpressionListOpt",
+"ForInitializerStatement ::= LocalVariableDeclaration
+    |/ ExpressionOpt ';'",
+"WhileStatement ::= 'while' '(' Expression ')' Statement",
+"DoStatement ::= 'do' Statement 'while' '(' Expression ')' ';'",
+"SwitchStatement ::= 'switch' '(' Expression ')' '{' DefaultCaseOpt '}'
+    |/ 'switch' '(' Expression ')' '{' SwitchCaseList DefaultCaseOpt '}'",
+"SwitchCaseList ::= SwitchCase
+    |/ SwitchCaseList SwitchCase",
+"SwitchCase ::= 'case' Expression ':' Statements",
+"DefaultCase ::= 'default' ':' Statements",
+"DefaultCaseOpt ::= [EMPTY]
+    |/ DefaultCase",
+"RethrowStatement ::= 'rethrow' ';'",
+"TryStatement ::= 'try' BlockStatement FinallyPart
+    |/ 'try' BlockStatement OnPartList
+    |/ 'try' BlockStatement OnPartList FinallyPart",
+"OnPartList ::= OnPart
+    |/ OnPartList OnPart",
+"OnPart ::= CatchPart BlockStatement
+    |/ 'on' TypeNotVoid BlockStatement
+    |/ 'on' TypeNotVoid CatchPart BlockStatement",
+"CatchPart ::= 'catch' '(' Identifier ')'
+    |/ 'catch' '(' Identifier ',' Identifier ')'",
+"FinallyPart ::= 'finally' BlockStatement",
+"ReturnStatement ::= 'return' ExpressionOpt ';'",
 // Libraries and Scripts
 "LibraryDeclaration ::= TopLevelDeclarationList",
 "TopLevelDeclarationList ::= [EMPTY]

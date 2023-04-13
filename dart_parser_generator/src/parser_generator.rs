@@ -287,7 +287,9 @@ fn calc_transition_map(
                 if transition_map.contains_key(&(state.to_string(), token.to_string())) {
                     // Shift-Reduce conflict
                     // priortize shift by default
-                    continue;
+                    if *token == "else" { continue }
+                    
+                    panic!("Unhandled Shift-Reduce conflict: {token} in {state} with {rule:?}", token=token, state=state, rule=rule);
                 }
 
                 transition_map.insert(

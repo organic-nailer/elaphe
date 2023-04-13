@@ -108,6 +108,51 @@ pub fn parse_expression<'input>(
     }
 }
 
+pub fn parse_expression_opt<'input>(
+    node: &NodeInternal<'input>,
+) -> Result<Option<Box<NodeExpression<'input>>>, Box<dyn Error>> {
+    if node.rule_name == "ExpressionOpt" {
+        if node.children.len() == 0 {
+            return Ok(None);
+        } else {
+            return Ok(Some(Box::new(parse_expression(&node.children[0])?)));
+        }
+    }
+
+    Err(gen_error("parse_expression_opt", &node.rule_name))
+}
+
+pub fn parse_expression_list<'input>(
+    node: &NodeInternal<'input>,
+) -> Result<Vec<Box<NodeExpression<'input>>>, Box<dyn Error>> {
+    if node.rule_name == "ExpressionList" {
+        if node.children.len() == 1 {
+            return Ok(vec![Box::new(parse_expression(&node.children[0])?)]);
+        } else {
+            return flatten(
+                parse_expression_list(&node.children[0]),
+                Box::new(parse_expression(&node.children[1])?),
+            );
+        }
+    }
+
+    Err(gen_error("parse_expression_list", &node.rule_name))
+}
+
+pub fn parse_expression_list_opt<'input>(
+    node: &NodeInternal<'input>,
+) -> Result<Option<Vec<Box<NodeExpression<'input>>>>, Box<dyn Error>> {
+    if node.rule_name == "ExpressionListOpt" {
+        if node.children.len() == 0 {
+            return Ok(None);
+        } else {
+            return Ok(Some(parse_expression_list(&node.children[0])?));
+        }
+    }
+
+    Err(gen_error("parse_expression_list_opt", &node.rule_name))
+}
+
 fn parse_string_literal_list<'input>(
     node: &NodeInternal<'input>,
 ) -> Result<Vec<&'input str>, Box<dyn Error>> {

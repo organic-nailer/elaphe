@@ -43,7 +43,43 @@ pub enum NodeStatement<'input> {
         expr: Box<NodeExpression<'input>>,
     },
     BlockStatement {
-        statements: Vec<NodeStatement<'input>>,
+        statements: Vec<Box<NodeStatement<'input>>>,
+    },
+    IfStatement {
+        condition: Box<NodeExpression<'input>>,
+        if_true_stmt: Box<NodeStatement<'input>>,
+        if_false_stmt: Option<Box<NodeStatement<'input>>>,
+    },
+    RethrowStatement,
+    TryFinallyStatement {
+        block_try: Box<NodeStatement<'input>>,
+        block_finally: Box<NodeStatement<'input>>,
+    },
+    TryOnStatement {
+        block_try: Box<NodeStatement<'input>>,
+        on_part_list: Vec<TryOnPart<'input>>,
+    },
+    ForStatement {
+        init: Option<Box<NodeStatement<'input>>>,
+        condition: Option<Box<NodeExpression<'input>>>,
+        update: Option<Vec<Box<NodeExpression<'input>>>>,
+        stmt: Box<NodeStatement<'input>>,
+    },
+    WhileStatement {
+        condition: Box<NodeExpression<'input>>,
+        stmt: Box<NodeStatement<'input>>,
+    },
+    DoStatement {
+        condition: Box<NodeExpression<'input>>,
+        stmt: Box<NodeStatement<'input>>,
+    },
+    ReturnStatement {
+        value: Option<Box<NodeExpression<'input>>>,
+    },
+    SwitchStatement {
+        expr: Box<NodeExpression<'input>>,
+        case_list: Vec<SwitchCase<'input>>,
+        default_case: Option<DefaultCase<'input>>,
     },
 }
 
@@ -86,4 +122,26 @@ pub struct DartTypeName<'input> {
 pub struct VariableDeclaration<'input> {
     pub identifier: Identifier<'input>,
     pub expr: Option<Box<NodeExpression<'input>>>,
+}
+
+pub struct SwitchCase<'input> {
+    pub label_list: Vec<Box<NodeExpression<'input>>>,
+    pub expr: Box<NodeExpression<'input>>,
+    pub stmt_list: Vec<Box<NodeStatement<'input>>>,
+}
+
+pub struct DefaultCase<'input> {
+    pub label_list: Vec<Box<NodeExpression<'input>>>,
+    pub stmt_list: Vec<Box<NodeStatement<'input>>>,
+}
+
+pub struct TryOnPart<'input> {
+    pub catch_part: Option<TryCatchPart<'input>>,
+    pub exc_type: Option<DartType<'input>>,
+    pub block: Box<NodeStatement<'input>>,
+}
+
+pub struct TryCatchPart<'input> {
+    pub id_error: Identifier<'input>,
+    pub id_trace: Option<Identifier<'input>>,
 }

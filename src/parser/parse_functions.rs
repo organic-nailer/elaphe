@@ -88,3 +88,13 @@ pub fn parse_function_signature<'input>(
 
     Err(gen_error("parse_function_signature", &node.rule_name))
 }
+
+pub fn parse_declared_identifier<'input>(
+    node: &NodeInternal<'input>,
+) -> Result<Identifier<'input>, Box<dyn Error>> {
+    if node.rule_name == "DeclaredIdentifier" {
+        return Ok(parse_identifier(&node.children.last().unwrap())?);
+    }
+
+    Err(gen_error("parse_declared_identifier", &node.rule_name))
+}
