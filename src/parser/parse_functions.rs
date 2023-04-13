@@ -3,8 +3,9 @@ use std::error::Error;
 use super::{
     node::{FunctionSignature, Identifier, NodeStatement},
     node_internal::NodeInternal,
+    parse_expression::parse_expression,
     parse_identifier::parse_identifier,
-    parse_statement::parse_statement,
+    parse_statement::parse_block_statement,
     parse_type::parse_type,
     util::{flatten, gen_error},
 };
@@ -14,9 +15,11 @@ pub fn parse_function_body<'input>(
 ) -> Result<NodeStatement<'input>, Box<dyn Error>> {
     if node.rule_name == "FunctionBody" {
         if node.children.len() == 1 {
-            return parse_statement(&node.children[0]);
+            return parse_block_statement(&node.children[0]);
         } else {
-            return parse_statement(&node.children[1]);
+            return Ok(NodeStatement::ExpressionStatement {
+                expr: Box::new(parse_expression(&node.children[1])?),
+            });
         }
     }
 

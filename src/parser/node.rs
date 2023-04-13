@@ -38,6 +38,10 @@ pub enum NodeExpression<'input> {
 }
 
 pub enum NodeStatement<'input> {
+    Labeled {
+        label: Identifier<'input>,
+        stmt: Box<NodeStatement<'input>>,
+    },
     FunctionDeclaration {
         signature: FunctionSignature<'input>,
         body: Box<NodeStatement<'input>>,
@@ -86,6 +90,12 @@ pub enum NodeStatement<'input> {
         expr: Box<NodeExpression<'input>>,
         case_list: Vec<SwitchCase<'input>>,
         default_case: Option<DefaultCase<'input>>,
+    },
+    BreakStatement {
+        label: Option<Identifier<'input>>,
+    },
+    ContinueStatement {
+        label: Option<Identifier<'input>>,
     },
 }
 

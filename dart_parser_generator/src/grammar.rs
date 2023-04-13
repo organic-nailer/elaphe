@@ -5,7 +5,7 @@ pub const START_SYMBOL: &'static str = "LibraryDeclaration";
 pub const EPSILON: &'static str = "[EMPTY]";
 pub const END: &'static str = "[END]";
 
-const DART_GRAMMARS: [&'static str; 76] = [
+const DART_GRAMMARS: [&'static str; 80] = [
 // Variables
 "InitializedVariableDeclaration ::= DeclaredIdentifier
     |/ DeclaredIdentifier '=' Expression
@@ -99,7 +99,9 @@ const DART_GRAMMARS: [&'static str; 76] = [
 // Statements
 "Statements ::= [EMPTY]
     |/ Statements Statement",
-"Statement ::= ExpressionStatement
+"Statement ::= NonLabeledStatement
+    |/ Label NonLabeledStatement",
+"NonLabeledStatement ::= ExpressionStatement
     |/ LocalVariableDeclaration
     |/ BlockStatement
     |/ IfStatement
@@ -109,6 +111,8 @@ const DART_GRAMMARS: [&'static str; 76] = [
     |/ SwitchStatement
     |/ RethrowStatement
     |/ TryStatement
+    |/ BreakStatement
+    |/ ContinueStatement
     |/ ReturnStatement",
 "ExpressionStatement ::= Expression ';'",
 "LocalVariableDeclaration ::= InitializedVariableDeclaration ';'",
@@ -141,6 +145,11 @@ const DART_GRAMMARS: [&'static str; 76] = [
     |/ 'catch' '(' Identifier ',' Identifier ')'",
 "FinallyPart ::= 'finally' BlockStatement",
 "ReturnStatement ::= 'return' ExpressionOpt ';'",
+"Label ::= 'Identifier' ':'",
+"BreakStatement ::= 'break' ';'
+    |/ 'break' 'Identifier' ';'",
+"ContinueStatement ::= 'continue' ';'
+    |/ 'continue' 'Identifier' ';'",
 // Libraries and Scripts
 "LibraryDeclaration ::= TopLevelDeclarationList",
 "TopLevelDeclarationList ::= [EMPTY]

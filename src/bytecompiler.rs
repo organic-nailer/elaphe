@@ -166,7 +166,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 for declaration in decl_list {
                     match &declaration.expr {
                         Some(e) => {
-                            self.compile_expr(e, None);
+                            self.compile_expr(e);
                             let value = declaration.identifier.value.to_string();
                             let position = (**self.context_stack.last().unwrap())
                                 .borrow_mut()
@@ -195,7 +195,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 }
             }
             NodeStatement::ExpressionStatement { expr } => {
-                self.compile_expr(expr, None);
+                self.compile_expr(expr);
                 self.push_op(OpCode::PopTop);
             }
             NodeStatement::BlockStatement { statements } => {
@@ -216,7 +216,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 match if_false_stmt {
                     Some(if_false_stmt) => {
                         // if expr stmt else stmt
-                        self.compile_expr(condition, None);
+                        self.compile_expr(condition);
                         let label_false_starts = self.gen_jump_label();
                         self.push_op(OpCode::PopJumpIfFalse(label_false_starts));
 
@@ -243,7 +243,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     }
                     None => {
                         // if expr stmt
-                        self.compile_expr(condition, None);
+                        self.compile_expr(condition);
                         let label_if_ends = self.gen_jump_label();
                         self.push_op(OpCode::PopJumpIfFalse(label_if_ends));
                         self.compile_stmt(if_true_stmt, None);
@@ -399,7 +399,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 }
                 self.set_jump_label_value(label_loop_start);
                 if let Some(node) = condition {
-                    self.compile_expr(node, None);
+                    self.compile_expr(node);
                     self.push_op(OpCode::PopJumpIfFalse(label_for_end));
                 }
 
@@ -412,7 +412,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
 
                 if let Some(node_list) = update {
                     for node in node_list {
-                        self.compile_expr(node, None);
+                        self.compile_expr(node);
                         self.push_op(OpCode::PopTop);
                     }
                 }
@@ -435,7 +435,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                         .insert(stmt_label.to_string(), label_loop_start);
                 }
                 self.set_jump_label_value(label_loop_start);
-                self.compile_expr(condition, None);
+                self.compile_expr(condition);
                 self.push_op(OpCode::PopJumpIfFalse(label_while_end));
 
                 self.context_stack.push(Rc::new(RefCell::new(BlockContext {
@@ -474,7 +474,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 self.compile_stmt(stmt, None);
                 self.context_stack.pop();
 
-                self.compile_expr(condition, None);
+                self.compile_expr(condition);
                 self.push_op(OpCode::PopJumpIfTrue(label_do_start));
                 self.set_jump_label_value(label_do_end);
 
@@ -485,7 +485,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             }
             NodeStatement::ReturnStatement { value } => {
                 match value {
-                    Some(v) => self.compile_expr(v, None),
+                    Some(v) => self.compile_expr(v),
                     None => {
                         self.push_load_const(PyObject::None(false));
                     }
@@ -497,7 +497,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 case_list,
                 default_case,
             } => {
-                self.compile_expr(expr, None);
+                self.compile_expr(expr);
                 let label_switch_end = self.gen_jump_label();
                 self.default_scope_stack.push(DefaultScope {
                     break_label: label_switch_end,
@@ -512,7 +512,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     let case = &case_list[case_index];
                     let case_label = case_labels[case_index];
                     self.push_op(OpCode::DupTop);
-                    self.compile_expr(&case.expr, None);
+                    self.compile_expr(&case.expr);
                     self.push_op(OpCode::compare_op_from_str("=="));
                     self.push_op(OpCode::PopJumpIfTrue(case_label));
                 }
@@ -537,10 +537,57 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 self.set_jump_label_value(label_switch_end);
                 self.default_scope_stack.pop();
             }
+            NodeStatement::Labeled { label, stmt } => {
+                let label_str = label.value.to_string();
+                let label_id = self.gen_jump_label();
+
+                // break用のラベルはこの時点で用意する
+                self.break_label_table.insert(label_str.clone(), label_id);
+
+                self.compile_stmt(stmt, Some(&label_str));
+
+                self.set_jump_label_value(label_id);
+                self.break_label_table.remove(&label_str);
+            }
+            NodeStatement::BreakStatement { label } => match label {
+                Some(identifier) => {
+                    let label_str = identifier.value;
+                    match self.break_label_table.get(label_str) {
+                        Some(v) => {
+                            self.push_op(OpCode::JumpAbsolute(*v));
+                        }
+                        None => panic!("label {} is not existing in this scope.", label_str),
+                    }
+                }
+                None => match self.default_scope_stack.last() {
+                    Some(v) => {
+                        self.push_op(OpCode::JumpAbsolute(v.break_label));
+                    }
+                    None => panic!("break statement is not available here"),
+                },
+            },
+            NodeStatement::ContinueStatement { label } => match label {
+                Some(identifier) => {
+                    let label_str = identifier.value;
+                    match self.continue_label_table.get(label_str) {
+                        Some(v) => {
+                            self.push_op(OpCode::JumpAbsolute(*v));
+                        }
+                        None => panic!("label {} is not existing in this scope.", label_str),
+                    }
+                }
+                None => match self.default_scope_stack.last() {
+                    Some(v) => match v.continue_label {
+                        Some(continue_label) => self.push_op(OpCode::JumpAbsolute(continue_label)),
+                        None => panic!("continue statement is not available here"),
+                    },
+                    None => panic!("continue statement is not available here"),
+                },
+            },
         }
     }
 
-    fn compile_expr(&mut self, node: &'value NodeExpression, label: Option<&String>) {
+    fn compile_expr(&mut self, node: &'value NodeExpression) {
         match node {
             NodeExpression::AssignmentExpression {
                 operator,
@@ -549,7 +596,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             } => {
                 match *operator {
                     "=" => {
-                        self.compile_expr(right, None);
+                        self.compile_expr(right);
                         // DartではAssignment Expressionが代入先の最終的な値を残す
                         self.push_op(OpCode::DupTop);
 
@@ -589,7 +636,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                             let value = identifier.value.to_string();
                             self.push_load_var(&value);
 
-                            self.compile_expr(right, None);
+                            self.compile_expr(right);
                             match *operator {
                                 "*=" => self.push_op(OpCode::InplaceMultiply),
                                 "/=" => self.push_op(OpCode::InplaceTrueDivide),
@@ -687,7 +734,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                             self.push_op(OpCode::PopJumpIfFalse(label_end));
 
                             self.push_op(OpCode::PopTop);
-                            self.compile_expr(right, None);
+                            self.compile_expr(right);
                             self.push_op(OpCode::DupTop);
                             self.push_store_var(&value);
                             self.set_jump_label_value(label_end);
@@ -769,8 +816,8 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 operator,
                 right,
             } => {
-                self.compile_expr(left, None);
-                self.compile_expr(right, None);
+                self.compile_expr(left);
+                self.compile_expr(right);
                 match *operator {
                     "==" | "!=" | ">=" | ">" | "<=" | "<" => {
                         self.push_op(OpCode::compare_op_from_str(operator))
@@ -796,16 +843,16 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             } => {
                 let label_conditional_end = self.gen_jump_label();
                 let label_false_start = self.gen_jump_label();
-                self.compile_expr(condition, None);
+                self.compile_expr(condition);
                 self.push_op(OpCode::PopJumpIfFalse(label_false_start));
-                self.compile_expr(true_expr, None);
+                self.compile_expr(true_expr);
                 self.push_op(OpCode::JumpAbsolute(label_conditional_end));
                 self.set_jump_label_value(label_false_start);
-                self.compile_expr(false_expr, None);
+                self.compile_expr(false_expr);
                 self.set_jump_label_value(label_conditional_end);
             }
             NodeExpression::Unary { operator, expr } => {
-                self.compile_expr(expr, None);
+                self.compile_expr(expr);
                 match *operator {
                     "-" => self.push_op(OpCode::UnaryNegative),
                     "!" => self.push_op(OpCode::UnaryNot),
@@ -840,13 +887,13 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             }
             NodeExpression::Selector { left, operator } => {
                 // 右辺値として処理される場合
-                self.compile_expr(left, None);
+                self.compile_expr(left);
 
                 match operator {
                     Selector::Args { args } => {
                         let mut name_list: Vec<&str> = vec![];
                         for param in args {
-                            self.compile_expr(&param.expr, None);
+                            self.compile_expr(&param.expr);
                             if let Some(v) = &param.identifier {
                                 name_list.push(v.value);
                             }

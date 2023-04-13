@@ -1,7 +1,7 @@
 use std::{error::Error, vec};
 
 use super::{
-    node::{DefaultCase, NodeStatement, SwitchCase, TryCatchPart, TryOnPart},
+    node::{DefaultCase, Identifier, NodeStatement, SwitchCase, TryCatchPart, TryOnPart},
     node_internal::NodeInternal,
     parse_expression::{parse_expression, parse_expression_list_opt, parse_expression_opt},
     parse_identifier::parse_identifier,
@@ -13,12 +13,30 @@ use super::{
 pub fn parse_statement<'input>(
     node: &NodeInternal<'input>,
 ) -> Result<NodeStatement<'input>, Box<dyn Error>> {
+    if node.rule_name == "Statement" {
+        if node.children.len() == 1 {
+            return parse_non_labeled_statement(&node.children[0]);
+        } else if node.children.len() == 2 {
+            return Ok(NodeStatement::Labeled {
+                label: parse_label(&node.children[0])?,
+                stmt: Box::new(parse_non_labeled_statement(&node.children[1])?),
+            });
+        }
+    }
+
+    Err(gen_error("parse_statement", &node.rule_name))
+}
+
+pub fn parse_non_labeled_statement<'input>(
+    node: &NodeInternal<'input>,
+) -> Result<NodeStatement<'input>, Box<dyn Error>> {
+    if node.rule_name != "NonLabeledStatement" {
+        return Err(gen_error("parse_non_labeled_statement", &node.rule_name));
+    }
+    let node = &node.children[0];
     match node.rule_name.as_str() {
-        "Statement" => parse_statement(&node.children[0]),
         "LocalVariableDeclaration" => parse_local_variable_declaration(node),
-        "BlockStatement" => Ok(NodeStatement::BlockStatement {
-            statements: parse_statement_list(&node.children[1])?,
-        }),
+        "BlockStatement" => parse_block_statement(node),
         "ExpressionStatement" => Ok(NodeStatement::ExpressionStatement {
             expr: Box::new(parse_expression(&node.children[0])?),
         }),
@@ -30,8 +48,22 @@ pub fn parse_statement<'input>(
         "RethrowStatement" => parse_rethrow_statement(node),
         "TryStatement" => parse_try_statement(node),
         "ReturnStatement" => parse_return_statement(node),
-        v => Err(gen_error("parse_statement", v)),
+        "BreakStatement" => parse_break_statement(node),
+        "ContinueStatement" => parse_continue_statement(node),
+        v => Err(gen_error("parse_non_labeled_statement", v)),
     }
+}
+
+pub fn parse_block_statement<'input>(
+    node: &NodeInternal<'input>,
+) -> Result<NodeStatement<'input>, Box<dyn Error>> {
+    if node.rule_name == "BlockStatement" {
+        return Ok(NodeStatement::BlockStatement {
+            statements: parse_statement_list(&node.children[1])?,
+        });
+    }
+
+    Err(gen_error("parse_block_statement", &node.rule_name))
 }
 
 pub fn parse_statement_list<'input>(
@@ -96,7 +128,9 @@ fn parse_for_statement<'input>(
         let parts_init_node = &parts_node.children[0];
         let init = if parts_init_node.children.len() == 1 {
             if parts_init_node.children[0].rule_name == "LocalVariableDeclaration" {
-                Some(Box::new(parse_statement(&parts_init_node.children[0])?))
+                Some(Box::new(parse_local_variable_declaration(
+                    &parts_init_node.children[0],
+                )?))
             } else {
                 None
             }
@@ -168,8 +202,8 @@ fn parse_switch_case_list<'input>(
     node: &NodeInternal<'input>,
 ) -> Result<Vec<SwitchCase<'input>>, Box<dyn Error>> {
     if node.rule_name == "SwitchCaseList" {
-        if node.children.len() == 0 {
-            return Ok(vec![]);
+        if node.children.len() == 1 {
+            return Ok(vec![parse_switch_case(&node.children[0])?]);
         } else {
             return flatten(
                 parse_switch_case_list(&node.children[0]),
@@ -239,19 +273,19 @@ fn parse_try_statement<'input>(
         if node.children.len() == 3 {
             if node.children[2].rule_name == "FinallyPart" {
                 return Ok(NodeStatement::TryFinallyStatement {
-                    block_try: Box::new(parse_statement(&node.children[1])?),
+                    block_try: Box::new(parse_block_statement(&node.children[1])?),
                     block_finally: Box::new(parse_finally_part(&node.children[2])?),
                 });
             } else {
                 return Ok(NodeStatement::TryOnStatement {
-                    block_try: Box::new(parse_statement(&node.children[1])?),
+                    block_try: Box::new(parse_block_statement(&node.children[1])?),
                     on_part_list: parse_on_part_list(&node.children[2])?,
                 });
             }
         } else {
             return Ok(NodeStatement::TryFinallyStatement {
                 block_try: Box::new(NodeStatement::TryOnStatement {
-                    block_try: Box::new(parse_statement(&node.children[1])?),
+                    block_try: Box::new(parse_block_statement(&node.children[1])?),
                     on_part_list: parse_on_part_list(&node.children[2])?,
                 }),
                 block_finally: Box::new(parse_finally_part(&node.children[3])?),
@@ -268,19 +302,19 @@ fn parse_on_part<'input>(node: &NodeInternal<'input>) -> Result<TryOnPart<'input
             return Ok(TryOnPart {
                 catch_part: Some(parse_catch_part(&node.children[0])?),
                 exc_type: None,
-                block: Box::new(parse_statement(&node.children[1])?),
+                block: Box::new(parse_block_statement(&node.children[1])?),
             });
         } else if node.children.len() == 3 {
             return Ok(TryOnPart {
                 catch_part: None,
                 exc_type: Some(parse_type(&node.children[1])?),
-                block: Box::new(parse_statement(&node.children[2])?),
+                block: Box::new(parse_block_statement(&node.children[2])?),
             });
         } else {
             return Ok(TryOnPart {
                 catch_part: Some(parse_catch_part(&node.children[2])?),
                 exc_type: Some(parse_type(&node.children[1])?),
-                block: Box::new(parse_statement(&node.children[3])?),
+                block: Box::new(parse_block_statement(&node.children[3])?),
             });
         }
     }
@@ -329,7 +363,7 @@ fn parse_finally_part<'input>(
     node: &NodeInternal<'input>,
 ) -> Result<NodeStatement<'input>, Box<dyn Error>> {
     if node.rule_name == "FinallyPart" {
-        return Ok(parse_statement(&node.children[1])?);
+        return Ok(parse_block_statement(&node.children[1])?);
     }
 
     Err(gen_error("parse_finally_part", &node.rule_name))
@@ -345,4 +379,44 @@ fn parse_return_statement<'input>(
     }
 
     Err(gen_error("parse_return_statement", &node.rule_name))
+}
+
+fn parse_break_statement<'input>(
+    node: &NodeInternal<'input>,
+) -> Result<NodeStatement<'input>, Box<dyn Error>> {
+    if node.rule_name == "BreakStatement" {
+        if node.children.len() == 2 {
+            return Ok(NodeStatement::BreakStatement { label: None });
+        } else {
+            return Ok(NodeStatement::BreakStatement {
+                label: Some(parse_identifier(&node.children[1])?),
+            });
+        }
+    }
+
+    Err(gen_error("parse_break_statement", &node.rule_name))
+}
+
+fn parse_continue_statement<'input>(
+    node: &NodeInternal<'input>,
+) -> Result<NodeStatement<'input>, Box<dyn Error>> {
+    if node.rule_name == "ContinueStatement" {
+        if node.children.len() == 2 {
+            return Ok(NodeStatement::ContinueStatement { label: None });
+        } else {
+            return Ok(NodeStatement::ContinueStatement {
+                label: Some(parse_identifier(&node.children[1])?),
+            });
+        }
+    }
+
+    Err(gen_error("parse_continue_statement", &node.rule_name))
+}
+
+fn parse_label<'input>(node: &NodeInternal<'input>) -> Result<Identifier<'input>, Box<dyn Error>> {
+    if node.rule_name == "Label" {
+        return Ok(parse_identifier(&node.children[0])?);
+    }
+
+    Err(gen_error("parse_label", &node.rule_name))
 }
