@@ -92,7 +92,7 @@ fn parse_for_statement<'input>(
     node: &NodeInternal<'input>,
 ) -> Result<NodeStatement<'input>, Box<dyn Error>> {
     if node.rule_name == "ForStatement" {
-        let parts_node = &node.children[1];
+        let parts_node = &node.children[2];
         let parts_init_node = &parts_node.children[0];
         let init = if parts_init_node.children.len() == 1 {
             if parts_init_node.children[0].rule_name == "LocalVariableDeclaration" {
@@ -108,7 +108,7 @@ fn parse_for_statement<'input>(
         return Ok(NodeStatement::ForStatement {
             init,
             condition: parse_expression_opt(&parts_node.children[1])?,
-            update: parse_expression_list_opt(&parts_node.children[2])?,
+            update: parse_expression_list_opt(&parts_node.children[3])?,
             stmt: Box::new(parse_statement(&node.children[4])?),
         });
     }

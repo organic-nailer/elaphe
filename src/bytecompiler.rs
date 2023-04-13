@@ -542,6 +542,228 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
 
     fn compile_expr(&mut self, node: &'value NodeExpression, label: Option<&String>) {
         match node {
+            NodeExpression::AssignmentExpression {
+                operator,
+                left,
+                right,
+            } => {
+                match *operator {
+                    "=" => {
+                        self.compile_expr(right, None);
+                        // DartではAssignment Expressionが代入先の最終的な値を残す
+                        self.push_op(OpCode::DupTop);
+
+                        match &**left {
+                            NodeExpression::Identifier { identifier } => {
+                                let value = identifier.value.to_string();
+                                self.push_store_var(&value);
+                            }
+                            // Node::SelectorExpression { child, selector } => {
+                            //     self.compile(child, None);
+
+                            //     match selector {
+                            //         Selector::Args { args: _ } => panic!("Invalid lhs value."),
+                            //         Selector::Method {
+                            //             identifier: _,
+                            //             arguments: _,
+                            //         } => panic!("Invalid lhs value."),
+                            //         Selector::Attr { identifier } => {
+                            //             let name = identifier.value;
+                            //             let p = (**self.context_stack.last().unwrap())
+                            //                 .borrow_mut()
+                            //                 .register_or_get_name(&name.to_string());
+                            //             self.push_op(OpCode::StoreAttr(p));
+                            //         }
+                            //         Selector::Index { expr } => {
+                            //             self.compile(expr, None);
+                            //             self.push_op(OpCode::StoreSubScr);
+                            //         }
+                            //     }
+                            // }
+                            _ => panic!("Invalid lhs value."),
+                        }
+                    }
+                    "*=" | "/=" | "~/=" | "%=" | "+=" | "-=" | "<<=" | ">>=" | "&=" | "^="
+                    | "|=" => match &**left {
+                        NodeExpression::Identifier { identifier } => {
+                            let value = identifier.value.to_string();
+                            self.push_load_var(&value);
+
+                            self.compile_expr(right, None);
+                            match *operator {
+                                "*=" => self.push_op(OpCode::InplaceMultiply),
+                                "/=" => self.push_op(OpCode::InplaceTrueDivide),
+                                "~/=" => self.push_op(OpCode::InplaceFloorDivide),
+                                "%=" => self.push_op(OpCode::InplaceModulo),
+                                "+=" => self.push_op(OpCode::InplaceAdd),
+                                "-=" => self.push_op(OpCode::InplaceSubtract),
+                                "<<=" => self.push_op(OpCode::InplaceLShift),
+                                ">>=" => self.push_op(OpCode::InplaceRShift),
+                                "&=" => self.push_op(OpCode::InplaceAnd),
+                                "^=" => self.push_op(OpCode::InplaceXor),
+                                "|=" => self.push_op(OpCode::InplaceOr),
+                                _ => (),
+                            }
+                            self.push_op(OpCode::DupTop);
+
+                            self.push_store_var(&value);
+                        }
+                        // NodeExpression::Selector { child, selector } => {
+                        //     self.compile(child, None);
+                        //     match selector {
+                        //         Selector::Args { args: _ } => panic!("Invalid lhs value."),
+                        //         Selector::Method {
+                        //             identifier: _,
+                        //             arguments: _,
+                        //         } => panic!("Invalid lhs value."),
+                        //         Selector::Attr { identifier } => {
+                        //             let name = identifier.value;
+                        //             let p = (**self.context_stack.last().unwrap())
+                        //                 .borrow_mut()
+                        //                 .register_or_get_name(&name.to_string());
+
+                        //             self.push_op(OpCode::DupTop);
+                        //             self.push_op(OpCode::LoadAttr(p));
+
+                        //             self.compile(right, None);
+                        //             match *operator {
+                        //                 "*=" => self.push_op(OpCode::InplaceMultiply),
+                        //                 "/=" => self.push_op(OpCode::InplaceTrueDivide),
+                        //                 "~/=" => self.push_op(OpCode::InplaceFloorDivide),
+                        //                 "%=" => self.push_op(OpCode::InplaceModulo),
+                        //                 "+=" => self.push_op(OpCode::InplaceAdd),
+                        //                 "-=" => self.push_op(OpCode::InplaceSubtract),
+                        //                 "<<=" => self.push_op(OpCode::InplaceLShift),
+                        //                 ">>=" => self.push_op(OpCode::InplaceRShift),
+                        //                 "&=" => self.push_op(OpCode::InplaceAnd),
+                        //                 "^=" => self.push_op(OpCode::InplaceXor),
+                        //                 "|=" => self.push_op(OpCode::InplaceOr),
+                        //                 _ => (),
+                        //             }
+                        //             self.push_op(OpCode::DupTop);
+
+                        //             self.push_op(OpCode::RotThree);
+                        //             self.push_op(OpCode::StoreAttr(p));
+                        //         }
+                        //         Selector::Index { expr } => {
+                        //             self.compile(expr, None);
+                        //             self.push_op(OpCode::DupTopTwo);
+                        //             self.push_op(OpCode::BinarySubScr);
+
+                        //             self.compile(right, None);
+                        //             match *operator {
+                        //                 "*=" => self.push_op(OpCode::InplaceMultiply),
+                        //                 "/=" => self.push_op(OpCode::InplaceTrueDivide),
+                        //                 "~/=" => self.push_op(OpCode::InplaceFloorDivide),
+                        //                 "%=" => self.push_op(OpCode::InplaceModulo),
+                        //                 "+=" => self.push_op(OpCode::InplaceAdd),
+                        //                 "-=" => self.push_op(OpCode::InplaceSubtract),
+                        //                 "<<=" => self.push_op(OpCode::InplaceLShift),
+                        //                 ">>=" => self.push_op(OpCode::InplaceRShift),
+                        //                 "&=" => self.push_op(OpCode::InplaceAnd),
+                        //                 "^=" => self.push_op(OpCode::InplaceXor),
+                        //                 "|=" => self.push_op(OpCode::InplaceOr),
+                        //                 _ => (),
+                        //             }
+                        //             self.push_op(OpCode::DupTop);
+                        //             self.push_op(OpCode::RotFour);
+
+                        //             self.push_op(OpCode::RotFour);
+                        //             self.push_op(OpCode::StoreSubScr);
+                        //         }
+                        //     }
+                        // }
+                        _ => panic!("Invalid lhs value."),
+                    },
+                    "??=" => match &**left {
+                        NodeExpression::Identifier { identifier } => {
+                            let value = identifier.value.to_string();
+
+                            self.push_load_var(&value);
+                            self.push_op(OpCode::DupTop);
+                            self.push_load_const(PyObject::None(false));
+                            self.push_op(OpCode::compare_op_from_str("=="));
+                            let label_end = self.gen_jump_label();
+                            self.push_op(OpCode::PopJumpIfFalse(label_end));
+
+                            self.push_op(OpCode::PopTop);
+                            self.compile_expr(right, None);
+                            self.push_op(OpCode::DupTop);
+                            self.push_store_var(&value);
+                            self.set_jump_label_value(label_end);
+                        }
+                        // Node::SelectorExpression { child, selector } => {
+                        //     self.compile(child, None);
+                        //     match selector {
+                        //         Selector::Args { args: _ } => panic!("Invalid lhs value."),
+                        //         Selector::Method {
+                        //             identifier: _,
+                        //             arguments: _,
+                        //         } => panic!("Invalid lhs value."),
+                        //         Selector::Attr { identifier } => {
+                        //             let name = identifier.value;
+                        //             let p = (**self.context_stack.last().unwrap())
+                        //                 .borrow_mut()
+                        //                 .register_or_get_name(&name.to_string());
+
+                        //             self.push_op(OpCode::DupTop);
+                        //             self.push_op(OpCode::LoadAttr(p));
+
+                        //             self.push_op(OpCode::DupTop);
+                        //             self.push_load_const(PyObject::None(false));
+                        //             self.push_op(OpCode::compare_op_from_str("=="));
+                        //             let label_false = self.gen_jump_label();
+                        //             self.push_op(OpCode::PopJumpIfFalse(label_false));
+
+                        //             self.push_op(OpCode::PopTop);
+                        //             self.compile(right, None);
+                        //             self.push_op(OpCode::DupTop);
+                        //             self.push_op(OpCode::RotThree);
+                        //             self.push_op(OpCode::RotThree);
+                        //             self.push_op(OpCode::StoreAttr(p));
+                        //             let label_end = self.gen_jump_label();
+                        //             self.push_op(OpCode::JumpAbsolute(label_end));
+
+                        //             self.set_jump_label_value(label_false);
+                        //             self.push_op(OpCode::RotTwo);
+                        //             self.push_op(OpCode::PopTop);
+
+                        //             self.set_jump_label_value(label_end);
+                        //         }
+                        //         Selector::Index { expr } => {
+                        //             self.compile(expr, None);
+                        //             self.push_op(OpCode::DupTopTwo);
+                        //             self.push_op(OpCode::BinarySubScr);
+
+                        //             self.push_op(OpCode::DupTop);
+                        //             self.push_load_const(PyObject::None(false));
+                        //             self.push_op(OpCode::compare_op_from_str("=="));
+                        //             let label_false = self.gen_jump_label();
+                        //             self.push_op(OpCode::PopJumpIfFalse(label_false));
+
+                        //             self.push_op(OpCode::PopTop);
+                        //             self.compile(right, None);
+                        //             self.push_op(OpCode::DupTop);
+                        //             self.push_op(OpCode::RotFour);
+                        //             self.push_op(OpCode::RotFour);
+                        //             self.push_op(OpCode::StoreSubScr);
+                        //             let label_end = self.gen_jump_label();
+                        //             self.push_op(OpCode::JumpAbsolute(label_end));
+
+                        //             self.set_jump_label_value(label_false);
+                        //             self.push_op(OpCode::RotThree);
+                        //             self.push_op(OpCode::PopTop);
+                        //             self.push_op(OpCode::PopTop);
+
+                        //             self.set_jump_label_value(label_end);
+                        //         }
+                        //     }
+                        // }
+                        _ => panic!("Invalid lhs value."),
+                    },
+                    _ => panic!("Unknown assignment operator: {}", operator),
+                }
+            }
             NodeExpression::Binary {
                 left,
                 operator,
@@ -590,6 +812,9 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     "~" => self.push_op(OpCode::UnaryInvert),
                     _ => panic!("unknown unary operator: {}", *operator),
                 }
+            }
+            NodeExpression::NullLiteral => {
+                self.push_load_const(PyObject::None(false));
             }
             NodeExpression::BooleanLiteral { value } => {
                 self.push_load_const(PyObject::new_boolean(value, false));

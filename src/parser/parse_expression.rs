@@ -11,7 +11,20 @@ pub fn parse_expression<'input>(
     node: &NodeInternal<'input>,
 ) -> Result<NodeExpression<'input>, Box<dyn Error>> {
     match node.rule_name.as_str() {
-        "Expression" => parse_expression(&node.children[0]),
+        "Expression" => {
+            if node.children.len() == 1 {
+                parse_expression(&node.children[0])
+            } else {
+                let left = parse_assignable_expression(&node.children[0])?;
+                let operator = &node.children[1].children[0].token.clone().unwrap().str;
+                let right = parse_expression(&node.children[2])?;
+                Ok(NodeExpression::AssignmentExpression {
+                    operator,
+                    left: Box::new(left),
+                    right: Box::new(right),
+                })
+            }
+        }
         "PrimaryExpression" => {
             if node.children.len() == 1 {
                 parse_expression(&node.children[0])
@@ -19,6 +32,7 @@ pub fn parse_expression<'input>(
                 parse_expression(&node.children[1])
             }
         }
+        "Null" => Ok(NodeExpression::NullLiteral),
         "Boolean" => Ok(NodeExpression::BooleanLiteral {
             value: node.token.clone().unwrap().str,
         }),
@@ -217,4 +231,14 @@ fn parse_argument_list<'input>(
     }
 
     Err(gen_error("parse_argument_list", &node.rule_name))
+}
+
+fn parse_assignable_expression<'input>(
+    node: &NodeInternal<'input>,
+) -> Result<NodeExpression<'input>, Box<dyn Error>> {
+    if node.rule_name == "AssignableExpression" {
+        return Ok(parse_expression(&node.children[0])?);
+    }
+
+    Err(gen_error("parse_assignable_expression", &node.rule_name))
 }
