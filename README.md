@@ -10,7 +10,7 @@ ElapheはDartのプログラムをPython VM上で動くバイトコードに変�
 
 # Install
 
-Elaphe currently supports Linux and Windows. Elaphe requires [Rust](https://www.rust-lang.org/tools/install) for installation.
+Elaphe currently supports Linux, macOS and Windows. Elaphe requires [Rust](https://www.rust-lang.org/tools/install) for installation.
 
 ## Linux(bash)
 
@@ -234,7 +234,7 @@ https://docs.google.com/document/d/1c956nDwu3t9qNN0C4HBvl9U6WSvCUY3umqpzohqlrKs/
         - [ ] ?.xxx
         - [ ] ?[]
         - [x] .xxx
-        - [x] .[]
+        - [x] []
         - [x] Arguments
     - [x] Type Cast
     - [x] Type Test
@@ -260,15 +260,15 @@ https://docs.google.com/document/d/1c956nDwu3t9qNN0C4HBvl9U6WSvCUY3umqpzohqlrKs/
     - [x] return
     - [ ] yield
     - [ ] yield*
-    - [ ] Expression Statement
+    - [x] Expression Statement
     - [ ] assert
 - [ ] Libraries and Scripts
     - [ ] part keyword
     - [ ] export keyword
-    - [ ] import keyword
+    - [x] import keyword
         - [x] Normal
         - [x] as
-        - [ ] show/hide
+        - [x] show/hide
 - [ ] Static Types
     - [x] void
     - [ ] function type
