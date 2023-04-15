@@ -35,11 +35,12 @@ impl ParserGeneratorLR0<'_> {
 impl ParserGeneratorLR0<'_> {
     pub fn new<'a>(
         rules: &'a Vec<ProductionRuleData>,
+        initial_grammar: &ProductionRuleData,
         start_symbol: Token,
     ) -> ParserGeneratorLR0<'a> {
         let (terminal_tokens, non_terminal_tokens) = ParserGeneratorLR0::calc_token_kind(rules);
         let (goto_table, closure_map) =
-            ParserGeneratorLR0::calc_goto(rules, start_symbol, &non_terminal_tokens);
+            ParserGeneratorLR0::calc_goto(rules, initial_grammar, &non_terminal_tokens);
 
         ParserGeneratorLR0 {
             rules,
@@ -72,7 +73,7 @@ impl ParserGeneratorLR0<'_> {
 
     fn calc_goto(
         rules: &Vec<ProductionRuleData>,
-        start_symbol: Token,
+        initial_grammar: &ProductionRuleData,
         non_terminal_tokens: &HashSet<Token>,
     ) -> (
         HashMap<(State, Token), State>,
@@ -80,19 +81,12 @@ impl ParserGeneratorLR0<'_> {
     ) {
         let mut goto_map: HashMap<(State, Token), State> = HashMap::new();
 
-        let initial_grammar = ProductionRuleData {
-            left: "[START]",
-            right: vec![start_symbol],
-        };
-        let mut extended_rules = rules.clone();
-        extended_rules.push(initial_grammar.clone());
-
         let mut closure_map: HashMap<HashableSet<LRProductionRuleData>, State> = HashMap::new();
         let mut closure_index = 0;
         let mut init_set = HashableSet::new();
         init_set.insert(initial_grammar.to_lr());
         closure_map.insert(
-            ParserGeneratorLR0::get_closure(init_set, &extended_rules, non_terminal_tokens),
+            ParserGeneratorLR0::get_closure(init_set, rules, non_terminal_tokens),
             format!("I{}", closure_index),
         );
 
@@ -113,7 +107,7 @@ impl ParserGeneratorLR0<'_> {
                     updated = true;
                     let goto_set = ParserGeneratorLR0::get_goto(
                         &closure_rules,
-                        &extended_rules,
+                        rules,
                         non_terminal_tokens,
                         token,
                     );

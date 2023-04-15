@@ -2,6 +2,7 @@ use crate::{
     grammar::{EPSILON, END},
     parser_generator_lr0::{LRProductionRuleData, ParserGeneratorLR0, ProductionRuleData},
     hashable_set::HashableSet,
+    export_transitions::{export_transitions, export_closures},
 };
 use std::collections::{HashMap, HashSet};
 use serde::{Serialize, Deserialize};
@@ -12,19 +13,34 @@ type Kernel = (String, LRProductionRuleData);
 
 pub fn generate_parser(
     rules: &Vec<ProductionRuleData>,
-    start_symbol: &'static str
+    start_symbol: &'static str,
+    output_transitions: bool,
 ) -> TransitionMap {
-    let parser_generator_lr0 = ParserGeneratorLR0::new(rules, start_symbol);
+    let initial_grammar = ProductionRuleData {
+        left: "[START]",
+        right: vec![start_symbol, END],
+    };
+    let mut extended_rules = rules.clone();
+    extended_rules.push(initial_grammar.clone());
 
-    let first_map = calc_first(rules, &parser_generator_lr0);
+    let parser_generator_lr0 = ParserGeneratorLR0::new(&extended_rules, &initial_grammar, start_symbol);
 
-    let closure_map = calc_goto_map(start_symbol, rules, &first_map, &parser_generator_lr0);
+    let first_map = calc_first_pure(&extended_rules, &parser_generator_lr0);
+
+    let closure_map = calc_goto_map(&extended_rules, &first_map, &parser_generator_lr0);
 
     let transition_map = calc_transition_map(&parser_generator_lr0, &closure_map);
 
-    TransitionMap {
+    let result = TransitionMap {
         transitions: transition_map,
+    };
+
+    if output_transitions {
+        export_closures(&closure_map, "closure.yaml").unwrap();
+        export_transitions(&result, &closure_map, &parser_generator_lr0, "transitions.csv").unwrap();
     }
+
+    result
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -33,66 +49,47 @@ pub struct TransitionMap {
 }
 
 /// 
-/// right_token_list + suffixesのToken列のfirst集合を計算する
+/// right_token_listのToken列のfirst集合を計算する
 /// 
 /// # Arguments
-/// - right_token_list: Token列
-/// - suffixes: right_token_listの後ろに存在する可能性のあるTokenの集合
+/// - token_list: Token列
 /// - first_map: 現時点で計算済みのfirst集合。Tokenごとのfirst集合を格納
 /// - parser_generator_lr0: ParserGeneratorLR0
-fn get_first(
-    right_token_list: &Vec<Token>,
-    suffixes: HashSet<Token>,
+fn get_first_pure(
+    token_list: &Vec<Token>,
     first_map: &HashMap<Token, HashSet<Token>>,
-    parser_generator_lr0: &ParserGeneratorLR0,
+    parser_generator_lr0: &ParserGeneratorLR0
 ) -> HashSet<Token> {
-    // right_token_listが空もしくは空文字の場合はsuffixesを返す
-    if right_token_list.is_empty() {
-        return suffixes;
-    }
-    let value_first = *right_token_list.first().unwrap();
-    if value_first == EPSILON && right_token_list.len() == 1 {
-        return suffixes;
-    }
-    // right_token_listの先頭が終端記号の場合はそのTokenを返す
-    if parser_generator_lr0.terminal_tokens.contains(value_first) || value_first == END {
-        return HashSet::from([value_first]);
+    assert!(token_list.len() > 0);
+    // First(ε) = {ε}
+    if token_list.len() == 1 && token_list[0] == EPSILON {
+        return HashSet::from([EPSILON]);
     }
 
-    // right_token_listの先頭が非終端記号の場合はそのTokenのfirst集合を返す
-    if let Some(current_first_set) = first_map.get(value_first) {
-        let current_first_set: HashSet<&str> = current_first_set.iter().map(|v| *v).collect();
-        // 空集合が含まれていない場合はそのTokenのfirst集合を返す
-        if !current_first_set.contains(&EPSILON) {
-            return current_first_set;
+    // First(aα) = {a} if a is terminal token
+    if parser_generator_lr0.terminal_tokens.contains(&token_list[0]) {
+        return HashSet::from([token_list[0]]);
+    }
+
+    // First(Yα) = First(Y) if First(Y) does not contain ε
+    // First(Yα) = First(Y) - {ε} + First(α) if First(Y) contains ε
+    let mut y_first_set = match first_map.get(&token_list[0]) {
+        Some(v) => v.clone(),
+        None => HashSet::new(), // if First(Y) has not been calculated yet, return empty set
+    };
+    if y_first_set.contains(EPSILON) {
+        if token_list.len() == 1 {
+            y_first_set
         }
-
-        // current_first_setに空集合が含まれるかつright_token_listがTokenを1つしか持たない場合
-        if right_token_list.len() == 1 {
-            if !suffixes.is_empty() {
-                // 空集合を除いてsuffixesとの和集合を返す
-                let mut right_token_list = current_first_set.clone();
-                right_token_list.remove(EPSILON);
-                return suffixes.union(&right_token_list).map(|v| *v).collect();
-            }
-
-            return current_first_set.iter().map(|v| *v).collect();
+        else {
+            y_first_set.remove(EPSILON);
+            let alpha_first_set = get_first_pure(&token_list[1..].to_vec(), first_map, parser_generator_lr0);
+            y_first_set.union(&alpha_first_set).map(|v| *v).collect()
         }
-
-        // Tokenが2つ以上ある場合は、空集合を除いたcurrent_first_setと
-        // right_token_list[1..]のfirst集合の和集合を返す
-        let mut current_first_set = current_first_set.clone();
-        current_first_set.remove(EPSILON);
-        let first_alpha = get_first(
-            &right_token_list[1..].to_vec(),
-            suffixes,
-            first_map,
-            parser_generator_lr0,
-        );
-        return current_first_set.union(&first_alpha).map(|v| *v).collect();
     }
-
-    return HashSet::new();
+    else {
+        y_first_set
+    }
 }
 
 fn add_first(
@@ -108,9 +105,9 @@ fn add_first(
     first_map.insert(key, union);
 }
 
-fn calc_first(
+fn calc_first_pure(
     rules: &Vec<ProductionRuleData>,
-    parser_generator_lr0: &ParserGeneratorLR0,
+    parser_generator_lr0: &ParserGeneratorLR0
 ) -> HashMap<Token, HashSet<Token>> {
     let mut first_map: HashMap<Token, HashSet<Token>> = HashMap::new();
 
@@ -118,25 +115,21 @@ fn calc_first(
     while updated {
         updated = false;
         for rule in rules {
-
-            // first_alphaはrule.rightの最初の文字列のfirst集合
-            // もし既存のrule.leftのfirst集合に含まれないTokenがあれば、
-            // first_mapに追加する
-            // 追加されたら、updatedをtrueにする
-            let first_alpha = get_first(&rule.right, HashSet::new(), &first_map, parser_generator_lr0);
+            // if X -> α, add First(α) to First(X)
+            let first_alpha = get_first_pure(&rule.right, &first_map, parser_generator_lr0);
             match first_map.get(rule.left) {
-                Some(first_x) => {
-                    let diff: HashSet<&str> = first_alpha.difference(first_x).map(|v| *v).collect();
-                    if !diff.is_empty() {
+                Some(current_first_set) => {
+                    let current_first_set: HashSet<&str> = current_first_set.iter().map(|v| *v).collect();
+                    if first_alpha.difference(&current_first_set).count() > 0 {
                         updated = true;
-                        add_first(rule.left, diff, &mut first_map);
+                        add_first(rule.left, first_alpha, &mut first_map);
                     }
                 },
                 None => {
                     updated = true;
                     add_first(rule.left, first_alpha, &mut first_map);
                 }
-            };
+            }
         }
     }
 
@@ -144,18 +137,11 @@ fn calc_first(
 }
 
 fn calc_goto_map(
-    start_symbol: Token,
     rules: &Vec<ProductionRuleData>,
     first_map: &HashMap<Token, HashSet<Token>>,
     parser_generator_lr0: &ParserGeneratorLR0,
 ) -> HashMap<HashableSet<LALR1ProductionRuleData>, State> {
     let mut closure_map: HashMap<HashableSet<LALR1ProductionRuleData>, State> = HashMap::new();
-    let initial_grammar = ProductionRuleData {
-        left: "[START]",
-        right: vec![start_symbol],
-    };
-    let mut extended_rules = rules.clone();
-    extended_rules.push(initial_grammar.clone());
 
     let kernel_map = parser_generator_lr0.get_kernel_map();
     let mut kernels: HashSet<Kernel> = HashSet::new();
@@ -177,7 +163,7 @@ fn calc_goto_map(
         follow.insert("####");
         let closure = get_closure(
             HashSet::from([kernel_rule.to_lalr1(follow)]), 
-            &extended_rules, 
+            rules, 
             first_map, 
             parser_generator_lr0);
         let mut prop_set: HashSet<Kernel> = HashSet::new();
@@ -207,13 +193,6 @@ fn calc_goto_map(
         }
         propagate_map.insert((kernel_state, kernel_rule), prop_set);
     }
-    match follows_map.get_mut(&("I0".to_string(), initial_grammar.to_lr())) {
-        Some(follow) => {
-            follow.insert(END);
-        }
-        None => {}
-    }
-    updated_kernels.insert(("I0".to_string(), initial_grammar.to_lr()));
 
     while !updated_kernels.is_empty() {
         let updated = updated_kernels.clone();
@@ -243,14 +222,17 @@ fn calc_goto_map(
         }
     }
 
-    for (state, rules) in kernel_map {
+    for (kernel_state, kernek_rules) in kernel_map {
         closure_map.insert(
             get_closure(
-                rules.iter().map(|r| r.to_lalr1(follows_map.get(&(state.to_string(), r.clone())).unwrap().iter().map(|r| *r).collect())).collect(),
-                &extended_rules, 
+                kernek_rules
+                    .iter()
+                    .map(|r| r.to_lalr1(follows_map.get(&(kernel_state.to_string(), r.clone())).unwrap().iter().map(|r| *r).collect()))
+                    .collect(),
+                rules, 
                 first_map, 
                 parser_generator_lr0),
-            state,
+            kernel_state,
         );
     }
 
@@ -281,6 +263,8 @@ fn calc_transition_map(
         );
     }
 
+    let mut error_transitions: Vec<ErrorTransition> = Vec::new();
+
     for (kernel, state) in closure_map {
         for rule in kernel.iter().filter(|r| r.reducible) {
             for token in rule.follow.iter() {
@@ -288,8 +272,21 @@ fn calc_transition_map(
                     // Shift-Reduce conflict
                     // priortize shift by default
                     if *token == "else" { continue }
-                    
-                    panic!("Unhandled Shift-Reduce conflict: {token} in {state} with {rule:?}", token=token, state=state, rule=rule);
+                    // if *token == "import" { continue }
+                    // if *token == "on" { continue }
+
+                    error_transitions.push(ErrorTransition {
+                        state: state.to_string(),
+                        follow_token: token.to_string(),
+                        conflict_reduce_rule: rule.to_rule(),
+                        conflict_shift_state: transition_map
+                            .get(&(state.to_string(), token.to_string()))
+                            .unwrap()
+                            .target
+                            .clone().unwrap(),
+                    });
+
+                    // panic!("Unhandled Shift-Reduce conflict: {token} in {state} with {rule:?}", token=token, state=state, rule=rule);
                 }
 
                 transition_map.insert(
@@ -302,10 +299,9 @@ fn calc_transition_map(
                 );
             }
         }
+        // if the kernel contains a rule that can shift END, then the state is an accept state
         if kernel.iter().any(|r| {
-            r.right == vec![parser_generator_lr0.start_symbol]
-                && r.follow.contains(&END)
-                && r.dot == r.right.len()
+            !r.reducible && r.right[r.dot] == END
         }) {
             transition_map.insert(
                 (state.to_string(), END.to_string()),
@@ -316,6 +312,10 @@ fn calc_transition_map(
                 },
             );
         }
+    }
+
+    if !error_transitions.is_empty() {
+        panic!("Unhandled Shift-Reduce conflicts: {:?}", error_transitions);
     }
 
     transition_map
@@ -339,33 +339,58 @@ fn get_closure(
     let mut updated = true;
     while updated {
         updated = false;
-        for (rule, follow) in result.clone().iter() {
+        for (rule, base_follow) in result.clone().iter() {
             if rule.reducible {
                 continue;
             }
             let target = rule.right[rule.dot];
             if parser_generator_lr0.non_terminal_tokens.contains(target) {
-                let first_set = get_first(
-                    &rule.right[rule.dot + 1..].to_vec(),
-                    follow.set.clone().into_iter().collect(),
-                    first_map,
-                    parser_generator_lr0,
-                );
+                // A -> α target β
+                // add First(β) - {ε} to Follow(target)
+                // if ε in First(β), add Follow(A) to Follow(target)
+                let mut first_set = if rule.right.len() > rule.dot + 1 { 
+                    get_first_pure(
+                        &rule.right[rule.dot + 1..].to_vec(), 
+                        first_map, 
+                        parser_generator_lr0)
+                } else {
+                    HashSet::from([EPSILON])
+                };
+
+                let first_has_epsilon = first_set.contains(EPSILON);
+                first_set.remove(EPSILON);
+                // let first_set = get_first(
+                //     &rule.right[rule.dot + 1..].to_vec(),
+                //     follow.set.clone().into_iter().collect(),
+                //     first_map,
+                //     parser_generator_lr0,
+                // );
                 for g_rule in grammar_rules.iter().filter(|r| r.left == target) {
                     let r = g_rule.to_lalr1(HashableSet::new());
                     match result.get_mut(&r) {
                         Some(follow) => {
-                            for f in first_set.clone() {
-                                if follow.insert(f) {
+                            for token in first_set.clone() {
+                                if follow.insert(token) {
                                     updated = true;
+                                }
+                            }
+                            if first_has_epsilon {
+                                for token in base_follow.set.clone() {
+                                    if follow.insert(token) {
+                                        updated = true;
+                                    }
                                 }
                             }
                         }
                         None => {
-                            if first_set.len() > 0 {
+                            let mut new_follow_set = first_set.clone();
+                            if first_has_epsilon {
+                                new_follow_set.extend(base_follow.set.clone());
+                            }
+                            if new_follow_set.len() > 0 {
                                 updated = true;
                             }
-                            result.insert(r, HashableSet::from_iter(first_set.clone()));
+                            result.insert(r, HashableSet::from_iter(new_follow_set));
                         }
                     }
                 }
@@ -450,4 +475,12 @@ impl SerializableRule {
             right: rule.right.iter().map(|s| s.to_string()).collect(),
         }
     }
+}
+
+#[derive(Clone, Debug)]
+struct ErrorTransition {
+    pub state: String,
+    pub follow_token: String,
+    pub conflict_reduce_rule: ProductionRuleData,
+    pub conflict_shift_state: String,
 }
