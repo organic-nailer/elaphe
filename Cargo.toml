@@ -22,3 +22,11 @@ getopts = "0.2"
 ciborium = "0.2.0"
 regex = "1"
 dart_parser_generator = { path = "./dart_parser_generator" }
+
+# デバッグモード時のbuild.rsのオプション
+[profile.dev.build-override]
+opt-level = 3
+
+# リリースモード時のbuild.rsのオプション
+[profile.release.build-override]
+opt-level = 3

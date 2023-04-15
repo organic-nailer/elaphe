@@ -287,6 +287,8 @@ fn calc_transition_map(
                             .clone().unwrap(),
                     });
 
+                    continue
+
                     // panic!("Unhandled Shift-Reduce conflict: {token} in {state} with {rule:?}", token=token, state=state, rule=rule);
                 }
 
@@ -360,6 +362,9 @@ fn get_closure(
 
                 let first_has_epsilon = first_set.contains(EPSILON);
                 first_set.remove(EPSILON);
+                // if target == "ExpressionStatement" {
+                //     first_set.remove("{");
+                // }
                 // let first_set = get_first(
                 //     &rule.right[rule.dot + 1..].to_vec(),
                 //     follow.set.clone().into_iter().collect(),

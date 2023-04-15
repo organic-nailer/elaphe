@@ -15,6 +15,7 @@ mod parse_expression;
 mod parse_functions;
 mod parse_identifier;
 mod parse_library;
+mod parse_literal;
 mod parse_selector;
 mod parse_statement;
 mod parse_type;

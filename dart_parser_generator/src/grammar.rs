@@ -5,7 +5,7 @@ pub const START_SYMBOL: &'static str = "LibraryDeclaration";
 pub const EPSILON: &'static str = "[EMPTY]";
 pub const END: &'static str = "[END]";
 
-const DART_GRAMMARS: [&'static str; 91] = [
+const DART_GRAMMARS: [&'static str; 117] = [
 // Variables
 "InitializedVariableDeclaration ::= DeclaredIdentifier
     |/ DeclaredIdentifier '=' Expression
@@ -39,6 +39,9 @@ const DART_GRAMMARS: [&'static str; 91] = [
 "Expression ::= SelectorExpression AssignmentOperator Expression
     |/ ConditionalExpression
     |/ ThrowExpression",
+"ExpressionNotBrace ::= SelectorExpressionNotBrace AssignmentOperator Expression
+    |/ ConditionalExpressionNotBrace
+    |/ ThrowExpression",
 "AssignmentOperator ::= '=' |/ '*=' |/ '/=' |/ '~/=' |/ '%=' |/ '+=' |/ '-=' |/ '<<=' |/ '>>=' |/ '&=' |/ '^=' |/ '|=' |/ '??='",
 "ExpressionOpt ::= [EMPTY]
     |/ Expression",
@@ -51,49 +54,121 @@ const DART_GRAMMARS: [&'static str; 91] = [
     |/ 'BOOLEAN'
     |/ 'NUMBER'
     |/ StringLiteralList
+    |/ ListLiteral
+    |/ SetOrMapLiteral
+    |/ Identifier",
+"PrimaryExpressionNotBrace ::= '(' Expression ')'
+    |/ 'NULL'
+    |/ 'BOOLEAN'
+    |/ 'NUMBER'
+    |/ StringLiteralList
+    |/ ListLiteral
+    |/ SetOrMapLiteralNotBrace
     |/ Identifier",
 "StringLiteralList ::= 'STRING'
     |/ StringLiteralList 'STRING'",
+"ListLiteral ::= '[' ']'
+    |/ 'const' '[' ']'
+    |/ '[' ElementList CommaOpt ']'
+    |/ 'const' '[' ElementList CommaOpt ']'
+    |/ TypeArguments '[' ']'
+    |/ 'const' TypeArguments '[' ']'
+    |/ TypeArguments '[' ElementList CommaOpt ']'
+    |/ 'const' TypeArguments '[' ElementList CommaOpt ']'",
+"SetOrMapLiteral ::= 'const' '{' '}'",
+"SetOrMapLiteral ::= '{' '}'
+    |/ 'const' '{' '}'
+    |/ '{' ElementList CommaOpt '}'
+    |/ 'const' '{' ElementList CommaOpt '}'
+    |/ TypeArguments '{' '}'
+    |/ 'const' TypeArguments '{' '}'
+    |/ TypeArguments '{' ElementList CommaOpt '}'
+    |/ 'const' TypeArguments '{' ElementList CommaOpt '}'",
+"SetOrMapLiteralNotBrace ::= 'const' '{' '}'
+    |/ 'const' '{' ElementList CommaOpt '}'
+    |/ TypeArguments '{' '}'
+    |/ 'const' TypeArguments '{' '}'
+    |/ TypeArguments '{' ElementList CommaOpt '}'
+    |/ 'const' TypeArguments '{' ElementList CommaOpt '}'",
+"ElementList ::= Element
+    |/ ElementList ',' Element",
+"Element ::= ExpressionElement
+    |/ MapElement",
+"ExpressionElement ::= Expression",
+"MapElement ::= Expression ':' Expression",
 "ThrowExpression ::= 'throw' Expression",
 "ConditionalExpression ::= IfNullExpression
     |/ IfNullExpression '?' Expression : Expression",
+"ConditionalExpressionNotBrace ::= IfNullExpressionNotBrace
+    |/ IfNullExpressionNotBrace '?' Expression : Expression",
 "IfNullExpression ::= LogicalOrExpression
     |/ IfNullExpression '??' LogicalOrExpression",
+"IfNullExpressionNotBrace ::= LogicalOrExpressionNotBrace
+    |/ IfNullExpressionNotBrace '??' LogicalOrExpression", 
 "LogicalOrExpression ::= LogicalAndExpression
     |/ LogicalOrExpression '||' LogicalAndExpression",
+"LogicalOrExpressionNotBrace ::= LogicalAndExpressionNotBrace
+    |/ LogicalOrExpressionNotBrace '||' LogicalAndExpression",
 "LogicalAndExpression ::= EqualityExpression
     |/ LogicalAndExpression '&&' EqualityExpression",
+"LogicalAndExpressionNotBrace ::= EqualityExpressionNotBrace
+    |/ LogicalAndExpressionNotBrace '&&' EqualityExpression",
 "EqualityExpression ::= RelationalExpression
     |/ RelationalExpression EqualityOperator RelationalExpression",
+"EqualityExpressionNotBrace ::= RelationalExpressionNotBrace
+    |/ RelationalExpressionNotBrace EqualityOperator RelationalExpression",
 "EqualityOperator ::= '==' |/ '!='",
 "RelationalExpression ::= BitwiseOrExpression
     |/ BitwiseOrExpression RelationalOperator BitwiseOrExpression",
+"RelationalExpressionNotBrace ::= BitwiseOrExpressionNotBrace
+    |/ BitwiseOrExpressionNotBrace RelationalOperator BitwiseOrExpression",
 "RelationalOperator ::= '<' |/ '>' |/ '<=' |/ '>='",
 "BitwiseOrExpression ::= BitwiseXorExpression
     |/ BitwiseOrExpression '|' BitwiseXorExpression",
+"BitwiseOrExpressionNotBrace ::= BitwiseXorExpressionNotBrace
+    |/ BitwiseOrExpressionNotBrace '|' BitwiseXorExpression",
 "BitwiseXorExpression ::= BitwiseAndExpression
     |/ BitwiseXorExpression '^' BitwiseAndExpression",
+"BitwiseXorExpressionNotBrace ::= BitwiseAndExpressionNotBrace
+    |/ BitwiseXorExpressionNotBrace '^' BitwiseAndExpression",
 "BitwiseAndExpression ::= ShiftExpression
     |/ BitwiseAndExpression '&' ShiftExpression",
+"BitwiseAndExpressionNotBrace ::= ShiftExpressionNotBrace
+    |/ BitwiseAndExpressionNotBrace '&' ShiftExpression",
 "ShiftExpression ::= AdditiveExpression
     |/ ShiftExpression ShiftOperator AdditiveExpression",
+"ShiftExpressionNotBrace ::= AdditiveExpressionNotBrace
+    |/ ShiftExpressionNotBrace ShiftOperator AdditiveExpression",
 "ShiftOperator ::= '<<' |/ '>>'",
 "AdditiveExpression ::= AdditiveExpression '+' MultiplicativeExpression
     |/ AdditiveExpression '-' MultiplicativeExpression
     |/ MultiplicativeExpression",
+"AdditiveExpressionNotBrace ::= AdditiveExpressionNotBrace '+' MultiplicativeExpression
+    |/ AdditiveExpressionNotBrace '-' MultiplicativeExpression
+    |/ MultiplicativeExpressionNotBrace",
 "MultiplicativeExpression ::= MultiplicativeExpression MultiplicativeOperator PrimaryExpression
     |/ UnaryExpression",
+"MultiplicativeExpressionNotBrace ::= MultiplicativeExpressionNotBrace MultiplicativeOperator PrimaryExpression
+    |/ UnaryExpressionNotBrace",
 "MultiplicativeOperator ::= '*' |/ '/' |/ '%' |/ '~/'",
 "UnaryExpression ::= PostfixExpression
+    |/ PrefixOperator UnaryExpression
+    |/ IncrementOperator SelectorExpression",
+"UnaryExpressionNotBrace ::= PostfixExpressionNotBrace
     |/ PrefixOperator UnaryExpression
     |/ IncrementOperator SelectorExpression",
 "PrefixOperator ::= '!' |/ '-' |/ '~'",
 "IncrementOperator ::= '++' |/ '--'",
 "PostfixExpression ::= SelectorExpression
     |/ PrimaryExpression IncrementOperator",
+"PostfixExpressionNotBrace ::= SelectorExpressionNotBrace
+    |/ PrimaryExpressionNotBrace IncrementOperator",
 "SelectorExpression ::= PrimaryExpression
     |/ SliceExpression
     |/ SelectorExpression Selector",
+"SelectorExpressionNotBrace ::= PrimaryExpressionNotBrace
+    |/ SliceExpression
+    |/ SelectorExpressionNotBrace Selector",
 "SliceExpression ::= 'sl' '(' ')'
     |/ 'sl' '(' Expression ')'
     |/ 'sl' '(' Expression ',' Expression ')'
@@ -125,7 +200,7 @@ const DART_GRAMMARS: [&'static str; 91] = [
     |/ BreakStatement
     |/ ContinueStatement
     |/ ReturnStatement",
-"ExpressionStatement ::= Expression ';'",
+"ExpressionStatement ::= ExpressionNotBrace ';'",
 "LocalVariableDeclaration ::= InitializedVariableDeclaration ';'",
 "IfStatement ::= 'if' '(' Expression ')' Statement
     |/ 'if' '(' Expression ')' Statement 'else' Statement",
@@ -205,6 +280,10 @@ const DART_GRAMMARS: [&'static str; 91] = [
     |/ 'dynamic'",
 "BUILT_IN_IDENTIFIER ::= 'abstract' |/ 'as' |/ 'covariant' |/ 'deferred' |/ 'dynamic' |/ 'export' |/ 'external' |/ 'extension' |/ 'factory' |/ 'Function' |/ 'get' |/ 'implements' |/ 'import' |/ 'interface' |/ 'late' |/ 'library' |/ 'mixin' |/ 'operator' |/ 'part' |/ 'required' |/ 'set' |/ 'static' |/ 'typedef'",
 "OTHER_IDENTIFIER ::= 'async' |/ 'hide' |/ 'of' |/ 'on' |/ 'show' |/ 'sync' |/ 'await' |/ 'yield'",
+
+// Others
+"CommaOpt ::= [EMPTY]
+    |/ ','",
 ];
 
 fn parse_rule(rule: &'static str) -> (&'static str, Vec<ProductionRuleData>) {

@@ -4,7 +4,7 @@ use std::{cell::RefCell, collections::HashMap};
 use crate::bytecode::ByteCode;
 use crate::executioncontext::{BlockContext, ExecutionContext, VariableScope};
 use crate::parser::node::{
-    DartType, Identifier, LibraryImport, NodeExpression, NodeStatement, Selector,
+    CollectionElement, DartType, Identifier, LibraryImport, NodeExpression, NodeStatement, Selector,
 };
 use crate::{bytecode::OpCode, pyobject::PyObject};
 
@@ -607,28 +607,28 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                                 let value = identifier.value.to_string();
                                 self.push_store_var(&value);
                             }
-                            // Node::SelectorExpression { child, selector } => {
-                            //     self.compile(child, None);
+                            NodeExpression::Selector { child, selector } => {
+                                self.compile_expr(child);
 
-                            //     match selector {
-                            //         Selector::Args { args: _ } => panic!("Invalid lhs value."),
-                            //         Selector::Method {
-                            //             identifier: _,
-                            //             arguments: _,
-                            //         } => panic!("Invalid lhs value."),
-                            //         Selector::Attr { identifier } => {
-                            //             let name = identifier.value;
-                            //             let p = (**self.context_stack.last().unwrap())
-                            //                 .borrow_mut()
-                            //                 .register_or_get_name(&name.to_string());
-                            //             self.push_op(OpCode::StoreAttr(p));
-                            //         }
-                            //         Selector::Index { expr } => {
-                            //             self.compile(expr, None);
-                            //             self.push_op(OpCode::StoreSubScr);
-                            //         }
-                            //     }
-                            // }
+                                match selector {
+                                    Selector::Args { args: _ } => panic!("Invalid lhs value."),
+                                    Selector::Method {
+                                        identifier: _,
+                                        arguments: _,
+                                    } => panic!("Invalid lhs value."),
+                                    Selector::Attr { identifier } => {
+                                        let name = identifier.value;
+                                        let p = (**self.context_stack.last().unwrap())
+                                            .borrow_mut()
+                                            .register_or_get_name(&name.to_string());
+                                        self.push_op(OpCode::StoreAttr(p));
+                                    }
+                                    Selector::Index { expr } => {
+                                        self.compile_expr(expr);
+                                        self.push_op(OpCode::StoreSubScr);
+                                    }
+                                }
+                            }
                             _ => panic!("Invalid lhs value."),
                         }
                     }
@@ -657,71 +657,71 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
 
                             self.push_store_var(&value);
                         }
-                        // NodeExpression::Selector { child, selector } => {
-                        //     self.compile(child, None);
-                        //     match selector {
-                        //         Selector::Args { args: _ } => panic!("Invalid lhs value."),
-                        //         Selector::Method {
-                        //             identifier: _,
-                        //             arguments: _,
-                        //         } => panic!("Invalid lhs value."),
-                        //         Selector::Attr { identifier } => {
-                        //             let name = identifier.value;
-                        //             let p = (**self.context_stack.last().unwrap())
-                        //                 .borrow_mut()
-                        //                 .register_or_get_name(&name.to_string());
+                        NodeExpression::Selector { child, selector } => {
+                            self.compile_expr(child);
+                            match selector {
+                                Selector::Args { args: _ } => panic!("Invalid lhs value."),
+                                Selector::Method {
+                                    identifier: _,
+                                    arguments: _,
+                                } => panic!("Invalid lhs value."),
+                                Selector::Attr { identifier } => {
+                                    let name = identifier.value;
+                                    let p = (**self.context_stack.last().unwrap())
+                                        .borrow_mut()
+                                        .register_or_get_name(&name.to_string());
 
-                        //             self.push_op(OpCode::DupTop);
-                        //             self.push_op(OpCode::LoadAttr(p));
+                                    self.push_op(OpCode::DupTop);
+                                    self.push_op(OpCode::LoadAttr(p));
 
-                        //             self.compile(right, None);
-                        //             match *operator {
-                        //                 "*=" => self.push_op(OpCode::InplaceMultiply),
-                        //                 "/=" => self.push_op(OpCode::InplaceTrueDivide),
-                        //                 "~/=" => self.push_op(OpCode::InplaceFloorDivide),
-                        //                 "%=" => self.push_op(OpCode::InplaceModulo),
-                        //                 "+=" => self.push_op(OpCode::InplaceAdd),
-                        //                 "-=" => self.push_op(OpCode::InplaceSubtract),
-                        //                 "<<=" => self.push_op(OpCode::InplaceLShift),
-                        //                 ">>=" => self.push_op(OpCode::InplaceRShift),
-                        //                 "&=" => self.push_op(OpCode::InplaceAnd),
-                        //                 "^=" => self.push_op(OpCode::InplaceXor),
-                        //                 "|=" => self.push_op(OpCode::InplaceOr),
-                        //                 _ => (),
-                        //             }
-                        //             self.push_op(OpCode::DupTop);
+                                    self.compile_expr(right);
+                                    match *operator {
+                                        "*=" => self.push_op(OpCode::InplaceMultiply),
+                                        "/=" => self.push_op(OpCode::InplaceTrueDivide),
+                                        "~/=" => self.push_op(OpCode::InplaceFloorDivide),
+                                        "%=" => self.push_op(OpCode::InplaceModulo),
+                                        "+=" => self.push_op(OpCode::InplaceAdd),
+                                        "-=" => self.push_op(OpCode::InplaceSubtract),
+                                        "<<=" => self.push_op(OpCode::InplaceLShift),
+                                        ">>=" => self.push_op(OpCode::InplaceRShift),
+                                        "&=" => self.push_op(OpCode::InplaceAnd),
+                                        "^=" => self.push_op(OpCode::InplaceXor),
+                                        "|=" => self.push_op(OpCode::InplaceOr),
+                                        _ => (),
+                                    }
+                                    self.push_op(OpCode::DupTop);
 
-                        //             self.push_op(OpCode::RotThree);
-                        //             self.push_op(OpCode::StoreAttr(p));
-                        //         }
-                        //         Selector::Index { expr } => {
-                        //             self.compile(expr, None);
-                        //             self.push_op(OpCode::DupTopTwo);
-                        //             self.push_op(OpCode::BinarySubScr);
+                                    self.push_op(OpCode::RotThree);
+                                    self.push_op(OpCode::StoreAttr(p));
+                                }
+                                Selector::Index { expr } => {
+                                    self.compile_expr(expr);
+                                    self.push_op(OpCode::DupTopTwo);
+                                    self.push_op(OpCode::BinarySubScr);
 
-                        //             self.compile(right, None);
-                        //             match *operator {
-                        //                 "*=" => self.push_op(OpCode::InplaceMultiply),
-                        //                 "/=" => self.push_op(OpCode::InplaceTrueDivide),
-                        //                 "~/=" => self.push_op(OpCode::InplaceFloorDivide),
-                        //                 "%=" => self.push_op(OpCode::InplaceModulo),
-                        //                 "+=" => self.push_op(OpCode::InplaceAdd),
-                        //                 "-=" => self.push_op(OpCode::InplaceSubtract),
-                        //                 "<<=" => self.push_op(OpCode::InplaceLShift),
-                        //                 ">>=" => self.push_op(OpCode::InplaceRShift),
-                        //                 "&=" => self.push_op(OpCode::InplaceAnd),
-                        //                 "^=" => self.push_op(OpCode::InplaceXor),
-                        //                 "|=" => self.push_op(OpCode::InplaceOr),
-                        //                 _ => (),
-                        //             }
-                        //             self.push_op(OpCode::DupTop);
-                        //             self.push_op(OpCode::RotFour);
+                                    self.compile_expr(right);
+                                    match *operator {
+                                        "*=" => self.push_op(OpCode::InplaceMultiply),
+                                        "/=" => self.push_op(OpCode::InplaceTrueDivide),
+                                        "~/=" => self.push_op(OpCode::InplaceFloorDivide),
+                                        "%=" => self.push_op(OpCode::InplaceModulo),
+                                        "+=" => self.push_op(OpCode::InplaceAdd),
+                                        "-=" => self.push_op(OpCode::InplaceSubtract),
+                                        "<<=" => self.push_op(OpCode::InplaceLShift),
+                                        ">>=" => self.push_op(OpCode::InplaceRShift),
+                                        "&=" => self.push_op(OpCode::InplaceAnd),
+                                        "^=" => self.push_op(OpCode::InplaceXor),
+                                        "|=" => self.push_op(OpCode::InplaceOr),
+                                        _ => (),
+                                    }
+                                    self.push_op(OpCode::DupTop);
+                                    self.push_op(OpCode::RotFour);
 
-                        //             self.push_op(OpCode::RotFour);
-                        //             self.push_op(OpCode::StoreSubScr);
-                        //         }
-                        //     }
-                        // }
+                                    self.push_op(OpCode::RotFour);
+                                    self.push_op(OpCode::StoreSubScr);
+                                }
+                            }
+                        }
                         _ => panic!("Invalid lhs value."),
                     },
                     "??=" => match &**left {
@@ -741,73 +741,73 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                             self.push_store_var(&value);
                             self.set_jump_label_value(label_end);
                         }
-                        // Node::SelectorExpression { child, selector } => {
-                        //     self.compile(child, None);
-                        //     match selector {
-                        //         Selector::Args { args: _ } => panic!("Invalid lhs value."),
-                        //         Selector::Method {
-                        //             identifier: _,
-                        //             arguments: _,
-                        //         } => panic!("Invalid lhs value."),
-                        //         Selector::Attr { identifier } => {
-                        //             let name = identifier.value;
-                        //             let p = (**self.context_stack.last().unwrap())
-                        //                 .borrow_mut()
-                        //                 .register_or_get_name(&name.to_string());
+                        NodeExpression::Selector { child, selector } => {
+                            self.compile_expr(child);
+                            match selector {
+                                Selector::Args { args: _ } => panic!("Invalid lhs value."),
+                                Selector::Method {
+                                    identifier: _,
+                                    arguments: _,
+                                } => panic!("Invalid lhs value."),
+                                Selector::Attr { identifier } => {
+                                    let name = identifier.value;
+                                    let p = (**self.context_stack.last().unwrap())
+                                        .borrow_mut()
+                                        .register_or_get_name(&name.to_string());
 
-                        //             self.push_op(OpCode::DupTop);
-                        //             self.push_op(OpCode::LoadAttr(p));
+                                    self.push_op(OpCode::DupTop);
+                                    self.push_op(OpCode::LoadAttr(p));
 
-                        //             self.push_op(OpCode::DupTop);
-                        //             self.push_load_const(PyObject::None(false));
-                        //             self.push_op(OpCode::compare_op_from_str("=="));
-                        //             let label_false = self.gen_jump_label();
-                        //             self.push_op(OpCode::PopJumpIfFalse(label_false));
+                                    self.push_op(OpCode::DupTop);
+                                    self.push_load_const(PyObject::None(false));
+                                    self.push_op(OpCode::compare_op_from_str("=="));
+                                    let label_false = self.gen_jump_label();
+                                    self.push_op(OpCode::PopJumpIfFalse(label_false));
 
-                        //             self.push_op(OpCode::PopTop);
-                        //             self.compile(right, None);
-                        //             self.push_op(OpCode::DupTop);
-                        //             self.push_op(OpCode::RotThree);
-                        //             self.push_op(OpCode::RotThree);
-                        //             self.push_op(OpCode::StoreAttr(p));
-                        //             let label_end = self.gen_jump_label();
-                        //             self.push_op(OpCode::JumpAbsolute(label_end));
+                                    self.push_op(OpCode::PopTop);
+                                    self.compile_expr(right);
+                                    self.push_op(OpCode::DupTop);
+                                    self.push_op(OpCode::RotThree);
+                                    self.push_op(OpCode::RotThree);
+                                    self.push_op(OpCode::StoreAttr(p));
+                                    let label_end = self.gen_jump_label();
+                                    self.push_op(OpCode::JumpAbsolute(label_end));
 
-                        //             self.set_jump_label_value(label_false);
-                        //             self.push_op(OpCode::RotTwo);
-                        //             self.push_op(OpCode::PopTop);
+                                    self.set_jump_label_value(label_false);
+                                    self.push_op(OpCode::RotTwo);
+                                    self.push_op(OpCode::PopTop);
 
-                        //             self.set_jump_label_value(label_end);
-                        //         }
-                        //         Selector::Index { expr } => {
-                        //             self.compile(expr, None);
-                        //             self.push_op(OpCode::DupTopTwo);
-                        //             self.push_op(OpCode::BinarySubScr);
+                                    self.set_jump_label_value(label_end);
+                                }
+                                Selector::Index { expr } => {
+                                    self.compile_expr(expr);
+                                    self.push_op(OpCode::DupTopTwo);
+                                    self.push_op(OpCode::BinarySubScr);
 
-                        //             self.push_op(OpCode::DupTop);
-                        //             self.push_load_const(PyObject::None(false));
-                        //             self.push_op(OpCode::compare_op_from_str("=="));
-                        //             let label_false = self.gen_jump_label();
-                        //             self.push_op(OpCode::PopJumpIfFalse(label_false));
+                                    self.push_op(OpCode::DupTop);
+                                    self.push_load_const(PyObject::None(false));
+                                    self.push_op(OpCode::compare_op_from_str("=="));
+                                    let label_false = self.gen_jump_label();
+                                    self.push_op(OpCode::PopJumpIfFalse(label_false));
 
-                        //             self.push_op(OpCode::PopTop);
-                        //             self.compile(right, None);
-                        //             self.push_op(OpCode::DupTop);
-                        //             self.push_op(OpCode::RotFour);
-                        //             self.push_op(OpCode::RotFour);
-                        //             self.push_op(OpCode::StoreSubScr);
-                        //             let label_end = self.gen_jump_label();
-                        //             self.push_op(OpCode::JumpAbsolute(label_end));
+                                    self.push_op(OpCode::PopTop);
+                                    self.compile_expr(right);
+                                    self.push_op(OpCode::DupTop);
+                                    self.push_op(OpCode::RotFour);
+                                    self.push_op(OpCode::RotFour);
+                                    self.push_op(OpCode::StoreSubScr);
+                                    let label_end = self.gen_jump_label();
+                                    self.push_op(OpCode::JumpAbsolute(label_end));
 
-                        //             self.set_jump_label_value(label_false);
-                        //             self.push_op(OpCode::RotThree);
-                        //             self.push_op(OpCode::PopTop);
-                        //             self.push_op(OpCode::PopTop);
+                                    self.set_jump_label_value(label_false);
+                                    self.push_op(OpCode::RotThree);
+                                    self.push_op(OpCode::PopTop);
+                                    self.push_op(OpCode::PopTop);
 
-                        //             self.set_jump_label_value(label_end);
-                        //         }
-                        //     }
-                        // }
+                                    self.set_jump_label_value(label_end);
+                                }
+                            }
+                        }
                         _ => panic!("Invalid lhs value."),
                     },
                     _ => panic!("Unknown assignment operator: {}", operator),
@@ -949,11 +949,77 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 let value = identifier.value.to_string();
                 self.push_load_var(&value);
             }
-            NodeExpression::Selector { left, operator } => {
-                // 右辺値として処理される場合
-                self.compile_expr(left);
+            NodeExpression::ListLiteral { element_list } => {
+                let size = element_list.len() as u8;
+                for elem in element_list {
+                    match elem {
+                        CollectionElement::ExpressionElement { expr } => {
+                            self.compile_expr(expr);
+                        }
+                        CollectionElement::MapElement {
+                            key_expr: _,
+                            value_expr: _,
+                        } => {
+                            panic!("Invalid List Literal");
+                        }
+                    }
+                }
+                self.push_op(OpCode::BuildList(size));
+            }
+            NodeExpression::SetOrMapLiteral { element_list } => {
+                let first_elem = element_list.first();
+                let is_map = if let Some(elem) = first_elem {
+                    match elem {
+                        CollectionElement::ExpressionElement { expr: _ } => false,
+                        CollectionElement::MapElement {
+                            key_expr: _,
+                            value_expr: _,
+                        } => true,
+                    }
+                } else {
+                    true
+                };
 
-                match operator {
+                if is_map {
+                    let size = element_list.len() as u8;
+                    for elem in element_list {
+                        match elem {
+                            CollectionElement::ExpressionElement { expr: _ } => {
+                                panic!("Invalid Map Literal");
+                            }
+                            CollectionElement::MapElement {
+                                key_expr,
+                                value_expr,
+                            } => {
+                                self.compile_expr(key_expr);
+                                self.compile_expr(value_expr);
+                            }
+                        }
+                    }
+                    self.push_op(OpCode::BuildMap(size));
+                } else {
+                    let size = element_list.len() as u8;
+                    for elem in element_list {
+                        match elem {
+                            CollectionElement::ExpressionElement { expr } => {
+                                self.compile_expr(expr);
+                            }
+                            CollectionElement::MapElement {
+                                key_expr: _,
+                                value_expr: _,
+                            } => {
+                                panic!("Invalid Set Literal");
+                            }
+                        }
+                    }
+                    self.push_op(OpCode::BuildSet(size));
+                }
+            }
+            NodeExpression::Selector { child, selector } => {
+                // 右辺値として処理される場合
+                self.compile_expr(child);
+
+                match selector {
                     Selector::Args { args } => {
                         let mut name_list: Vec<&str> = vec![];
                         for param in args {

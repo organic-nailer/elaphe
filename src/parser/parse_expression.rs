@@ -4,6 +4,7 @@ use super::{
     node::{CallParameter, NodeExpression, Selector},
     node_internal::NodeInternal,
     parse_identifier::parse_identifier,
+    parse_literal::{parse_list_literal, parse_set_or_map_literal, parse_string_literal_list},
     parse_selector::{parse_selector, parse_slice_expression},
     util::{flatten, gen_error},
 };
@@ -12,7 +13,7 @@ pub fn parse_expression<'input>(
     node: &NodeInternal<'input>,
 ) -> Result<NodeExpression<'input>, Box<dyn Error>> {
     match node.rule_name.as_str() {
-        "Expression" => {
+        "Expression" | "ExpressionNotBrace" => {
             if node.children.len() == 1 {
                 parse_expression(&node.children[0])
             } else {
@@ -26,7 +27,7 @@ pub fn parse_expression<'input>(
                 })
             }
         }
-        "PrimaryExpression" => {
+        "PrimaryExpression" | "PrimaryExpressionNotBrace" => {
             if node.children.len() == 1 {
                 parse_expression(&node.children[0])
             } else {
@@ -46,7 +47,9 @@ pub fn parse_expression<'input>(
         "Identifier" => Ok(NodeExpression::Identifier {
             identifier: parse_identifier(node)?,
         }),
-        "ConditionalExpression" => {
+        "ListLiteral" => parse_list_literal(node),
+        "SetOrMapLiteral" => parse_set_or_map_literal(node),
+        "ConditionalExpression" | "ConditionalExpressionNotBrace" => {
             if node.children.len() == 1 {
                 parse_expression(&node.children[0])
             } else {
@@ -61,12 +64,19 @@ pub fn parse_expression<'input>(
             }
         }
         "IfNullExpression"
+        | "IfNullExpressionNotBrace"
         | "LogicalOrExpression"
+        | "LogicalOrExpressionNotBrace"
         | "LogicalAndExpression"
+        | "LogicalAndExpressionNotBrace"
         | "BitwiseOrExpression"
+        | "BitwiseOrExpressionNotBrace"
         | "BitwiseXorExpression"
+        | "BitwiseXorExpressionNotBrace"
         | "BitwiseAndExpression"
-        | "AdditiveExpression" => {
+        | "BitwiseAndExpressionNotBrace"
+        | "AdditiveExpression"
+        | "AdditiveExpressionNotBrace" => {
             if node.children.len() == 1 {
                 parse_expression(&node.children[0])
             } else {
@@ -80,9 +90,13 @@ pub fn parse_expression<'input>(
             }
         }
         "EqualityExpression"
+        | "EqualityExpressionNotBrace"
         | "RelationalExpression"
+        | "RelationalExpressionNotBrace"
         | "ShiftExpression"
-        | "MultiplicativeExpression" => {
+        | "ShiftExpressionNotBrace"
+        | "MultiplicativeExpression"
+        | "MultiplicativeExpressionNotBrace" => {
             if node.children.len() == 1 {
                 parse_expression(&node.children[0])
             } else {
@@ -96,7 +110,7 @@ pub fn parse_expression<'input>(
                 })
             }
         }
-        "UnaryExpression" => {
+        "UnaryExpression" | "UnaryExpressionNotBrace" => {
             if node.children.len() == 1 {
                 parse_expression(&node.children[0])
             } else {
@@ -118,7 +132,7 @@ pub fn parse_expression<'input>(
                 }
             }
         }
-        "PostfixExpression" => {
+        "PostfixExpression" | "PostfixExpressionNotBrace" => {
             if node.children.len() == 1 {
                 parse_expression(&node.children[0])
             } else {
@@ -130,14 +144,14 @@ pub fn parse_expression<'input>(
                 })
             }
         }
-        "SelectorExpression" => {
+        "SelectorExpression" | "SelectorExpressionNotBrace" => {
             if node.children.len() == 1 {
                 parse_expression(&node.children[0])
             } else {
                 let left = parse_expression(&node.children[0])?;
                 Ok(NodeExpression::Selector {
-                    left: Box::new(left),
-                    operator: parse_selector(&node.children[1])?,
+                    child: Box::new(left),
+                    selector: parse_selector(&node.children[1])?,
                 })
             }
         }
@@ -192,21 +206,4 @@ pub fn parse_expression_list_opt<'input>(
     }
 
     Err(gen_error("parse_expression_list_opt", &node.rule_name))
-}
-
-fn parse_string_literal_list<'input>(
-    node: &NodeInternal<'input>,
-) -> Result<Vec<&'input str>, Box<dyn Error>> {
-    if node.rule_name == "StringLiteralList" {
-        if node.children.len() == 1 {
-            return Ok(vec![&node.children[0].token.clone().unwrap().str]);
-        } else {
-            return flatten(
-                parse_string_literal_list(&node.children[0]),
-                &node.children[1].token.clone().unwrap().str,
-            );
-        }
-    }
-
-    Err(gen_error("parse_string_literal_list", &node.rule_name))
 }

@@ -37,8 +37,14 @@ pub enum NodeExpression<'input> {
         identifier: Identifier<'input>,
     },
     Selector {
-        left: Box<NodeExpression<'input>>,
-        operator: Selector<'input>,
+        child: Box<NodeExpression<'input>>,
+        selector: Selector<'input>,
+    },
+    ListLiteral {
+        element_list: Vec<CollectionElement<'input>>,
+    },
+    SetOrMapLiteral {
+        element_list: Vec<CollectionElement<'input>>,
     },
     Slice {
         start: Option<Box<NodeExpression<'input>>>,
@@ -199,4 +205,14 @@ pub struct TryOnPart<'input> {
 pub struct TryCatchPart<'input> {
     pub id_error: Identifier<'input>,
     pub id_trace: Option<Identifier<'input>>,
+}
+
+pub enum CollectionElement<'input> {
+    ExpressionElement {
+        expr: Box<NodeExpression<'input>>,
+    },
+    MapElement {
+        key_expr: Box<NodeExpression<'input>>,
+        value_expr: Box<NodeExpression<'input>>,
+    },
 }
