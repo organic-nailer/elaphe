@@ -18,6 +18,11 @@ pub enum NodeExpression<'input> {
         operator: &'input str,
         expr: Box<NodeExpression<'input>>,
     },
+    Update {
+        operator: &'input str,
+        is_prefix: bool,
+        child: Box<NodeExpression<'input>>,
+    },
     NullLiteral,
     BooleanLiteral {
         value: &'input str,

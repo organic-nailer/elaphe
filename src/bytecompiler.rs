@@ -890,6 +890,40 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     _ => panic!("unknown unary operator: {}", *operator),
                 }
             }
+            NodeExpression::Update {
+                operator,
+                is_prefix,
+                child,
+            } => {
+                if let NodeExpression::Identifier { identifier } = &**child {
+                    let value = identifier.value.to_string();
+                    if *is_prefix {
+                        // 前置
+                        self.push_load_var(&value);
+                        self.push_load_const(PyObject::Int(1, false));
+                        match *operator {
+                            "++" => self.push_op(OpCode::InplaceAdd),
+                            "--" => self.push_op(OpCode::InplaceSubtract),
+                            _ => (),
+                        }
+                        self.push_op(OpCode::DupTop);
+                        self.push_store_var(&value);
+                    } else {
+                        // 後置
+                        self.push_load_var(&value);
+                        self.push_op(OpCode::DupTop);
+                        self.push_load_const(PyObject::Int(1, false));
+                        match *operator {
+                            "++" => self.push_op(OpCode::InplaceAdd),
+                            "--" => self.push_op(OpCode::InplaceSubtract),
+                            _ => (),
+                        }
+                        self.push_store_var(&value);
+                    }
+                } else {
+                    panic!("Invalid AST. Increment target must be an identifier.");
+                }
+            }
             NodeExpression::NullLiteral => {
                 self.push_load_const(PyObject::None(false));
             }
@@ -1016,40 +1050,6 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             }
         }
         // match node {
-        //     Node::UpdateExpression {
-        //         operator,
-        //         is_prefix,
-        //         child,
-        //     } => {
-        //         if let Node::IdentifierNode { identifier } = &**child {
-        //             let value = identifier.value.to_string();
-        //             if *is_prefix {
-        //                 // 前置
-        //                 self.push_load_var(&value);
-        //                 self.push_load_const(PyObject::Int(1, false));
-        //                 match *operator {
-        //                     "++" => self.push_op(OpCode::InplaceAdd),
-        //                     "--" => self.push_op(OpCode::InplaceSubtract),
-        //                     _ => (),
-        //                 }
-        //                 self.push_op(OpCode::DupTop);
-        //                 self.push_store_var(&value);
-        //             } else {
-        //                 // 後置
-        //                 self.push_load_var(&value);
-        //                 self.push_op(OpCode::DupTop);
-        //                 self.push_load_const(PyObject::Int(1, false));
-        //                 match *operator {
-        //                     "++" => self.push_op(OpCode::InplaceAdd),
-        //                     "--" => self.push_op(OpCode::InplaceSubtract),
-        //                     _ => (),
-        //                 }
-        //                 self.push_store_var(&value);
-        //             }
-        //         } else {
-        //             panic!("Invalid AST. Increment target must be an identifier.");
-        //         }
-        //     }
         //     Node::TypeTestExpression { child, type_test } => {
         //         // isinstance(child, type_test.)
         //         self.push_load_var(&"isinstance".to_string());

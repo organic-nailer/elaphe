@@ -100,12 +100,22 @@ pub fn parse_expression<'input>(
             if node.children.len() == 1 {
                 parse_expression(&node.children[0])
             } else {
-                let expr = parse_expression(&node.children[1])?;
-                let operator = &node.children[0].children[0].token.clone().unwrap().str;
-                Ok(NodeExpression::Unary {
-                    expr: Box::new(expr),
-                    operator,
-                })
+                if node.children[0].rule_name == "PrefixOperator" {
+                    let expr = parse_expression(&node.children[1])?;
+                    let operator = &node.children[0].children[0].token.clone().unwrap().str;
+                    Ok(NodeExpression::Unary {
+                        expr: Box::new(expr),
+                        operator,
+                    })
+                } else {
+                    let expr = parse_expression(&node.children[1])?;
+                    let operator = &node.children[0].children[0].token.clone().unwrap().str;
+                    Ok(NodeExpression::Update {
+                        child: Box::new(expr),
+                        operator,
+                        is_prefix: true,
+                    })
+                }
             }
         }
         "PostfixExpression" => {
@@ -113,9 +123,10 @@ pub fn parse_expression<'input>(
                 parse_expression(&node.children[0])
             } else {
                 let left = parse_expression(&node.children[0])?;
-                Ok(NodeExpression::Selector {
-                    left: Box::new(left),
-                    operator: parse_selector(&node.children[1])?,
+                Ok(NodeExpression::Update {
+                    operator: &node.children[1].children[0].token.clone().unwrap().str,
+                    is_prefix: false,
+                    child: Box::new(left),
                 })
             }
         }
