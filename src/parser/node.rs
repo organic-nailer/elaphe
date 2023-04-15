@@ -45,6 +45,9 @@ pub enum NodeExpression<'input> {
         end: Option<Box<NodeExpression<'input>>>,
         step: Option<Box<NodeExpression<'input>>>,
     },
+    Throw {
+        expr: Box<NodeExpression<'input>>,
+    },
 }
 
 pub enum NodeStatement<'input> {

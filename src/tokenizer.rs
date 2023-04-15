@@ -167,7 +167,9 @@ pub fn tokenize<'input>(input: &'input str) -> Vec<Token<'input>> {
             continue 'tokenize;
         }
 
-        for keyword in RESERVED_KEYWORDS.iter() {
+        let mut reserved_keywords = RESERVED_KEYWORDS.clone();
+        reserved_keywords.sort_by(|a, b| b.len().cmp(&a.len()));
+        for keyword in reserved_keywords.iter() {
             if input[current_index..].starts_with(keyword) {
                 tokens.push(Token {
                     kind: TokenKind::Keyword,
@@ -178,7 +180,9 @@ pub fn tokenize<'input>(input: &'input str) -> Vec<Token<'input>> {
             }
         }
 
-        for identifier in BUILT_IN_IDENTIFIER.iter() {
+        let mut built_in_identifier = BUILT_IN_IDENTIFIER.clone();
+        built_in_identifier.sort_by(|a, b| b.len().cmp(&a.len()));
+        for identifier in built_in_identifier.iter() {
             if input[current_index..].starts_with(identifier) {
                 tokens.push(Token {
                     kind: TokenKind::BuiltInIdentifier,
@@ -189,7 +193,9 @@ pub fn tokenize<'input>(input: &'input str) -> Vec<Token<'input>> {
             }
         }
 
-        for identifier in OTHER_IDENTIFIER.iter() {
+        let mut other_identifier = OTHER_IDENTIFIER.clone();
+        other_identifier.sort_by(|a, b| b.len().cmp(&a.len()));
+        for identifier in other_identifier.iter() {
             if input[current_index..].starts_with(identifier) {
                 tokens.push(Token {
                     kind: TokenKind::OtherIdentifier,

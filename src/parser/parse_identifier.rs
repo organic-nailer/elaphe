@@ -9,7 +9,7 @@ use super::{
 pub fn parse_identifier<'input>(
     node: &NodeInternal<'input>,
 ) -> Result<Identifier<'input>, Box<dyn Error>> {
-    if node.rule_name == "Identifier" {
+    if node.rule_name == "Identifier" || node.rule_name == "TypeIdentifier" {
         let child_node = &node.children[0];
         if child_node.rule_name == "IDENTIFIER" {
             return Ok(Identifier {

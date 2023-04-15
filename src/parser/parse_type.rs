@@ -11,6 +11,9 @@ pub fn parse_type<'input>(node: &NodeInternal<'input>) -> Result<DartType<'input
     if node.rule_name == "Type" {
         return parse_type_not_function(&node.children[0]);
     }
+    if node.rule_name == "TypeNotVoid" {
+        return parse_type_not_void_not_function(&node.children[0]);
+    }
 
     Err(gen_error("parse_type", &node.rule_name))
 }

@@ -1048,6 +1048,10 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     }
                 }
             }
+            NodeExpression::Throw { expr } => {
+                self.compile_expr(expr);
+                self.push_op(OpCode::RaiseVarargs(1));
+            }
         }
         // match node {
         //     Node::TypeTestExpression { child, type_test } => {

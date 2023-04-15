@@ -5,7 +5,7 @@ pub const START_SYMBOL: &'static str = "LibraryDeclaration";
 pub const EPSILON: &'static str = "[EMPTY]";
 pub const END: &'static str = "[END]";
 
-const DART_GRAMMARS: [&'static str; 90] = [
+const DART_GRAMMARS: [&'static str; 91] = [
 // Variables
 "InitializedVariableDeclaration ::= DeclaredIdentifier
     |/ DeclaredIdentifier '=' Expression
@@ -37,7 +37,8 @@ const DART_GRAMMARS: [&'static str; 90] = [
     |/ 'late' 'final' Type Identifier",
 // Expressions
 "Expression ::= SelectorExpression AssignmentOperator Expression
-    |/ ConditionalExpression",
+    |/ ConditionalExpression
+    |/ ThrowExpression",
 "AssignmentOperator ::= '=' |/ '*=' |/ '/=' |/ '~/=' |/ '%=' |/ '+=' |/ '-=' |/ '<<=' |/ '>>=' |/ '&=' |/ '^=' |/ '|=' |/ '??='",
 "ExpressionOpt ::= [EMPTY]
     |/ Expression",
@@ -53,6 +54,7 @@ const DART_GRAMMARS: [&'static str; 90] = [
     |/ Identifier",
 "StringLiteralList ::= 'STRING'
     |/ StringLiteralList 'STRING'",
+"ThrowExpression ::= 'throw' Expression",
 "ConditionalExpression ::= IfNullExpression
     |/ IfNullExpression '?' Expression : Expression",
 "IfNullExpression ::= LogicalOrExpression

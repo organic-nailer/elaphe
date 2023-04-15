@@ -142,6 +142,9 @@ pub fn parse_expression<'input>(
             }
         }
         "SliceExpression" => parse_slice_expression(node),
+        "ThrowExpression" => Ok(NodeExpression::Throw {
+            expr: Box::new(parse_expression(&node.children[1])?),
+        }),
         v => Err(gen_error("parse_expression", v)),
     }
 }

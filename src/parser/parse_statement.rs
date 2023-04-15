@@ -326,8 +326,8 @@ fn parse_on_part_list<'input>(
     node: &NodeInternal<'input>,
 ) -> Result<Vec<TryOnPart<'input>>, Box<dyn Error>> {
     if node.rule_name == "OnPartList" {
-        if node.children.len() == 0 {
-            return Ok(vec![]);
+        if node.children.len() == 1 {
+            return Ok(vec![parse_on_part(&node.children[0])?]);
         } else {
             return flatten(
                 parse_on_part_list(&node.children[0]),
