@@ -15,6 +15,7 @@ mod parse_expression;
 mod parse_functions;
 mod parse_identifier;
 mod parse_library;
+mod parse_selector;
 mod parse_statement;
 mod parse_type;
 mod parse_variables;
@@ -46,7 +47,11 @@ fn parse_internally(input: Vec<Token>, transition_map: TransitionMap) -> NodeInt
         ));
 
         if transition.is_none() {
-            println!("No Transition Error: {:?}", input[parse_index]);
+            println!(
+                "No Transition Error: {:?}, {}",
+                input[parse_index],
+                stack.last().unwrap().0
+            );
             break;
         }
         let transition = transition.unwrap();

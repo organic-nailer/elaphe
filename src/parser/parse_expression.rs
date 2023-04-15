@@ -4,6 +4,7 @@ use super::{
     node::{CallParameter, NodeExpression, Selector},
     node_internal::NodeInternal,
     parse_identifier::parse_identifier,
+    parse_selector::{parse_selector, parse_slice_expression},
     util::{flatten, gen_error},
 };
 
@@ -15,7 +16,7 @@ pub fn parse_expression<'input>(
             if node.children.len() == 1 {
                 parse_expression(&node.children[0])
             } else {
-                let left = parse_assignable_expression(&node.children[0])?;
+                let left = parse_expression(&node.children[0])?;
                 let operator = &node.children[1].children[0].token.clone().unwrap().str;
                 let right = parse_expression(&node.children[2])?;
                 Ok(NodeExpression::AssignmentExpression {
@@ -118,6 +119,18 @@ pub fn parse_expression<'input>(
                 })
             }
         }
+        "SelectorExpression" => {
+            if node.children.len() == 1 {
+                parse_expression(&node.children[0])
+            } else {
+                let left = parse_expression(&node.children[0])?;
+                Ok(NodeExpression::Selector {
+                    left: Box::new(left),
+                    operator: parse_selector(&node.children[1])?,
+                })
+            }
+        }
+        "SliceExpression" => parse_slice_expression(node),
         v => Err(gen_error("parse_expression", v)),
     }
 }
@@ -182,63 +195,4 @@ fn parse_string_literal_list<'input>(
     }
 
     Err(gen_error("parse_string_literal_list", &node.rule_name))
-}
-
-fn parse_selector<'input>(node: &NodeInternal<'input>) -> Result<Selector<'input>, Box<dyn Error>> {
-    if node.rule_name != "Selector" {
-        return Err(gen_error("parse_selector", &node.rule_name));
-    }
-    let node = &node.children[0];
-    match node.rule_name.as_str() {
-        "Arguments" => {
-            if node.children.len() == 2 {
-                Ok(Selector::Args { args: Vec::new() })
-            } else {
-                Ok(Selector::Args {
-                    args: parse_argument_list(&node.children[1])?,
-                })
-            }
-        }
-        v => Err(gen_error("parse_selector", v)),
-    }
-}
-
-fn parse_normal_argument<'input>(
-    node: &NodeInternal<'input>,
-) -> Result<CallParameter<'input>, Box<dyn Error>> {
-    if node.rule_name == "NormalArgument" {
-        return Ok(CallParameter {
-            identifier: None,
-            expr: Box::new(parse_expression(&node.children[0])?),
-        });
-    }
-
-    Err(gen_error("parse_normal_argument", &node.rule_name))
-}
-
-fn parse_argument_list<'input>(
-    node: &NodeInternal<'input>,
-) -> Result<Vec<CallParameter<'input>>, Box<dyn Error>> {
-    if node.rule_name == "ArgumentList" {
-        if node.children.len() == 1 {
-            return Ok(vec![parse_normal_argument(&node.children[0])?]);
-        } else {
-            return flatten(
-                parse_argument_list(&node.children[0]),
-                parse_normal_argument(&node.children[2])?,
-            );
-        }
-    }
-
-    Err(gen_error("parse_argument_list", &node.rule_name))
-}
-
-fn parse_assignable_expression<'input>(
-    node: &NodeInternal<'input>,
-) -> Result<NodeExpression<'input>, Box<dyn Error>> {
-    if node.rule_name == "AssignableExpression" {
-        return Ok(parse_expression(&node.children[0])?);
-    }
-
-    Err(gen_error("parse_assignable_expression", &node.rule_name))
 }

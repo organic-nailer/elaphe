@@ -274,6 +274,7 @@ fn calc_transition_map(
                     if *token == "else" { continue }
                     if *token == "import" { continue }
                     if *token == "on" { continue }
+                    if *token == "(" && rule.left == "Selector" { continue }
 
                     error_transitions.push(ErrorTransition {
                         state: state.to_string(),

@@ -5,7 +5,7 @@ pub const START_SYMBOL: &'static str = "LibraryDeclaration";
 pub const EPSILON: &'static str = "[EMPTY]";
 pub const END: &'static str = "[END]";
 
-const DART_GRAMMARS: [&'static str; 89] = [
+const DART_GRAMMARS: [&'static str; 90] = [
 // Variables
 "InitializedVariableDeclaration ::= DeclaredIdentifier
     |/ DeclaredIdentifier '=' Expression
@@ -36,7 +36,7 @@ const DART_GRAMMARS: [&'static str; 89] = [
     |/ 'late' 'final' Identifier
     |/ 'late' 'final' Type Identifier",
 // Expressions
-"Expression ::= AssignableExpression AssignmentOperator Expression
+"Expression ::= SelectorExpression AssignmentOperator Expression
     |/ ConditionalExpression",
 "AssignmentOperator ::= '=' |/ '*=' |/ '/=' |/ '~/=' |/ '%=' |/ '+=' |/ '-=' |/ '<<=' |/ '>>=' |/ '&=' |/ '^=' |/ '|=' |/ '??='",
 "ExpressionOpt ::= [EMPTY]
@@ -84,13 +84,22 @@ const DART_GRAMMARS: [&'static str; 89] = [
 "MultiplicativeOperator ::= '*' |/ '/' |/ '%' |/ '~/'",
 "UnaryExpression ::= PostfixExpression
     |/ PrefixOperator UnaryExpression
-    |/ IncrementOperator UnaryExpression",
+    |/ IncrementOperator SelectorExpression",
 "PrefixOperator ::= '!' |/ '-' |/ '~'",
 "IncrementOperator ::= '++' |/ '--'",
-"PostfixExpression ::= PrimaryExpression
-    |/ PostfixExpression Selector",
-"Selector ::= Arguments",
-"AssignableExpression ::= Identifier",
+"PostfixExpression ::= SelectorExpression
+    |/ PrimaryExpression IncrementOperator",
+"SelectorExpression ::= PrimaryExpression
+    |/ SliceExpression
+    |/ SelectorExpression Selector",
+"SliceExpression ::= 'sl' '(' ')'
+    |/ 'sl' '(' Expression ')'
+    |/ 'sl' '(' Expression ',' Expression ')'
+    |/ 'sl' '(' Expression ',' Expression ',' Expression ')'",
+"Selector ::= Arguments
+    |/ '.' Identifier
+    |/ '.' Identifier Arguments
+    |/ '[' Expression ']'",
 "Arguments ::= '(' ')'
     |/ '(' ArgumentList ')'",
 "ArgumentList ::= NormalArgument

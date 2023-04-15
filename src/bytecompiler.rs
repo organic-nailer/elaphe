@@ -3,7 +3,9 @@ use std::{cell::RefCell, collections::HashMap};
 
 use crate::bytecode::ByteCode;
 use crate::executioncontext::{BlockContext, ExecutionContext, VariableScope};
-use crate::parser::node::{DartType, Identifier, NodeExpression, NodeStatement, Selector};
+use crate::parser::node::{
+    DartType, Identifier, LibraryImport, NodeExpression, NodeStatement, Selector,
+};
 use crate::{bytecode::OpCode, pyobject::PyObject};
 
 // use self::runclass::run_class;
@@ -30,125 +32,125 @@ pub struct ByteCompiler<'ctx, 'value> {
 }
 
 impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
-    // fn compile_import(&mut self, node: &LibraryImport) {
-    //     let uri = &node.uri;
-    //     let len = uri.len();
-    //     let uri = &uri[1..len - 1];
+    fn compile_import(&mut self, node: &LibraryImport) {
+        let uri = &node.uri;
+        let len = uri.len();
+        let uri = &uri[1..len - 1];
 
-    //     let identifier = match &node.identifier {
-    //         Some(v) => Some(v.value),
-    //         None => None,
-    //     };
+        let identifier = match &node.identifier {
+            Some(v) => Some(v.value),
+            None => None,
+        };
 
-    //     // uri形式
-    //     // import A.B as C
-    //     // → import "elaphe/A/B.d.dart" as C;
-    //     // from ..A.B import C as D
-    //     // → import "../A/B/C.d.dart" as D;
-    //     if uri.contains(":") {
-    //         panic!("invalid import uri: {}", uri);
-    //     }
+        // uri形式
+        // import A.B as C
+        // → import "elaphe/A/B.d.dart" as C;
+        // from ..A.B import C as D
+        // → import "../A/B/C.d.dart" as D;
+        if uri.contains(":") {
+            panic!("invalid import uri: {}", uri);
+        }
 
-    //     if uri.starts_with(".") {
-    //         // 相対パスの場合
-    //         let mut path_splitted: Vec<&str> = uri.split("/").collect();
+        if uri.starts_with(".") {
+            // 相対パスの場合
+            let mut path_splitted: Vec<&str> = uri.split("/").collect();
 
-    //         // ドットの数を積む
-    //         let dot_len = path_splitted[0].len();
-    //         self.push_load_const(PyObject::Int(dot_len as i32, false));
-    //         path_splitted.remove(0);
+            // ドットの数を積む
+            let dot_len = path_splitted[0].len();
+            self.push_load_const(PyObject::Int(dot_len as i32, false));
+            path_splitted.remove(0);
 
-    //         // 最後尾のモジュールをタプルで積む
-    //         let import_mod = path_splitted.pop().unwrap();
-    //         let import_mod_p = self.push_load_const(PyObject::SmallTuple {
-    //             children: vec![PyObject::new_string(import_mod.to_string(), false)],
-    //             add_ref: false,
-    //         });
+            // 最後尾のモジュールをタプルで積む
+            let import_mod = path_splitted.pop().unwrap();
+            let import_mod_p = self.push_load_const(PyObject::SmallTuple {
+                children: vec![PyObject::new_string(import_mod.to_string(), false)],
+                add_ref: false,
+            });
 
-    //         // 名前でインポート
-    //         let p = (**self.context_stack.last().unwrap())
-    //             .borrow_mut()
-    //             .register_or_get_name(&path_splitted.join("."));
-    //         self.push_op(OpCode::ImportName(p));
+            // 名前でインポート
+            let p = (**self.context_stack.last().unwrap())
+                .borrow_mut()
+                .register_or_get_name(&path_splitted.join("."));
+            self.push_op(OpCode::ImportName(p));
 
-    //         // インポート先のモジュール
-    //         self.push_op(OpCode::ImportFrom(import_mod_p));
+            // インポート先のモジュール
+            self.push_op(OpCode::ImportFrom(import_mod_p));
 
-    //         // 格納先
-    //         let store_name = match identifier {
-    //             Some(v) => v,
-    //             None => import_mod,
-    //         };
-    //         let store_name_p = (**self.context_stack.last().unwrap())
-    //             .borrow_mut()
-    //             .declare_variable(&store_name.to_string());
-    //         self.push_op(OpCode::StoreName(store_name_p));
-    //         self.push_op(OpCode::PopTop);
-    //     } else {
-    //         // 絶対パスの場合はelaphe/から始まり、最後尾は.d.dartで終わる必要がある
-    //         if !uri.starts_with("elaphe/") {
-    //             panic!("invalid import uri: {}", uri);
-    //         }
-    //         if !uri.ends_with(".d.dart") {
-    //             // .d.dartで終わらないものは無視する
-    //             return;
-    //         }
-    //         let path_splitted: Vec<&str> = uri[7..uri.len() - 7].split("/").collect();
+            // 格納先
+            let store_name = match identifier {
+                Some(v) => v,
+                None => import_mod,
+            };
+            let store_name_p = (**self.context_stack.last().unwrap())
+                .borrow_mut()
+                .declare_variable(&store_name.to_string());
+            self.push_op(OpCode::StoreName(store_name_p));
+            self.push_op(OpCode::PopTop);
+        } else {
+            // 絶対パスの場合はelaphe/から始まり、最後尾は.d.dartで終わる必要がある
+            if !uri.starts_with("elaphe/") {
+                panic!("invalid import uri: {}", uri);
+            }
+            if !uri.ends_with(".d.dart") {
+                // .d.dartで終わらないものは無視する
+                return;
+            }
+            let path_splitted: Vec<&str> = uri[7..uri.len() - 7].split("/").collect();
 
-    //         // 0を積む
-    //         self.push_load_const(PyObject::Int(0, false));
+            // 0を積む
+            self.push_load_const(PyObject::Int(0, false));
 
-    //         // Noneを積む
-    //         self.push_load_const(PyObject::None(false));
+            // Noneを積む
+            self.push_load_const(PyObject::None(false));
 
-    //         // 名前でインポート
-    //         let import_name = path_splitted.join(".");
-    //         let import_name_p = (**self.context_stack.last().unwrap())
-    //             .borrow_mut()
-    //             .register_or_get_name(&import_name);
-    //         self.push_op(OpCode::ImportName(import_name_p));
+            // 名前でインポート
+            let import_name = path_splitted.join(".");
+            let import_name_p = (**self.context_stack.last().unwrap())
+                .borrow_mut()
+                .register_or_get_name(&import_name);
+            self.push_op(OpCode::ImportName(import_name_p));
 
-    //         match identifier {
-    //             None => {
-    //                 // import A.B
-    //                 let store_name = path_splitted[0].to_string();
-    //                 let store_name_p = (**self.context_stack.last().unwrap())
-    //                     .borrow_mut()
-    //                     .declare_variable(&store_name);
-    //                 self.push_op(OpCode::StoreName(store_name_p));
-    //             }
-    //             Some(v) => {
-    //                 if path_splitted.len() == 1 {
-    //                     // import A as B
-    //                     let p = (**self.context_stack.last().unwrap())
-    //                         .borrow_mut()
-    //                         .declare_variable(&v.to_string());
-    //                     self.push_op(OpCode::StoreName(p));
-    //                 } else {
-    //                     // import A.B.C as D
-    //                     let second_name = path_splitted[1].to_string();
-    //                     let p = (**self.context_stack.last().unwrap())
-    //                         .borrow_mut()
-    //                         .register_or_get_name(&second_name);
-    //                     self.push_op(OpCode::ImportFrom(p));
-    //                     for i in 2..path_splitted.len() {
-    //                         self.push_op(OpCode::RotTwo);
-    //                         self.push_op(OpCode::PopTop);
-    //                         let p = (**self.context_stack.last().unwrap())
-    //                             .borrow_mut()
-    //                             .register_or_get_name(&path_splitted[i].to_string());
-    //                         self.push_op(OpCode::ImportFrom(p));
-    //                     }
-    //                     let p = (**self.context_stack.last().unwrap())
-    //                         .borrow_mut()
-    //                         .declare_variable(&v.to_string());
-    //                     self.push_op(OpCode::StoreName(p));
-    //                     self.push_op(OpCode::PopTop);
-    //                 }
-    //             }
-    //         }
-    //     }
-    // }
+            match identifier {
+                None => {
+                    // import A.B
+                    let store_name = path_splitted[0].to_string();
+                    let store_name_p = (**self.context_stack.last().unwrap())
+                        .borrow_mut()
+                        .declare_variable(&store_name);
+                    self.push_op(OpCode::StoreName(store_name_p));
+                }
+                Some(v) => {
+                    if path_splitted.len() == 1 {
+                        // import A as B
+                        let p = (**self.context_stack.last().unwrap())
+                            .borrow_mut()
+                            .declare_variable(&v.to_string());
+                        self.push_op(OpCode::StoreName(p));
+                    } else {
+                        // import A.B.C as D
+                        let second_name = path_splitted[1].to_string();
+                        let p = (**self.context_stack.last().unwrap())
+                            .borrow_mut()
+                            .register_or_get_name(&second_name);
+                        self.push_op(OpCode::ImportFrom(p));
+                        for i in 2..path_splitted.len() {
+                            self.push_op(OpCode::RotTwo);
+                            self.push_op(OpCode::PopTop);
+                            let p = (**self.context_stack.last().unwrap())
+                                .borrow_mut()
+                                .register_or_get_name(&path_splitted[i].to_string());
+                            self.push_op(OpCode::ImportFrom(p));
+                        }
+                        let p = (**self.context_stack.last().unwrap())
+                            .borrow_mut()
+                            .declare_variable(&v.to_string());
+                        self.push_op(OpCode::StoreName(p));
+                        self.push_op(OpCode::PopTop);
+                    }
+                }
+            }
+        }
+    }
 
     fn compile_stmt(&mut self, node: &'value NodeStatement, label: Option<&String>) {
         match node {
@@ -910,6 +912,77 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                         } else {
                             self.push_op(OpCode::CallFunction(args.len() as u8));
                         }
+                    }
+                    Selector::Attr { identifier } => {
+                        let name = identifier.value;
+                        let p = (**self.context_stack.last().unwrap())
+                            .borrow_mut()
+                            .register_or_get_name(&name.to_string());
+                        self.push_op(OpCode::LoadAttr(p));
+                    }
+                    Selector::Index { expr } => {
+                        self.compile_expr(expr);
+
+                        self.push_op(OpCode::BinarySubScr);
+                    }
+                    Selector::Method {
+                        identifier,
+                        arguments,
+                    } => {
+                        let name = identifier.value;
+                        let p = (**self.context_stack.last().unwrap())
+                            .borrow_mut()
+                            .register_or_get_name(&name.to_string());
+                        self.push_op(OpCode::LoadMethod(p));
+
+                        let mut name_list: Vec<&str> = vec![];
+                        for param in arguments {
+                            self.compile_expr(&param.expr);
+                            if let Some(v) = &param.identifier {
+                                name_list.push(&v.value);
+                            }
+                        }
+                        if !name_list.is_empty() {
+                            self.push_load_const(PyObject::SmallTuple {
+                                children: name_list
+                                    .iter()
+                                    .map(|v| PyObject::new_string(v.to_string(), false))
+                                    .collect(),
+                                add_ref: false,
+                            });
+                            self.push_op(OpCode::CallFunctionKw(arguments.len() as u8));
+                        } else {
+                            self.push_op(OpCode::CallMethod(arguments.len() as u8))
+                        }
+                    }
+                }
+            }
+            NodeExpression::Slice { start, end, step } => {
+                match start {
+                    Some(v) => {
+                        self.compile_expr(v);
+                    }
+                    None => {
+                        self.push_load_const(PyObject::None(false));
+                    }
+                }
+
+                match end {
+                    Some(v) => {
+                        self.compile_expr(v);
+                    }
+                    None => {
+                        self.push_load_const(PyObject::None(false));
+                    }
+                }
+
+                match step {
+                    Some(v) => {
+                        self.compile_expr(v);
+                        self.push_op(OpCode::BuildSlice(3));
+                    }
+                    None => {
+                        self.push_op(OpCode::BuildSlice(2));
                     }
                 }
             }

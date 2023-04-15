@@ -35,9 +35,9 @@ pub fn run_root<'value>(
         .borrow_mut()
         .push_const(PyObject::None(false));
 
-    // for node in &root_node.import_list {
-    //     compiler.compile_import(node);
-    // }
+    for node in &root_node.import_list {
+        compiler.compile_import(node);
+    }
 
     for node in &root_node.top_level_declaration_list {
         compiler.compile_stmt(&node, None);

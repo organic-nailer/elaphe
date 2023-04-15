@@ -35,6 +35,11 @@ pub enum NodeExpression<'input> {
         left: Box<NodeExpression<'input>>,
         operator: Selector<'input>,
     },
+    Slice {
+        start: Option<Box<NodeExpression<'input>>>,
+        end: Option<Box<NodeExpression<'input>>>,
+        step: Option<Box<NodeExpression<'input>>>,
+    },
 }
 
 pub enum NodeStatement<'input> {
@@ -100,7 +105,19 @@ pub enum NodeStatement<'input> {
 }
 
 pub enum Selector<'input> {
-    Args { args: Vec<CallParameter<'input>> },
+    Index {
+        expr: Box<NodeExpression<'input>>,
+    },
+    Attr {
+        identifier: Identifier<'input>,
+    },
+    Method {
+        identifier: Identifier<'input>,
+        arguments: Vec<CallParameter<'input>>,
+    },
+    Args {
+        args: Vec<CallParameter<'input>>,
+    },
 }
 
 pub struct CallParameter<'input> {
