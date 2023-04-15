@@ -818,24 +818,52 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 operator,
                 right,
             } => {
-                self.compile_expr(left);
-                self.compile_expr(right);
-                match *operator {
-                    "==" | "!=" | ">=" | ">" | "<=" | "<" => {
-                        self.push_op(OpCode::compare_op_from_str(operator))
+                if *operator == "??" {
+                    self.compile_expr(left);
+                    self.push_op(OpCode::DupTop);
+                    self.push_load_const(PyObject::None(false));
+                    self.push_op(OpCode::compare_op_from_str("=="));
+                    let label_end = self.gen_jump_label();
+                    self.push_op(OpCode::PopJumpIfFalse(label_end));
+                    self.push_op(OpCode::PopTop);
+                    self.compile_expr(right);
+                    self.set_jump_label_value(label_end);
+                } else if *operator == "||" {
+                    self.compile_expr(left);
+                    self.push_op(OpCode::DupTop);
+                    let label_end = self.gen_jump_label();
+                    self.push_op(OpCode::PopJumpIfTrue(label_end));
+                    self.push_op(OpCode::PopTop);
+                    self.compile_expr(right);
+                    self.set_jump_label_value(label_end);
+                } else if *operator == "&&" {
+                    self.compile_expr(left);
+                    self.push_op(OpCode::DupTop);
+                    let label_end = self.gen_jump_label();
+                    self.push_op(OpCode::PopJumpIfFalse(label_end));
+                    self.push_op(OpCode::PopTop);
+                    self.compile_expr(right);
+                    self.set_jump_label_value(label_end);
+                } else {
+                    self.compile_expr(left);
+                    self.compile_expr(right);
+                    match *operator {
+                        "==" | "!=" | ">=" | ">" | "<=" | "<" => {
+                            self.push_op(OpCode::compare_op_from_str(operator))
+                        }
+                        "<<" => self.push_op(OpCode::BinaryLShift),
+                        ">>" => self.push_op(OpCode::BinaryRShift),
+                        "&" => self.push_op(OpCode::BinaryAnd),
+                        "^" => self.push_op(OpCode::BinaryXor),
+                        "|" => self.push_op(OpCode::BinaryOr),
+                        "+" => self.push_op(OpCode::BinaryAdd),
+                        "-" => self.push_op(OpCode::BinarySubtract),
+                        "*" => self.push_op(OpCode::BinaryMultiply),
+                        "/" => self.push_op(OpCode::BinaryTrueDivide),
+                        "%" => self.push_op(OpCode::BinaryModulo),
+                        "~/" => self.push_op(OpCode::BinaryFloorDivide),
+                        _ => panic!("unknown operator: {}", *operator),
                     }
-                    "<<" => self.push_op(OpCode::BinaryLShift),
-                    ">>" => self.push_op(OpCode::BinaryRShift),
-                    "&" => self.push_op(OpCode::BinaryAnd),
-                    "^" => self.push_op(OpCode::BinaryXor),
-                    "|" => self.push_op(OpCode::BinaryOr),
-                    "+" => self.push_op(OpCode::BinaryAdd),
-                    "-" => self.push_op(OpCode::BinarySubtract),
-                    "*" => self.push_op(OpCode::BinaryMultiply),
-                    "/" => self.push_op(OpCode::BinaryTrueDivide),
-                    "%" => self.push_op(OpCode::BinaryModulo),
-                    "~/" => self.push_op(OpCode::BinaryFloorDivide),
-                    _ => panic!("unknown operator: {}", *operator),
                 }
             }
             NodeExpression::Conditional {
@@ -988,83 +1016,6 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             }
         }
         // match node {
-        //     Node::BinaryExpression {
-        //         operator,
-        //         left,
-        //         right,
-        //     } => {
-        //         if *operator == "??" {
-        //             self.compile(left, None);
-        //             self.push_op(OpCode::DupTop);
-        //             self.push_load_const(PyObject::None(false));
-        //             self.push_op(OpCode::compare_op_from_str("=="));
-        //             let label_end = self.gen_jump_label();
-        //             self.push_op(OpCode::PopJumpIfFalse(label_end));
-        //             self.push_op(OpCode::PopTop);
-        //             self.compile(right, None);
-        //             self.set_jump_label_value(label_end);
-        //         } else if *operator == "||" {
-        //             self.compile(left, None);
-        //             self.push_op(OpCode::DupTop);
-        //             let label_end = self.gen_jump_label();
-        //             self.push_op(OpCode::PopJumpIfTrue(label_end));
-        //             self.push_op(OpCode::PopTop);
-        //             self.compile(right, None);
-        //             self.set_jump_label_value(label_end);
-        //         } else if *operator == "&&" {
-        //             self.compile(left, None);
-        //             self.push_op(OpCode::DupTop);
-        //             let label_end = self.gen_jump_label();
-        //             self.push_op(OpCode::PopJumpIfFalse(label_end));
-        //             self.push_op(OpCode::PopTop);
-        //             self.compile(right, None);
-        //             self.set_jump_label_value(label_end);
-        //         } else {
-        //             self.compile(left, None);
-        //             self.compile(right, None);
-        //             match *operator {
-        //                 "==" | "!=" | ">=" | ">" | "<=" | "<" => {
-        //                     self.push_op(OpCode::compare_op_from_str(operator))
-        //                 }
-        //                 "<<" => self.push_op(OpCode::BinaryLShift),
-        //                 ">>" => self.push_op(OpCode::BinaryRShift),
-        //                 "&" => self.push_op(OpCode::BinaryAnd),
-        //                 "^" => self.push_op(OpCode::BinaryXor),
-        //                 "|" => self.push_op(OpCode::BinaryOr),
-        //                 "+" => self.push_op(OpCode::BinaryAdd),
-        //                 "-" => self.push_op(OpCode::BinarySubtract),
-        //                 "*" => self.push_op(OpCode::BinaryMultiply),
-        //                 "/" => self.push_op(OpCode::BinaryTrueDivide),
-        //                 "%" => self.push_op(OpCode::BinaryModulo),
-        //                 "~/" => self.push_op(OpCode::BinaryFloorDivide),
-        //                 _ => panic!("unknown operator: {}", *operator),
-        //             }
-        //         }
-        //     }
-        //     Node::ConditionalExpression {
-        //         condition,
-        //         if_true_expr,
-        //         if_false_expr,
-        //     } => {
-        //         let label_conditional_end = self.gen_jump_label();
-        //         let label_false_start = self.gen_jump_label();
-        //         self.compile(condition, None);
-        //         self.push_op(OpCode::PopJumpIfFalse(label_false_start));
-        //         self.compile(if_true_expr, None);
-        //         self.push_op(OpCode::JumpAbsolute(label_conditional_end));
-        //         self.set_jump_label_value(label_false_start);
-        //         self.compile(if_false_expr, None);
-        //         self.set_jump_label_value(label_conditional_end);
-        //     }
-        //     Node::UnaryOpExpression { operator, child } => {
-        //         self.compile(child, None);
-        //         match *operator {
-        //             "-" => self.push_op(OpCode::UnaryNegative),
-        //             "!" => self.push_op(OpCode::UnaryNot),
-        //             "~" => self.push_op(OpCode::UnaryInvert),
-        //             _ => panic!("unknown unary operator: {}", *operator),
-        //         }
-        //     }
         //     Node::UpdateExpression {
         //         operator,
         //         is_prefix,
