@@ -272,8 +272,8 @@ fn calc_transition_map(
                     // Shift-Reduce conflict
                     // priortize shift by default
                     if *token == "else" { continue }
-                    // if *token == "import" { continue }
-                    // if *token == "on" { continue }
+                    if *token == "import" { continue }
+                    if *token == "on" { continue }
 
                     error_transitions.push(ErrorTransition {
                         state: state.to_string(),

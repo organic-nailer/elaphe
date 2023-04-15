@@ -5,7 +5,7 @@ pub const START_SYMBOL: &'static str = "LibraryDeclaration";
 pub const EPSILON: &'static str = "[EMPTY]";
 pub const END: &'static str = "[END]";
 
-const DART_GRAMMARS: [&'static str; 86] = [
+const DART_GRAMMARS: [&'static str; 89] = [
 // Variables
 "InitializedVariableDeclaration ::= DeclaredIdentifier
     |/ DeclaredIdentifier '=' Expression
@@ -186,15 +186,14 @@ const DART_GRAMMARS: [&'static str; 86] = [
     |/ TypeList ',' Type",
 
 // Identifier
-"Identifier ::= 'IDENTIFIER'",
-// "Identifier ::= 'IDENTIFIER'
-//     |/ BUILT_IN_IDENTIFIER
-//     |/ OTHER_IDENTIFIER",
-// "TypeIdentifier ::= 'IDENTIFIER'
-//     |/ OTHER_IDENTIFIER
-//     |/ 'dynamic'",
-// "BUILT_IN_IDENTIFIER ::= 'abstract' |/ 'as' |/ 'covariant' |/ 'deferred' |/ 'dynamic' |/ 'export' |/ 'external' |/ 'extension' |/ 'factory' |/ 'Function' |/ 'get' |/ 'implements' |/ 'import' |/ 'interface' |/ 'late' |/ 'library' |/ 'mixin' |/ 'operator' |/ 'part' |/ 'required' |/ 'set' |/ 'static' |/ 'typedef'",
-// "OTHER_IDENTIFIER ::= 'async' |/ 'hide' |/ 'of' |/ 'on' |/ 'show' |/ 'sync' |/ 'await' |/ 'yield'",
+"Identifier ::= 'IDENTIFIER'
+    |/ BUILT_IN_IDENTIFIER
+    |/ OTHER_IDENTIFIER",
+"TypeIdentifier ::= 'IDENTIFIER'
+    |/ OTHER_IDENTIFIER
+    |/ 'dynamic'",
+"BUILT_IN_IDENTIFIER ::= 'abstract' |/ 'as' |/ 'covariant' |/ 'deferred' |/ 'dynamic' |/ 'export' |/ 'external' |/ 'extension' |/ 'factory' |/ 'Function' |/ 'get' |/ 'implements' |/ 'import' |/ 'interface' |/ 'late' |/ 'library' |/ 'mixin' |/ 'operator' |/ 'part' |/ 'required' |/ 'set' |/ 'static' |/ 'typedef'",
+"OTHER_IDENTIFIER ::= 'async' |/ 'hide' |/ 'of' |/ 'on' |/ 'show' |/ 'sync' |/ 'await' |/ 'yield'",
 ];
 
 fn parse_rule(rule: &'static str) -> (&'static str, Vec<ProductionRuleData>) {

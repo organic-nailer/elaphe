@@ -181,7 +181,7 @@ pub fn tokenize<'input>(input: &'input str) -> Vec<Token<'input>> {
         for identifier in BUILT_IN_IDENTIFIER.iter() {
             if input[current_index..].starts_with(identifier) {
                 tokens.push(Token {
-                    kind: TokenKind::Keyword,
+                    kind: TokenKind::BuiltInIdentifier,
                     str: identifier,
                 });
                 current_index += identifier.len();
@@ -192,7 +192,7 @@ pub fn tokenize<'input>(input: &'input str) -> Vec<Token<'input>> {
         for identifier in OTHER_IDENTIFIER.iter() {
             if input[current_index..].starts_with(identifier) {
                 tokens.push(Token {
-                    kind: TokenKind::Keyword,
+                    kind: TokenKind::OtherIdentifier,
                     str: identifier,
                 });
                 current_index += identifier.len();
