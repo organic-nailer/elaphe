@@ -32,11 +32,11 @@ pub fn parse_expression<'input>(
                 parse_expression(&node.children[1])
             }
         }
-        "Null" => Ok(NodeExpression::NullLiteral),
-        "Boolean" => Ok(NodeExpression::BooleanLiteral {
+        "NULL" => Ok(NodeExpression::NullLiteral),
+        "BOOLEAN" => Ok(NodeExpression::BooleanLiteral {
             value: node.token.clone().unwrap().str,
         }),
-        "Number" => Ok(NodeExpression::NumericLiteral {
+        "NUMBER" => Ok(NodeExpression::NumericLiteral {
             value: node.token.clone().unwrap().str,
         }),
         "StringLiteralList" => Ok(NodeExpression::StringLiteral {

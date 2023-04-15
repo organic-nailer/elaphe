@@ -108,13 +108,27 @@ pub struct CallParameter<'input> {
     pub expr: Box<NodeExpression<'input>>,
 }
 
+pub enum IdentifierKind {
+    Normal,
+    BuiltIn,
+    Other,
+}
+
 pub struct Identifier<'input> {
     pub value: &'input str,
+    pub kind: IdentifierKind,
 }
 
 pub struct LibraryDeclaration<'input> {
+    pub import_list: Vec<LibraryImport<'input>>,
     pub top_level_declaration_list: Vec<Box<NodeStatement<'input>>>,
 }
+
+pub struct LibraryImport<'input> {
+    pub uri: &'input str,
+    pub identifier: Option<Identifier<'input>>,
+}
+
 pub struct FunctionSignature<'input> {
     pub return_type: Option<DartType<'input>>,
     pub name: Identifier<'input>,

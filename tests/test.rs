@@ -444,7 +444,7 @@ fn import_libraries() {
         elaphe::run(
             &output,
             "
-        import 'py:math';
+        import 'elaphe/math.d.dart';
 
         main() {
             var x = math.sqrt(4);

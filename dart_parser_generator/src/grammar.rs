@@ -5,18 +5,18 @@ pub const START_SYMBOL: &'static str = "LibraryDeclaration";
 pub const EPSILON: &'static str = "[EMPTY]";
 pub const END: &'static str = "[END]";
 
-const DART_GRAMMARS: [&'static str; 80] = [
+const DART_GRAMMARS: [&'static str; 86] = [
 // Variables
 "InitializedVariableDeclaration ::= DeclaredIdentifier
     |/ DeclaredIdentifier '=' Expression
     |/ InitializedVariableDeclaration ',' InitializedIdentifier",
-"InitializedIdentifier ::= 'Identifier'
-    |/ 'Identifier' '=' Expression",
+"InitializedIdentifier ::= Identifier
+    |/ Identifier '=' Expression",
 "InitializedIdentifierList ::= InitializedIdentifier
     |/ InitializedIdentifierList ',' InitializedIdentifier",
 // Functions
-"FunctionSignature ::= 'Identifier' FormalParameterList
-    |/ Type 'Identifier' FormalParameterList",
+"FunctionSignature ::= Identifier FormalParameterList
+    |/ Type Identifier FormalParameterList",
 "FunctionBody ::= BlockStatement
     |/ '=>' Expression ';'",
 "BlockStatement ::= '{' Statements '}'",
@@ -24,7 +24,7 @@ const DART_GRAMMARS: [&'static str; 80] = [
     |/ '(' NormalFormalParameterList ')'",
 "NormalFormalParameterList ::= NormalFormalParameter
     |/ NormalFormalParameterList ',' NormalFormalParameter",
-"NormalFormalParameter ::= 'Identifier'",
+"NormalFormalParameter ::= Identifier",
 "DeclaredIdentifier ::= 'var' Identifier
     |/ Type Identifier
     |/ 'late' 'var' Identifier
@@ -46,13 +46,13 @@ const DART_GRAMMARS: [&'static str; 80] = [
 "ExpressionListOpt ::= [EMPTY]
     |/ ExpressionList",
 "PrimaryExpression ::= '(' Expression ')'
-    |/ 'Null'
-    |/ 'Boolean'
-    |/ 'Number'
+    |/ 'NULL'
+    |/ 'BOOLEAN'
+    |/ 'NUMBER'
     |/ StringLiteralList
-    |/ 'Identifier'",
-"StringLiteralList ::= 'String'
-    |/ StringLiteralList 'String'",
+    |/ Identifier",
+"StringLiteralList ::= 'STRING'
+    |/ StringLiteralList 'STRING'",
 "ConditionalExpression ::= IfNullExpression
     |/ IfNullExpression '?' Expression : Expression",
 "IfNullExpression ::= LogicalOrExpression
@@ -90,7 +90,7 @@ const DART_GRAMMARS: [&'static str; 80] = [
 "PostfixExpression ::= PrimaryExpression
     |/ PostfixExpression Selector",
 "Selector ::= Arguments",
-"AssignableExpression ::= 'Identifier'",
+"AssignableExpression ::= Identifier",
 "Arguments ::= '(' ')'
     |/ '(' ArgumentList ')'",
 "ArgumentList ::= NormalArgument
@@ -145,17 +145,28 @@ const DART_GRAMMARS: [&'static str; 80] = [
     |/ 'catch' '(' Identifier ',' Identifier ')'",
 "FinallyPart ::= 'finally' BlockStatement",
 "ReturnStatement ::= 'return' ExpressionOpt ';'",
-"Label ::= 'Identifier' ':'",
+"Label ::= Identifier ':'",
 "BreakStatement ::= 'break' ';'
-    |/ 'break' 'Identifier' ';'",
+    |/ 'break' Identifier ';'",
 "ContinueStatement ::= 'continue' ';'
-    |/ 'continue' 'Identifier' ';'",
+    |/ 'continue' Identifier ';'",
 // Libraries and Scripts
-"LibraryDeclaration ::= TopLevelDeclarationList",
+"LibraryDeclaration ::= LibraryImportList TopLevelDeclarationList",
 "TopLevelDeclarationList ::= [EMPTY]
     |/ TopLevelDeclarationList TopLevelDeclaration",
 "TopLevelDeclaration ::= TopFunctionDeclaration
     |/ TopVariableDeclaration",
+"LibraryImportList ::= [EMPTY]
+    |/ LibraryImportList LibraryImport",
+"LibraryImport ::= 'import' Uri ';'
+    |/ 'import' Uri 'as' Identifier ';'
+    |/ 'import' Uri CombinatorList ';'
+    |/ 'import' Uri 'as' Identifier CombinatorList ';'",
+"Uri ::= 'STRING'",
+"CombinatorList ::= Combinator
+    |/ CombinatorList Combinator",
+"Combinator ::= 'show' IdentifierList
+    |/ 'hide' IdentifierList",
 "TopFunctionDeclaration ::= FunctionSignature FunctionBody",
 "TopVariableDeclaration ::= 'var' InitializedIdentifierList ';'
     |/ Type InitializedIdentifierList ';'
@@ -169,19 +180,22 @@ const DART_GRAMMARS: [&'static str; 80] = [
 "TypeNotFunction ::= 'void'
     |/ TypeNotVoidNotFunction",
 "TypeNotVoidNotFunction ::= TypeName",
-"TypeName ::= 'Identifier'",
+"TypeName ::= TypeIdentifier",
 "TypeArguments ::= '<' TypeList '>'",
 "TypeList ::= Type
     |/ TypeList ',' Type",
-];
 
-// const DART_GRAMMARS: [&'static str; 3] = [
-// "ArgumentList ::= '(' ExpressionList ')'",
-// "ExpressionList ::= [EMPTY]
-//     |/ Expression
-//     |/ ExpressionList ',' Expression",
-// "Expression ::= 'Number'",
-// ];
+// Identifier
+"Identifier ::= 'IDENTIFIER'",
+// "Identifier ::= 'IDENTIFIER'
+//     |/ BUILT_IN_IDENTIFIER
+//     |/ OTHER_IDENTIFIER",
+// "TypeIdentifier ::= 'IDENTIFIER'
+//     |/ OTHER_IDENTIFIER
+//     |/ 'dynamic'",
+// "BUILT_IN_IDENTIFIER ::= 'abstract' |/ 'as' |/ 'covariant' |/ 'deferred' |/ 'dynamic' |/ 'export' |/ 'external' |/ 'extension' |/ 'factory' |/ 'Function' |/ 'get' |/ 'implements' |/ 'import' |/ 'interface' |/ 'late' |/ 'library' |/ 'mixin' |/ 'operator' |/ 'part' |/ 'required' |/ 'set' |/ 'static' |/ 'typedef'",
+// "OTHER_IDENTIFIER ::= 'async' |/ 'hide' |/ 'of' |/ 'on' |/ 'show' |/ 'sync' |/ 'await' |/ 'yield'",
+];
 
 fn parse_rule(rule: &'static str) -> (&'static str, Vec<ProductionRuleData>) {
     let mut rule_parts = rule.split("::=");

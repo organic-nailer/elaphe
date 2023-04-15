@@ -9,6 +9,8 @@ pub enum TokenKind {
     Null,
     Keyword,
     Identifier,
+    BuiltInIdentifier,
+    OtherIdentifier,
     Symbol,
     EOF,
 }
@@ -22,12 +24,15 @@ pub struct Token<'input> {
 impl Token<'_> {
     pub fn kind_str(&self) -> String {
         match self.kind {
-            TokenKind::Keyword | TokenKind::Symbol => self.str.to_string(),
-            TokenKind::Number => String::from("Number"),
-            TokenKind::String => String::from("String"),
-            TokenKind::Boolean => String::from("Boolean"),
-            TokenKind::Null => String::from("Null"),
-            TokenKind::Identifier => String::from("Identifier"),
+            TokenKind::Keyword
+            | TokenKind::Symbol
+            | TokenKind::BuiltInIdentifier
+            | TokenKind::OtherIdentifier => self.str.to_string(),
+            TokenKind::Number => String::from("NUMBER"),
+            TokenKind::String => String::from("STRING"),
+            TokenKind::Boolean => String::from("BOOLEAN"),
+            TokenKind::Null => String::from("NULL"),
+            TokenKind::Identifier => String::from("IDENTIFIER"),
             TokenKind::EOF => String::from(END),
         }
     }
@@ -169,6 +174,28 @@ pub fn tokenize<'input>(input: &'input str) -> Vec<Token<'input>> {
                     str: keyword,
                 });
                 current_index += keyword.len();
+                continue 'tokenize;
+            }
+        }
+
+        for identifier in BUILT_IN_IDENTIFIER.iter() {
+            if input[current_index..].starts_with(identifier) {
+                tokens.push(Token {
+                    kind: TokenKind::Keyword,
+                    str: identifier,
+                });
+                current_index += identifier.len();
+                continue 'tokenize;
+            }
+        }
+
+        for identifier in OTHER_IDENTIFIER.iter() {
+            if input[current_index..].starts_with(identifier) {
+                tokens.push(Token {
+                    kind: TokenKind::Keyword,
+                    str: identifier,
+                });
+                current_index += identifier.len();
                 continue 'tokenize;
             }
         }

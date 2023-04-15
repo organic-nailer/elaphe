@@ -1,7 +1,7 @@
 use std::error::Error;
 
 use super::{
-    node::{LibraryDeclaration, NodeStatement},
+    node::{LibraryDeclaration, LibraryImport, NodeStatement},
     node_internal::NodeInternal,
     parse_functions::{parse_function_body, parse_function_signature},
     parse_variables::parse_initialized_identifier_list,
@@ -12,7 +12,8 @@ pub fn parse_library<'input>(
     node: &NodeInternal<'input>,
 ) -> Result<LibraryDeclaration<'input>, Box<dyn Error>> {
     Ok(LibraryDeclaration {
-        top_level_declaration_list: parse_top_level_declaration_list(&node.children[0])?,
+        import_list: parse_library_import_list(&node.children[0])?,
+        top_level_declaration_list: parse_top_level_declaration_list(&node.children[1])?,
     })
 }
 
@@ -52,6 +53,36 @@ fn parse_top_level_declaration<'input>(
     }
 
     Err(gen_error("parse_top_level_declaration", &node.rule_name))
+}
+
+fn parse_library_import_list<'input>(
+    node: &NodeInternal<'input>,
+) -> Result<Vec<LibraryImport<'input>>, Box<dyn Error>> {
+    if node.rule_name == "LibraryImportList" {
+        if node.children.len() == 0 {
+            return Ok(vec![]);
+        } else {
+            return flatten(
+                parse_library_import_list(&node.children[0]),
+                parse_library_import(&node.children[1])?,
+            );
+        }
+    }
+
+    Err(gen_error("parse_library_import_list", &node.rule_name))
+}
+
+fn parse_library_import<'input>(
+    node: &NodeInternal<'input>,
+) -> Result<LibraryImport<'input>, Box<dyn Error>> {
+    if node.rule_name == "LibraryImport" {
+        return Ok(LibraryImport {
+            uri: node.children[1].children[0].token.clone().unwrap().str,
+            identifier: None,
+        });
+    }
+
+    Err(gen_error("parse_library_import", &node.rule_name))
 }
 
 fn parse_top_function_declaration<'input>(
