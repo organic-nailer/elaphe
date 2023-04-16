@@ -38,11 +38,11 @@ impl Token<'_> {
     }
 }
 
-const RESERVED_KEYWORDS: [&'static str; 33] = [
+const RESERVED_KEYWORDS: [&'static str; 34] = [
     "assert", "break", "case", "catch", "class", "const", "continue", "default", "do", "else",
     "enum", "extends", "false", "final", "finally", "for", "if", "in", "is", "new", "null",
     "rethrow", "return", "super", "switch", "this", "throw", "true", "try", "var", "void", "while",
-    "with",
+    "with", "sl",
 ];
 
 const BUILT_IN_IDENTIFIER: [&'static str; 23] = [
@@ -90,8 +90,7 @@ pub fn tokenize<'input>(input: &'input str) -> Vec<Token<'input>> {
     let regex_multi_comment = Regex::new(r"^/\*(.|\n)*?\*/").unwrap();
     let regex_string = Regex::new(r#"^(('[^\\'$]*')|("[^\\"$]*"))"#).unwrap();
     let regex_number = Regex::new(r"^((0(x|X)[a-fA-F0-9]+)|((([0-9]+(\.[0-9]+)?((e|E)(\+|-)?[0-9]+)?)|(\.[0-9]+((e|E)(\+|-)?[0-9]+)?))))").unwrap();
-    let regex_boolean = Regex::new(r"^(true|false)").unwrap();
-    let regex_identifier = Regex::new(r"^[a-zA-Z_\$][0-9a-zA-Z_\$]*").unwrap();
+    let regex_identifier_or_keyword = Regex::new(r"^[a-zA-Z_\$][0-9a-zA-Z_\$]*").unwrap();
 
     'tokenize: loop {
         if current_index >= input.len() {
@@ -146,73 +145,55 @@ pub fn tokenize<'input>(input: &'input str) -> Vec<Token<'input>> {
             None => {}
         }
 
-        match regex_boolean.find(&input[current_index..]) {
-            Some(boolean) => {
-                tokens.push(Token {
-                    kind: TokenKind::Boolean,
-                    str: &input[current_index..current_index + boolean.end()],
-                });
-                current_index += boolean.end();
-                continue 'tokenize;
-            }
-            None => {}
-        }
-
-        if input[current_index..].starts_with("null") {
-            tokens.push(Token {
-                kind: TokenKind::Null,
-                str: "null",
-            });
-            current_index += 4;
-            continue 'tokenize;
-        }
-
-        let mut reserved_keywords = RESERVED_KEYWORDS.clone();
-        reserved_keywords.sort_by(|a, b| b.len().cmp(&a.len()));
-        for keyword in reserved_keywords.iter() {
-            if input[current_index..].starts_with(keyword) {
-                tokens.push(Token {
-                    kind: TokenKind::Keyword,
-                    str: keyword,
-                });
-                current_index += keyword.len();
-                continue 'tokenize;
-            }
-        }
-
-        let mut built_in_identifier = BUILT_IN_IDENTIFIER.clone();
-        built_in_identifier.sort_by(|a, b| b.len().cmp(&a.len()));
-        for identifier in built_in_identifier.iter() {
-            if input[current_index..].starts_with(identifier) {
-                tokens.push(Token {
-                    kind: TokenKind::BuiltInIdentifier,
-                    str: identifier,
-                });
-                current_index += identifier.len();
-                continue 'tokenize;
-            }
-        }
-
-        let mut other_identifier = OTHER_IDENTIFIER.clone();
-        other_identifier.sort_by(|a, b| b.len().cmp(&a.len()));
-        for identifier in other_identifier.iter() {
-            if input[current_index..].starts_with(identifier) {
-                tokens.push(Token {
-                    kind: TokenKind::OtherIdentifier,
-                    str: identifier,
-                });
-                current_index += identifier.len();
-                continue 'tokenize;
-            }
-        }
-
-        match regex_identifier.find(&input[current_index..]) {
-            Some(identifier) => {
+        match regex_identifier_or_keyword.find(&input[current_index..]) {
+            Some(identifier_or_keyword) => {
+                let identifier_or_keyword =
+                    &input[current_index..current_index + identifier_or_keyword.end()];
+                if identifier_or_keyword == "true" || identifier_or_keyword == "false" {
+                    tokens.push(Token {
+                        kind: TokenKind::Boolean,
+                        str: identifier_or_keyword,
+                    });
+                    current_index += identifier_or_keyword.len();
+                    continue 'tokenize;
+                }
+                if identifier_or_keyword == "null" {
+                    tokens.push(Token {
+                        kind: TokenKind::Null,
+                        str: identifier_or_keyword,
+                    });
+                    current_index += identifier_or_keyword.len();
+                    continue 'tokenize;
+                }
+                if RESERVED_KEYWORDS.contains(&identifier_or_keyword) {
+                    tokens.push(Token {
+                        kind: TokenKind::Keyword,
+                        str: identifier_or_keyword,
+                    });
+                    current_index += identifier_or_keyword.len();
+                    continue 'tokenize;
+                }
+                if BUILT_IN_IDENTIFIER.contains(&identifier_or_keyword) {
+                    tokens.push(Token {
+                        kind: TokenKind::BuiltInIdentifier,
+                        str: identifier_or_keyword,
+                    });
+                    current_index += identifier_or_keyword.len();
+                    continue 'tokenize;
+                }
+                if OTHER_IDENTIFIER.contains(&identifier_or_keyword) {
+                    tokens.push(Token {
+                        kind: TokenKind::OtherIdentifier,
+                        str: identifier_or_keyword,
+                    });
+                    current_index += identifier_or_keyword.len();
+                    continue 'tokenize;
+                }
                 tokens.push(Token {
                     kind: TokenKind::Identifier,
-                    str: &input[current_index..current_index + identifier.end()],
+                    str: identifier_or_keyword,
                 });
-                current_index += identifier.end();
+                current_index += identifier_or_keyword.len();
                 continue 'tokenize;
             }
             None => {}
@@ -324,6 +305,46 @@ mod tests {
                 Token {
                     kind: TokenKind::Null,
                     str: "null",
+                },
+                Token {
+                    kind: TokenKind::EOF,
+                    str: ""
+                }
+            ]
+        );
+
+        let source = "var truely = true; as finally";
+        let result = tokenize(source);
+        assert_eq!(
+            result,
+            vec![
+                Token {
+                    kind: TokenKind::Keyword,
+                    str: "var",
+                },
+                Token {
+                    kind: TokenKind::Identifier,
+                    str: "truely",
+                },
+                Token {
+                    kind: TokenKind::Symbol,
+                    str: "=",
+                },
+                Token {
+                    kind: TokenKind::Boolean,
+                    str: "true",
+                },
+                Token {
+                    kind: TokenKind::Symbol,
+                    str: ";",
+                },
+                Token {
+                    kind: TokenKind::BuiltInIdentifier,
+                    str: "as",
+                },
+                Token {
+                    kind: TokenKind::Keyword,
+                    str: "finally",
                 },
                 Token {
                     kind: TokenKind::EOF,
