@@ -4,12 +4,12 @@ use std::{cell::RefCell, collections::HashMap};
 use crate::bytecode::ByteCode;
 use crate::executioncontext::{BlockContext, ExecutionContext, VariableScope};
 use crate::parser::node::{
-    CollectionElement, DartType, FunctionParamSignature, Identifier, LibraryImport, NodeExpression,
+    CollectionElement, DartType, FunctionParamSignature, LibraryImport, NodeExpression,
     NodeStatement, Selector,
 };
 use crate::{bytecode::OpCode, pyobject::PyObject};
 
-// use self::runclass::run_class;
+use self::runclass::run_class;
 use self::runfunction::run_function;
 
 pub mod runclass;
@@ -164,6 +164,34 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     None,
                     |_| (),
                 );
+            }
+            NodeStatement::ClassDeclaration {
+                identifier,
+                member_list,
+            } => {
+                self.push_op(OpCode::LoadBuildClass);
+
+                let name = identifier.value.to_string();
+                self.push_load_const(run_class(
+                    &"main.py".to_string(),
+                    &name,
+                    member_list,
+                    self,
+                    self.source,
+                ));
+
+                self.push_load_const(PyObject::new_string(name.clone(), false));
+
+                self.push_op(OpCode::MakeFunction(0));
+
+                self.push_load_const(PyObject::new_string(name.clone(), false));
+
+                self.push_op(OpCode::CallFunction(2));
+
+                let p = (**self.context_stack.last().unwrap())
+                    .borrow_mut()
+                    .declare_variable(&name);
+                self.push_op(OpCode::StoreName(p));
             }
             NodeStatement::VariableDeclarationList { decl_list } => {
                 for declaration in decl_list {
@@ -587,6 +615,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     None => panic!("continue statement is not available here"),
                 },
             },
+            NodeStatement::Empty => {}
         }
     }
 
@@ -924,6 +953,15 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 } else {
                     panic!("Invalid AST. Increment target must be an identifier.");
                 }
+            }
+            NodeExpression::This => {
+                let p = self
+                    .context_stack
+                    .last()
+                    .unwrap()
+                    .borrow()
+                    .get_local_variable(&"self".to_string());
+                self.push_op(OpCode::LoadFast(p));
             }
             NodeExpression::NullLiteral => {
                 self.push_load_const(PyObject::None(false));
@@ -1573,15 +1611,6 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
         //         self.compile(expr, None);
         //         self.push_op(OpCode::RaiseVarargs(1));
         //     }
-        //     Node::ThisExpression => {
-        //         let p = self
-        //             .context_stack
-        //             .last()
-        //             .unwrap()
-        //             .borrow()
-        //             .get_local_variable(&"self".to_string());
-        //         self.push_op(OpCode::LoadFast(p));
-        //     }
 
         //     Node::LabeledStatement { label, stmt } => {
         //         let label_str = label.value.to_string();
@@ -1630,7 +1659,6 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
         //             None => panic!("continue statement is not available here"),
         //         },
         //     },
-        //     Node::EmptyStatement => {}
 
         //     Node::VariableDeclarationList { decl_list } => {
         //         for declaration in decl_list {
@@ -1673,34 +1701,6 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
         //             None,
         //             |_| (),
         //         );
-        //     }
-        //     Node::ClassDeclaration {
-        //         identifier,
-        //         member_list,
-        //     } => {
-        //         self.push_op(OpCode::LoadBuildClass);
-
-        //         let name = identifier.value.to_string();
-        //         self.push_load_const(run_class(
-        //             &"main.py".to_string(),
-        //             &name,
-        //             member_list,
-        //             self,
-        //             self.source,
-        //         ));
-
-        //         self.push_load_const(PyObject::new_string(name.clone(), false));
-
-        //         self.push_op(OpCode::MakeFunction(0));
-
-        //         self.push_load_const(PyObject::new_string(name.clone(), false));
-
-        //         self.push_op(OpCode::CallFunction(2));
-
-        //         let p = (**self.context_stack.last().unwrap())
-        //             .borrow_mut()
-        //             .declare_variable(&name);
-        //         self.push_op(OpCode::StoreName(p));
         //     }
         // }
     }

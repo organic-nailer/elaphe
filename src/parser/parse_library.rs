@@ -3,6 +3,7 @@ use std::error::Error;
 use super::{
     node::{LibraryDeclaration, LibraryImport, NodeStatement},
     node_internal::NodeInternal,
+    parse_class::parse_class_declaration,
     parse_functions::{parse_function_body, parse_function_signature},
     parse_variables::parse_initialized_identifier_list,
     util::{flatten, gen_error},
@@ -47,6 +48,9 @@ fn parse_top_level_declaration<'input>(
             }
             "TopVariableDeclaration" => {
                 return Ok(parse_top_variable_declaration(&node.children[0])?);
+            }
+            "ClassDeclaration" => {
+                return Ok(parse_class_declaration(&node.children[0])?);
             }
             _ => {}
         }

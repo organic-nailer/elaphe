@@ -11,6 +11,7 @@ use self::{node::*, node_internal::NodeInternal};
 
 pub mod node;
 mod node_internal;
+mod parse_class;
 mod parse_expression;
 mod parse_functions;
 mod parse_identifier;

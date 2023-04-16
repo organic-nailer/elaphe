@@ -41,6 +41,7 @@ pub fn parse_expression<'input>(
         "NUMBER" => Ok(NodeExpression::NumericLiteral {
             value: node.token.clone().unwrap().str,
         }),
+        "ThisExpression" => Ok(NodeExpression::This),
         "StringLiteralList" => Ok(NodeExpression::StringLiteral {
             str_list: parse_string_literal_list(&node)?,
         }),

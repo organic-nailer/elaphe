@@ -5,7 +5,7 @@ pub const START_SYMBOL: &'static str = "LibraryDeclaration";
 pub const EPSILON: &'static str = "[EMPTY]";
 pub const END: &'static str = "[END]";
 
-const DART_GRAMMARS: [&'static str; 125] = [
+const DART_GRAMMARS: [&'static str; 131] = [
 // Variables
 "InitializedVariableDeclaration ::= DeclaredIdentifier
     |/ DeclaredIdentifier '=' Expression
@@ -56,6 +56,22 @@ const DART_GRAMMARS: [&'static str; 125] = [
     |/ 'final' Type Identifier
     |/ 'late' 'final' Identifier
     |/ 'late' 'final' Type Identifier",
+// Classes
+"ClassDeclaration ::= 'class' Identifier '{' '}'
+    |/ 'class' Identifier '{' ClassDeclarationInternal '}'",
+"ClassDeclarationInternal ::= ClassMemberDeclaration
+    |/ ClassDeclarationInternal ClassMemberDeclaration",
+"ClassMemberDeclaration ::= Declaration ';'
+    |/ MemberImpl",
+"MemberImpl ::= FunctionSignature FunctionBody",
+"Declaration ::= 'var' InitializedIdentifierList
+    |/ Type InitializedIdentifierList
+    |/ 'late' 'var' InitializedIdentifierList
+    |/ 'late' Type InitializedIdentifierList
+    |/ 'final' InitializedIdentifierList
+    |/ 'final' Type InitializedIdentifierList
+    |/ 'late' 'final' InitializedIdentifierList
+    |/ 'late' 'final' Type InitializedIdentifierList",
 // Expressions
 "Expression ::= SelectorExpression AssignmentOperator Expression
     |/ ConditionalExpression
@@ -74,6 +90,7 @@ const DART_GRAMMARS: [&'static str; 125] = [
     |/ 'NULL'
     |/ 'BOOLEAN'
     |/ 'NUMBER'
+    |/ ThisExpression
     |/ StringLiteralList
     |/ ListLiteral
     |/ SetOrMapLiteral
@@ -82,6 +99,7 @@ const DART_GRAMMARS: [&'static str; 125] = [
     |/ 'NULL'
     |/ 'BOOLEAN'
     |/ 'NUMBER'
+    |/ ThisExpression
     |/ StringLiteralList
     |/ ListLiteral
     |/ SetOrMapLiteralNotBrace
@@ -118,6 +136,7 @@ const DART_GRAMMARS: [&'static str; 125] = [
 "ExpressionElement ::= Expression",
 "MapElement ::= Expression ':' Expression",
 "ThrowExpression ::= 'throw' Expression",
+"ThisExpression ::= 'this'",
 "ConditionalExpression ::= IfNullExpression
     |/ IfNullExpression '?' Expression : Expression",
 "ConditionalExpressionNotBrace ::= IfNullExpressionNotBrace
@@ -264,7 +283,8 @@ const DART_GRAMMARS: [&'static str; 125] = [
 "LibraryDeclaration ::= LibraryImportList TopLevelDeclarationList",
 "TopLevelDeclarationList ::= [EMPTY]
     |/ TopLevelDeclarationList TopLevelDeclaration",
-"TopLevelDeclaration ::= TopFunctionDeclaration
+"TopLevelDeclaration ::= ClassDeclaration
+    |/ TopFunctionDeclaration
     |/ TopVariableDeclaration",
 "LibraryImportList ::= [EMPTY]
     |/ LibraryImportList LibraryImport",

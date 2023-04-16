@@ -23,6 +23,7 @@ pub enum NodeExpression<'input> {
         is_prefix: bool,
         child: Box<NodeExpression<'input>>,
     },
+    This,
     NullLiteral,
     BooleanLiteral {
         value: &'input str,
@@ -64,6 +65,10 @@ pub enum NodeStatement<'input> {
     FunctionDeclaration {
         signature: FunctionSignature<'input>,
         body: Box<NodeStatement<'input>>,
+    },
+    ClassDeclaration {
+        identifier: Identifier<'input>,
+        member_list: Vec<Member<'input>>,
     },
     VariableDeclarationList {
         decl_list: Vec<VariableDeclaration<'input>>,
@@ -116,6 +121,7 @@ pub enum NodeStatement<'input> {
     ContinueStatement {
         label: Option<Identifier<'input>>,
     },
+    Empty,
 }
 
 pub enum Selector<'input> {
@@ -225,5 +231,24 @@ pub enum CollectionElement<'input> {
     MapElement {
         key_expr: Box<NodeExpression<'input>>,
         value_expr: Box<NodeExpression<'input>>,
+    },
+}
+
+pub struct ConstructorSignature<'input> {
+    pub name: Option<Identifier<'input>>,
+    pub param: FunctionParamSignature<'input>,
+}
+
+pub enum Member<'input> {
+    MethodImpl {
+        signature: FunctionSignature<'input>,
+        body: Box<NodeStatement<'input>>,
+    },
+    ConstructorImpl {
+        signature: ConstructorSignature<'input>,
+        body: Box<NodeStatement<'input>>,
+    },
+    VariableDecl {
+        decl_list: Vec<VariableDeclaration<'input>>,
     },
 }
