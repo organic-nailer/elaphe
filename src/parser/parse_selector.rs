@@ -5,6 +5,7 @@ use super::{
     node_internal::NodeInternal,
     parse_expression::parse_expression,
     parse_identifier::parse_identifier,
+    parse_statement::parse_label,
     util::{flatten, gen_error},
 };
 
@@ -85,13 +86,18 @@ fn parse_arguments<'input>(
     Err(gen_error("parse_arguments", &node.rule_name))
 }
 
-fn parse_normal_argument<'input>(
+fn parse_argument_item<'input>(
     node: &NodeInternal<'input>,
 ) -> Result<CallParameter<'input>, Box<dyn Error>> {
     if node.rule_name == "NormalArgument" {
         return Ok(CallParameter {
             identifier: None,
             expr: Box::new(parse_expression(&node.children[0])?),
+        });
+    } else if node.rule_name == "NamedArgument" {
+        return Ok(CallParameter {
+            identifier: Some(parse_label(&node.children[0])?),
+            expr: Box::new(parse_expression(&node.children[1])?),
         });
     }
 
@@ -103,11 +109,11 @@ fn parse_argument_list<'input>(
 ) -> Result<Vec<CallParameter<'input>>, Box<dyn Error>> {
     if node.rule_name == "ArgumentList" {
         if node.children.len() == 1 {
-            return Ok(vec![parse_normal_argument(&node.children[0])?]);
+            return Ok(vec![parse_argument_item(&node.children[0])?]);
         } else {
             return flatten(
                 parse_argument_list(&node.children[0]),
-                parse_normal_argument(&node.children[2])?,
+                parse_argument_item(&node.children[2])?,
             );
         }
     }

@@ -5,7 +5,7 @@ pub const START_SYMBOL: &'static str = "LibraryDeclaration";
 pub const EPSILON: &'static str = "[EMPTY]";
 pub const END: &'static str = "[END]";
 
-const DART_GRAMMARS: [&'static str; 117] = [
+const DART_GRAMMARS: [&'static str; 125] = [
 // Variables
 "InitializedVariableDeclaration ::= DeclaredIdentifier
     |/ DeclaredIdentifier '=' Expression
@@ -21,10 +21,31 @@ const DART_GRAMMARS: [&'static str; 117] = [
     |/ '=>' Expression ';'",
 "BlockStatement ::= '{' Statements '}'",
 "FormalParameterList ::= '(' ')'
-    |/ '(' NormalFormalParameterList ')'",
+    |/ '(' NormalFormalParameterList CommaOpt ')'
+    |/ '(' NormalFormalParameterList ',' OptionalOrNamedFormalParameterList ')'
+    |/ '(' OptionalOrNamedFormalParameterList ')'",
 "NormalFormalParameterList ::= NormalFormalParameter
     |/ NormalFormalParameterList ',' NormalFormalParameter",
-"NormalFormalParameter ::= Identifier",
+"OptionalOrNamedFormalParameterList ::= OptionalPositionalFormalParameterList
+    |/ NamedFormalParameterList",
+"OptionalPositionalFormalParameterList ::= '[' OptionalPositionalFormalParameterListInternal CommaOpt ']'",
+"OptionalPositionalFormalParameterListInternal ::= DefaultFormalParameter
+    |/ OptionalPositionalFormalParameterListInternal ',' DefaultFormalParameter",
+"NamedFormalParameterList ::= '{' NamedFormalParameterListInternal CommaOpt '}'",
+"NamedFormalParameterListInternal ::= DefaultNamedParameter
+    |/ NamedFormalParameterListInternal ',' DefaultNamedParameter",
+"NormalFormalParameter ::= Identifier
+    |/ DeclaredIdentifier",
+"DefaultFormalParameter ::= NormalFormalParameter
+    |/ NormalFormalParameter '=' Expression",
+"DefaultNamedParameter ::= Identifier
+    |/ DeclaredIdentifier
+    |/ DeclaredIdentifier '=' Expression
+    |/ Identifier ':' Expression
+    |/ 'required' Identifier
+    |/ 'required' DeclaredIdentifier
+    |/ 'required' DeclaredIdentifier '=' Expression
+    |/ 'required' Identifier ':' Expression",
 "DeclaredIdentifier ::= 'var' Identifier
     |/ Type Identifier
     |/ 'late' 'var' Identifier
@@ -180,7 +201,10 @@ const DART_GRAMMARS: [&'static str; 117] = [
 "Arguments ::= '(' ')'
     |/ '(' ArgumentList ')'",
 "ArgumentList ::= NormalArgument
-    |/ ArgumentList ',' NormalArgument",
+    |/ NamedArgument
+    |/ ArgumentList ',' NormalArgument
+    |/ ArgumentList ',' NamedArgument",
+"NamedArgument ::= Label Expression",
 "NormalArgument ::= Expression",
 // Statements
 "Statements ::= [EMPTY]

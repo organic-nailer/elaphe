@@ -413,7 +413,9 @@ fn parse_continue_statement<'input>(
     Err(gen_error("parse_continue_statement", &node.rule_name))
 }
 
-fn parse_label<'input>(node: &NodeInternal<'input>) -> Result<Identifier<'input>, Box<dyn Error>> {
+pub fn parse_label<'input>(
+    node: &NodeInternal<'input>,
+) -> Result<Identifier<'input>, Box<dyn Error>> {
     if node.rule_name == "Label" {
         return Ok(parse_identifier(&node.children[0])?);
     }

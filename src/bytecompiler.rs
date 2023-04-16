@@ -4,7 +4,8 @@ use std::{cell::RefCell, collections::HashMap};
 use crate::bytecode::ByteCode;
 use crate::executioncontext::{BlockContext, ExecutionContext, VariableScope};
 use crate::parser::node::{
-    CollectionElement, DartType, Identifier, LibraryImport, NodeExpression, NodeStatement, Selector,
+    CollectionElement, DartType, FunctionParamSignature, Identifier, LibraryImport, NodeExpression,
+    NodeStatement, Selector,
 };
 use crate::{bytecode::OpCode, pyobject::PyObject};
 
@@ -1707,8 +1708,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
     fn compile_declare_function<F: FnOnce(&mut ByteCompiler<'ctx, 'value>)>(
         &mut self,
         name: &String,
-        param: &Vec<Identifier<'value>>,
-        // param: &'value FunctionParamSignature,
+        param: &'value FunctionParamSignature,
         body: &'value Box<NodeStatement>,
         function_name_prefix: Option<String>,
         implicit_arg: Option<&String>,
@@ -1718,30 +1718,24 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
         if let Some(name) = implicit_arg {
             argument_list.push(name.clone());
         }
-        for p in param {
-            let name = p.value.to_string();
+        for p in &param.normal_list {
+            let name = p.identifier.value.to_string();
             argument_list.push(name);
         }
-        let num_normal_args = param.len() as u32;
-        let num_kw_only_args = 0;
-        // for p in &param.normal_list {
-        //     let name = p.identifier.value.to_string();
-        //     argument_list.push(name);
-        // }
-        // for p in &param.option_list {
-        //     let name = p.identifier.value.to_string();
-        //     argument_list.push(name);
-        // }
-        // for p in &param.named_list {
-        //     let name = p.identifier.value.to_string();
-        //     argument_list.push(name);
-        // }
+        for p in &param.option_list {
+            let name = p.identifier.value.to_string();
+            argument_list.push(name);
+        }
+        for p in &param.named_list {
+            let name = p.identifier.value.to_string();
+            argument_list.push(name);
+        }
 
-        // let mut num_normal_args = param.normal_list.len() as u32 + param.option_list.len() as u32;
-        // if implicit_arg.is_some() {
-        //     num_normal_args += 1;
-        // }
-        // let num_kw_only_args = param.named_list.len() as u32;
+        let mut num_normal_args = param.normal_list.len() as u32 + param.option_list.len() as u32;
+        if implicit_arg.is_some() {
+            num_normal_args += 1;
+        }
+        let num_kw_only_args = param.named_list.len() as u32;
         let py_code = run_function(
             &"main.py".to_string(),
             &name,
@@ -1755,46 +1749,46 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             preface,
         );
 
-        // // 通常引数のデフォルト値の設定
-        // let has_default = !param.option_list.is_empty();
-        // if has_default {
-        //     let size = param.option_list.len() as u8;
-        //     for v in &param.option_list {
-        //         match &v.expr {
-        //             Some(expr) => {
-        //                 self.compile(expr, None);
-        //             }
-        //             None => {
-        //                 self.push_load_const(PyObject::None(false));
-        //             }
-        //         }
-        //     }
-        //     self.push_op(OpCode::BuildTuple(size));
-        // }
+        // 通常引数のデフォルト値の設定
+        let has_default = !param.option_list.is_empty();
+        if has_default {
+            let size = param.option_list.len() as u8;
+            for v in &param.option_list {
+                match &v.expr {
+                    Some(expr) => {
+                        self.compile_expr(expr);
+                    }
+                    None => {
+                        self.push_load_const(PyObject::None(false));
+                    }
+                }
+            }
+            self.push_op(OpCode::BuildTuple(size));
+        }
 
-        // // キーワード引数のデフォルト値の設定
-        // let has_kw_default = param.named_list.iter().any(|v| v.expr.is_some());
-        // if has_kw_default {
-        //     let mut name_list: Vec<&str> = vec![];
-        //     for v in &param.named_list {
-        //         match &v.expr {
-        //             Some(expr) => {
-        //                 self.compile(expr, None);
-        //                 name_list.push(v.identifier.value);
-        //             }
-        //             None => (),
-        //         }
-        //     }
-        //     self.push_load_const(PyObject::SmallTuple {
-        //         children: name_list
-        //             .iter()
-        //             .map(|v| PyObject::new_string(v.to_string(), false))
-        //             .collect(),
-        //         add_ref: false,
-        //     });
-        //     let size = name_list.len() as u8;
-        //     self.push_op(OpCode::BuildConstKeyMap(size));
-        // }
+        // キーワード引数のデフォルト値の設定
+        let has_kw_default = param.named_list.iter().any(|v| v.expr.is_some());
+        if has_kw_default {
+            let mut name_list: Vec<&str> = vec![];
+            for v in &param.named_list {
+                match &v.expr {
+                    Some(expr) => {
+                        self.compile_expr(expr);
+                        name_list.push(v.identifier.value);
+                    }
+                    None => (),
+                }
+            }
+            self.push_load_const(PyObject::SmallTuple {
+                children: name_list
+                    .iter()
+                    .map(|v| PyObject::new_string(v.to_string(), false))
+                    .collect(),
+                add_ref: false,
+            });
+            let size = name_list.len() as u8;
+            self.push_op(OpCode::BuildConstKeyMap(size));
+        }
 
         // アノテーションは未実装
         // クロージャは未実装
@@ -1811,8 +1805,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             }
         }
         // 関数作成と収納
-        // let make_flag = (has_default as u8) | ((has_kw_default as u8) << 1);
-        let make_flag = 0;
+        let make_flag = (has_default as u8) | ((has_kw_default as u8) << 1);
         self.push_op(OpCode::MakeFunction(make_flag));
         let p = (**self.context_stack.last().unwrap())
             .borrow_mut()

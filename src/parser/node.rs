@@ -163,7 +163,18 @@ pub struct LibraryImport<'input> {
 pub struct FunctionSignature<'input> {
     pub return_type: Option<DartType<'input>>,
     pub name: Identifier<'input>,
-    pub param: Vec<Identifier<'input>>,
+    pub param: FunctionParamSignature<'input>,
+}
+
+pub struct FunctionParamSignature<'input> {
+    pub normal_list: Vec<FunctionParameter<'input>>,
+    pub option_list: Vec<FunctionParameter<'input>>,
+    pub named_list: Vec<FunctionParameter<'input>>,
+}
+
+pub struct FunctionParameter<'input> {
+    pub identifier: Identifier<'input>,
+    pub expr: Option<Box<NodeExpression<'input>>>,
 }
 
 pub enum DartType<'input> {
