@@ -20,7 +20,7 @@ pub fn parse_expression<'input>(
                 let left = parse_expression(&node.children[0])?;
                 let operator = &node.children[1].children[0].token.clone().unwrap().str;
                 let right = parse_expression(&node.children[2])?;
-                Ok(NodeExpression::AssignmentExpression {
+                Ok(NodeExpression::Assignment {
                     operator,
                     left: Box::new(left),
                     right: Box::new(right),

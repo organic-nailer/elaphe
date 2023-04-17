@@ -9,11 +9,6 @@ pub enum NodeExpression<'input> {
         true_expr: Box<NodeExpression<'input>>,
         false_expr: Box<NodeExpression<'input>>,
     },
-    AssignmentExpression {
-        operator: &'input str,
-        left: Box<NodeExpression<'input>>,
-        right: Box<NodeExpression<'input>>,
-    },
     Unary {
         operator: &'input str,
         expr: Box<NodeExpression<'input>>,
@@ -23,10 +18,10 @@ pub enum NodeExpression<'input> {
         is_prefix: bool,
         child: Box<NodeExpression<'input>>,
     },
-    This,
-    NullLiteral,
-    BooleanLiteral {
-        value: &'input str,
+    Assignment {
+        operator: &'input str,
+        left: Box<NodeExpression<'input>>,
+        right: Box<NodeExpression<'input>>,
     },
     NumericLiteral {
         value: &'input str,
@@ -34,18 +29,22 @@ pub enum NodeExpression<'input> {
     StringLiteral {
         str_list: Vec<&'input str>,
     },
+    BooleanLiteral {
+        value: &'input str,
+    },
+    NullLiteral,
+    ListLiteral {
+        element_list: Vec<CollectionElement<'input>>,
+    },
+    SetOrMapLiteral {
+        element_list: Vec<CollectionElement<'input>>,
+    },
     Identifier {
         identifier: Identifier<'input>,
     },
     Selector {
         child: Box<NodeExpression<'input>>,
         selector: Selector<'input>,
-    },
-    ListLiteral {
-        element_list: Vec<CollectionElement<'input>>,
-    },
-    SetOrMapLiteral {
-        element_list: Vec<CollectionElement<'input>>,
     },
     Slice {
         start: Option<Box<NodeExpression<'input>>>,
@@ -55,12 +54,33 @@ pub enum NodeExpression<'input> {
     Throw {
         expr: Box<NodeExpression<'input>>,
     },
+    This,
 }
 
 pub enum NodeStatement<'input> {
     Labeled {
         label: Identifier<'input>,
         stmt: Box<NodeStatement<'input>>,
+    },
+    Break {
+        label: Option<Identifier<'input>>,
+    },
+    Continue {
+        label: Option<Identifier<'input>>,
+    },
+    Return {
+        value: Option<Box<NodeExpression<'input>>>,
+    },
+    Empty,
+    Expression {
+        expr: Box<NodeExpression<'input>>,
+    },
+    Block {
+        statements: Vec<Box<NodeStatement<'input>>>,
+    },
+    Rethrow,
+    VariableDeclarationList {
+        decl_list: Vec<VariableDeclaration<'input>>,
     },
     FunctionDeclaration {
         signature: FunctionSignature<'input>,
@@ -70,58 +90,38 @@ pub enum NodeStatement<'input> {
         identifier: Identifier<'input>,
         member_list: Vec<Member<'input>>,
     },
-    VariableDeclarationList {
-        decl_list: Vec<VariableDeclaration<'input>>,
-    },
-    ExpressionStatement {
-        expr: Box<NodeExpression<'input>>,
-    },
-    BlockStatement {
-        statements: Vec<Box<NodeStatement<'input>>>,
-    },
-    IfStatement {
+    If {
         condition: Box<NodeExpression<'input>>,
         if_true_stmt: Box<NodeStatement<'input>>,
         if_false_stmt: Option<Box<NodeStatement<'input>>>,
     },
-    RethrowStatement,
-    TryFinallyStatement {
+    TryFinally {
         block_try: Box<NodeStatement<'input>>,
         block_finally: Box<NodeStatement<'input>>,
     },
-    TryOnStatement {
+    TryOn {
         block_try: Box<NodeStatement<'input>>,
         on_part_list: Vec<TryOnPart<'input>>,
     },
-    ForStatement {
+    For {
         init: Option<Box<NodeStatement<'input>>>,
         condition: Option<Box<NodeExpression<'input>>>,
         update: Option<Vec<Box<NodeExpression<'input>>>>,
         stmt: Box<NodeStatement<'input>>,
     },
-    WhileStatement {
+    While {
         condition: Box<NodeExpression<'input>>,
         stmt: Box<NodeStatement<'input>>,
     },
-    DoStatement {
+    Do {
         condition: Box<NodeExpression<'input>>,
         stmt: Box<NodeStatement<'input>>,
     },
-    ReturnStatement {
-        value: Option<Box<NodeExpression<'input>>>,
-    },
-    SwitchStatement {
+    Switch {
         expr: Box<NodeExpression<'input>>,
         case_list: Vec<SwitchCase<'input>>,
         default_case: Option<DefaultCase<'input>>,
     },
-    BreakStatement {
-        label: Option<Identifier<'input>>,
-    },
-    ContinueStatement {
-        label: Option<Identifier<'input>>,
-    },
-    Empty,
 }
 
 pub enum Selector<'input> {

@@ -19,7 +19,7 @@ pub fn parse_function_body<'input>(
         if node.children.len() == 1 {
             return parse_block_statement(&node.children[0]);
         } else {
-            return Ok(NodeStatement::ExpressionStatement {
+            return Ok(NodeStatement::Expression {
                 expr: Box::new(parse_expression(&node.children[1])?),
             });
         }
