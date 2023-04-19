@@ -2,14 +2,14 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::bytecode::{calc_stack_size, OpCode};
 use crate::executioncontext::{ExecutionContext, GlobalContext};
-use crate::parser::LibraryDeclaration;
+use crate::parser::node::LibraryDeclaration;
 use crate::pyobject::PyObject;
 
 use super::ByteCompiler;
 
 pub fn run_root<'value>(
     file_name: &String,
-    root_node: &'value LibraryDeclaration,
+    root_node: &'value LibraryDeclaration<'value>,
     source: &'value str,
 ) -> PyObject {
     let global_context = Rc::new(RefCell::new(GlobalContext {
@@ -40,7 +40,7 @@ pub fn run_root<'value>(
     }
 
     for node in &root_node.top_level_declaration_list {
-        compiler.compile(&node, None);
+        compiler.compile_stmt(&node, None);
     }
 
     // main関数を実行

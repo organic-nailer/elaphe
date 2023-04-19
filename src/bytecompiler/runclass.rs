@@ -2,8 +2,8 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::bytecode::{calc_stack_size, OpCode};
 use crate::executioncontext::{ClassContext, ExecutionContext, PyContext};
-use crate::parser::{
-    ConstructorSignature, FunctionParamSignature, Member, Node, VariableDeclaration,
+use crate::parser::node::{
+    ConstructorSignature, FunctionParamSignature, Member, NodeStatement, VariableDeclaration,
 };
 use crate::pyobject::PyObject;
 
@@ -98,7 +98,7 @@ pub fn run_class<'ctx, 'value, 'cpl>(
                 named_list: vec![],
             },
         },
-        body: Box::new(Node::EmptyStatement),
+        body: Box::new(NodeStatement::Empty),
     };
     if !instance_variable_declaration_list.is_empty() && primary_constructor.is_none() {
         primary_constructor = Some(&dummy_constructor);
@@ -165,7 +165,7 @@ fn compile_method<'ctx, 'value, 'cpl>(
 ) {
     if let Member::MethodImpl { signature, body } = node {
         let prefix = format!("{}{}", class_name, ".");
-        compiler.comiple_declare_function(
+        compiler.compile_declare_function(
             &signature.name.value.to_string(),
             &signature.param,
             &body,
@@ -186,7 +186,7 @@ fn compile_constructor<'ctx, 'value, 'cpl>(
         for decl_list in instance_variable_declaration_list {
             for decl in decl_list {
                 match &decl.expr {
-                    Some(expr) => compiler.compile(&*expr, None),
+                    Some(expr) => compiler.compile_expr(&*expr),
                     None => {
                         compiler.push_load_const(PyObject::None(false));
                     }
@@ -209,7 +209,7 @@ fn compile_constructor<'ctx, 'value, 'cpl>(
     match node {
         Member::MethodImpl { signature, body } => {
             let prefix = format!("{}{}", class_name, ".");
-            compiler.comiple_declare_function(
+            compiler.compile_declare_function(
                 &"__init__".to_string(),
                 &signature.param,
                 &body,
@@ -220,7 +220,7 @@ fn compile_constructor<'ctx, 'value, 'cpl>(
         }
         Member::ConstructorImpl { signature, body } => {
             let prefix = format!("{}{}", class_name, ".");
-            compiler.comiple_declare_function(
+            compiler.compile_declare_function(
                 &"__init__".to_string(),
                 &signature.param,
                 &body,

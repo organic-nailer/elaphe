@@ -39,6 +39,7 @@
                 }
             },
             "args": [
+                "run",
                 "main.dart"
             ],
             "cwd": "${workspaceFolder}"

@@ -2,7 +2,7 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::bytecode::{calc_stack_size, OpCode};
 use crate::executioncontext::{BlockContext, ExecutionContext, PyContext};
-use crate::parser::Node;
+use crate::parser::node::NodeStatement;
 use crate::pyobject::PyObject;
 
 use super::ByteCompiler;
@@ -15,7 +15,7 @@ pub fn run_function<'ctx, 'value, 'cpl, F: FnOnce(&mut ByteCompiler<'ctx, 'value
     num_pos_only_args: u32,
     num_kw_only_args: u32,
     outer_compiler: &'cpl ByteCompiler<'ctx, 'value>,
-    body: &'value Node,
+    body: &'value NodeStatement,
     source: &'value str,
     preface: F,
 ) -> PyObject {
@@ -49,7 +49,7 @@ pub fn run_function<'ctx, 'value, 'cpl, F: FnOnce(&mut ByteCompiler<'ctx, 'value
 
     preface(&mut compiler);
 
-    compiler.compile(body, None);
+    compiler.compile_stmt(body, None);
 
     compiler.push_load_const(PyObject::None(false));
     compiler.push_op(OpCode::ReturnValue);

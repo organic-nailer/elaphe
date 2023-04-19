@@ -1,76 +1,211 @@
+use dart_parser_generator::{
+    grammar::EPSILON,
+    parser_generator::{SerializableRule, State, TransitionData, TransitionMap},
+};
 use std::error::Error;
 
-use lrlex::lrlex_mod;
-use lrpar::lrpar_mod;
+use crate::tokenizer::Token;
 
-lrlex_mod!("grammar.l");
-lrpar_mod!("grammar.y");
+use self::parse_library::parse_library;
+use self::{node::*, node_internal::NodeInternal};
 
-pub use grammar_y::*;
+pub mod node;
+mod node_internal;
+mod parse_class;
+mod parse_expression;
+mod parse_functions;
+mod parse_identifier;
+mod parse_library;
+mod parse_literal;
+mod parse_selector;
+mod parse_statement;
+mod parse_type;
+mod parse_variables;
+mod util;
 
-pub fn parse(source: &str) -> Result<LibraryDeclaration, Box<dyn Error>> {
-    let lexerdef = grammar_l::lexerdef();
-    if source.trim().is_empty() {
-        return Err("source is empty".into());
+pub fn parse<'input>(
+    input: Vec<Token<'input>>,
+    transition_map: TransitionMap,
+) -> Result<LibraryDeclaration, Box<dyn Error>> {
+    let result = parse_internally(input, transition_map);
+    match result {
+        Ok(internal_node) => parse_library(&internal_node),
+        Err(e) => Err(e),
     }
-    let lexer = lexerdef.lexer(source);
-    let (res, err) = grammar_y::parse(&lexer);
-    if !err.is_empty() {
-        for e in err {
-            println!("{}", e.pp(&lexer, &grammar_y::token_epp));
-        }
-        return Err("there are parse error. aborting...".into());
-    }
-
-    match res {
-        Some(Ok(r)) => return Ok(r),
-        _ => return Err("parse failed".into()),
-    };
 }
 
-#[cfg(test)]
-mod tests {
-    use lrlex::{DefaultLexerTypes, LRNonStreamingLexer};
-    use lrpar::{Lexeme, Lexer};
+// 初期状態
+// input: token, token, token, token, ...
+// stack: (I0, _) ->
+// node_stack: ->
+// parse_index = 0
+// accepted = false
+//
+// 1. stackの一番上のstateとparse_index位置のinputのtokenからtrnasitionを取得
+// 2. transitionが存在しなければError
+// 3. transitionがShiftの場合:
+//    3.1. stackに遷移先のstateと現在のtokenを積む
+//    3.2. node_stackに現在のtokenをnodeとして積む
+//    3.3. parse_indexを1進める
+// 4. transitionがReduceの場合:
+//    4.1. child_sizeを決定(ruleの右辺がεの場合は0、それ以外はその長さ)
+//    4.2. child_sizeだけstackとnode_stackをpopし、node_stackの方はchildrenとする
+//    4.3. 還元したruleのnodeを作成
+//    4.4. 次のtransition判定は還元後のruleを使うのでここでshift情報をstackに積む(reduce/acceptは原理上起こらない)
+//    4.5. nodeをnode_stackに積む
+// 5. transitionがAcceptの場合:
+//    5.1. acceptをtrueにして終了
+fn parse_internally<'input>(
+    input: Vec<Token<'input>>,
+    transition_map: TransitionMap,
+) -> Result<NodeInternal<'input>, Box<dyn Error>> {
+    let mut stack: Vec<String> = Vec::new();
+    let node_stack: Vec<NodeInternal> = Vec::new();
+    let parse_index = 0;
 
-    use super::*;
+    stack.push(String::from("I0"));
 
-    fn lexer_result_to_vec<'a>(
-        result: LRNonStreamingLexer<DefaultLexerTypes>,
-        source: &'a str,
-    ) -> Vec<&'a str> {
-        result
-            .iter()
-            .map(|r| match r {
-                Ok(lexeme) => {
-                    let span = lexeme.span();
-                    return &source[span.start()..span.end()];
+    build_internal_node(&input, &transition_map, stack, node_stack, parse_index)
+}
+
+fn build_internal_node<'input>(
+    input: &Vec<Token<'input>>,
+    transition_map: &TransitionMap,
+    mut stack: Vec<State>,
+    mut node_stack: Vec<NodeInternal<'input>>,
+    mut parse_index: usize,
+) -> Result<NodeInternal<'input>, Box<dyn Error>> {
+    let mut accepted = false;
+    while parse_index < input.len() || !stack.is_empty() {
+        let transition = transition_map
+            .transitions
+            .get(&(stack.last().unwrap().clone(), input[parse_index].kind_str()));
+
+        if transition.is_none() {
+            return Err(format!(
+                "No Transition Error: {:?}, {}",
+                input[parse_index],
+                stack.last().unwrap()
+            )
+            .into());
+        }
+        let transition = transition.unwrap();
+        match transition {
+            TransitionData::Shift { target } => {
+                stack.push(target.clone());
+                node_stack.push(NodeInternal {
+                    rule_name: input[parse_index].kind_str(),
+                    token: Some(input[parse_index].clone()),
+                    children: Vec::new(),
+                });
+                parse_index += 1;
+            }
+            TransitionData::Reduce { rule } => {
+                reduce_rule(
+                    &mut stack,
+                    &mut node_stack,
+                    &transition_map,
+                    input[parse_index].clone(),
+                    rule,
+                )?;
+            }
+            TransitionData::Accept => {
+                accepted = true;
+                break;
+            }
+            TransitionData::ReduceReduceConflict { rules } => {
+                // 1つずつ試してみて、構文エラーが起きたら次のルールを試す
+                for selected_rule in rules {
+                    let mut copied_stack = stack.clone();
+                    let mut copied_node_stack = node_stack.clone();
+                    let token = input[parse_index].clone();
+
+                    let result = reduce_rule(
+                        &mut copied_stack,
+                        &mut copied_node_stack,
+                        &transition_map,
+                        token,
+                        selected_rule,
+                    );
+                    if result.is_err() {
+                        continue;
+                    }
+
+                    let result = build_internal_node(
+                        input,
+                        transition_map,
+                        copied_stack,
+                        copied_node_stack,
+                        parse_index,
+                    );
+                    match result {
+                        Ok(node) => {
+                            println!("Reduce-Reduce Conflict resolved: {:?}", selected_rule);
+                            return Ok(node);
+                        }
+                        Err(_) => {
+                            continue;
+                        }
+                    }
                 }
-                Err(e) => {
-                    panic!("Lex Error: {:?}", e);
-                }
-            })
-            .collect()
+
+                return Err("Reduce-Reduce Conflict".into());
+            }
+        }
     }
 
-    #[test]
-    fn lexer() {
-        let lexerdef = grammar_l::lexerdef();
+    if accepted {
+        Ok(node_stack.pop().unwrap())
+    } else {
+        panic!("Parse Error");
+    }
+}
 
-        let source = "1 + 2.3*.9e+3/10.2e-20 + 0x2A";
-        let result = lexerdef.lexer(source);
-        let result: Vec<&str> = lexer_result_to_vec(result, source);
-        assert_eq!(
-            result,
-            vec!["1", "+", "2.3", "*", ".9e+3", "/", "10.2e-20", "+", "0x2A"]
-        );
+fn reduce_rule<'input>(
+    stack: &mut Vec<State>,
+    node_stack: &mut Vec<NodeInternal<'input>>,
+    transition_map: &TransitionMap,
+    token: Token,
+    rule: &SerializableRule,
+) -> Result<(), Box<dyn Error>> {
+    let mut children = Vec::new();
+    let child_size = if rule.right.len() == 1 && rule.right[0] == EPSILON {
+        0
+    } else {
+        rule.right.len()
+    };
+    for _ in 0..child_size {
+        stack.pop();
+        children.push(node_stack.pop().unwrap());
+    }
+    children.reverse();
+    let new_node = NodeInternal {
+        rule_name: rule.left.to_string(),
+        token: None,
+        children,
+    };
+    node_stack.push(new_node);
 
-        let source = "'hoge ho123.4' + true + false +null";
-        let result = lexerdef.lexer(source);
-        let result: Vec<&str> = lexer_result_to_vec(result, source);
-        assert_eq!(
-            result,
-            vec!["'hoge ho123.4'", "+", "true", "+", "false", "+", "null"]
-        );
+    let next_transition = transition_map
+        .transitions
+        .get(&(stack.last().unwrap().clone(), rule.left.to_string()));
+    if next_transition.is_none() {
+        return Err(format!(
+            "No Transition Error: {:?}, {}",
+            token,
+            stack.last().unwrap()
+        )
+        .into());
+    }
+    if let TransitionData::Shift { target } = next_transition.unwrap() {
+        stack.push(target.clone());
+        Ok(())
+    } else {
+        return Err(format!(
+            "No Transition Error: {:?}, {}",
+            token,
+            stack.last().unwrap()
+        )
+        .into());
     }
 }

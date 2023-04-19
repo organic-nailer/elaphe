@@ -4,16 +4,25 @@ use std::io::Write;
 use std::path::Path;
 use std::time::SystemTime;
 
+use ciborium::de;
+use dart_parser_generator::parser_generator;
+use parser::node::LibraryDeclaration;
+
 mod bytecode;
 mod bytecompiler;
 mod executioncontext;
 mod parser;
 mod pyobject;
-
-use crate::parser::LibraryDeclaration;
+mod tokenizer;
 
 pub fn run(output: &str, source: &str) -> Result<(), ()> {
-    let node = parser::parse(source);
+    // Tokenize
+    let token_list = tokenizer::tokenize(source);
+
+    // Parse
+    let reader = std::fs::File::open(concat!(env!("OUT_DIR"), "/parser.bin")).unwrap();
+    let transition_map: parser_generator::TransitionMap = de::from_reader(reader).unwrap();
+    let node = parser::parse(token_list, transition_map);
     if node.is_err() {
         println!("{:?}", node.err());
         println!("failed to parse the passed source: {}", source);

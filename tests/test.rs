@@ -185,7 +185,20 @@ fn statement_list() {
 fn global_variable() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
-        elaphe::run(&output, "main() { {var x = 4;print(x*x);} }").expect("execution failed.");
+        elaphe::run(&output, "var x = 4; main() { {print(x*x);} }").expect("execution failed.");
+        exec_py_and_assert(&output, "16\n");
+    });
+    clean(&output);
+    if result.is_err() {
+        panic!("{:?}", result);
+    }
+}
+
+#[test]
+fn local_variable() {
+    let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
+    let result = catch_unwind(|| {
+        elaphe::run(&output, "main() { var x = 4; {print(x*x);} }").expect("execution failed.");
         exec_py_and_assert(&output, "16\n");
     });
     clean(&output);
@@ -431,7 +444,7 @@ fn import_libraries() {
         elaphe::run(
             &output,
             "
-        import 'py:math';
+        import 'elaphe/math.d.dart';
 
         main() {
             var x = math.sqrt(4);
@@ -955,6 +968,25 @@ fn slice() {
         )
         .expect("execution failed.");
         exec_py_and_assert(&output, "[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]\n[7, 8, 9]\n[3, 4, 5]\n[0, 1, 2]\n[0, 2, 4, 6, 8]\n[3, 6, 9]\n[0, 3]\n[3, 5]\n");
+    });
+    clean(&output);
+    if result.is_err() {
+        panic!("{:?}", result);
+    }
+}
+
+#[test]
+fn type_as_is() {
+    let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
+    let result = catch_unwind(|| {
+        elaphe::run(&output, "main() { print(3 is int); }").expect("execution failed.");
+        exec_py_and_assert(&output, "True\n");
+        elaphe::run(&output, "main() { print(2 is! int); }").expect("execution failed.");
+        exec_py_and_assert(&output, "False\n");
+        elaphe::run(&output, "main() { var x = 1; print(x as int); }").expect("execution failed.");
+        exec_py_and_assert(&output, "1\n");
+        elaphe::run(&output, "main() { var as = 1; print(as); }").expect("execution failed.");
+        exec_py_and_assert(&output, "1\n");
     });
     clean(&output);
     if result.is_err() {
