@@ -6,17 +6,11 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [build-dependencies]
-cfgrammar = "0.13.1"
-lrlex = "0.13.1"
-lrpar = "0.13.1"
 copy_to_output = "2.1.0"
 ciborium = "0.2.0"
 dart_parser_generator = { path = "./dart_parser_generator" }
 
 [dependencies]
-cfgrammar = "0.13.1"
-lrlex = "0.13.1"
-lrpar = "0.13.1"
 uuid = { version = "1.3.0", features = ["serde", "v4"] }
 getopts = "0.2"
 ciborium = "0.2.0"
