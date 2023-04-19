@@ -1,10 +1,11 @@
-use std::error::Error;
+use std::{error::Error, vec};
 
 use super::{
-    node::{LibraryDeclaration, LibraryImport, NodeStatement},
+    node::{Combinator, LibraryDeclaration, LibraryImport, NodeStatement},
     node_internal::NodeInternal,
     parse_class::parse_class_declaration,
     parse_functions::{parse_function_body, parse_function_signature},
+    parse_identifier::{parse_identifier, parse_identifier_list},
     parse_variables::parse_initialized_identifier_list,
     util::{flatten, gen_error},
 };
@@ -80,10 +81,31 @@ fn parse_library_import<'input>(
     node: &NodeInternal<'input>,
 ) -> Result<LibraryImport<'input>, Box<dyn Error>> {
     if node.rule_name == "LibraryImport" {
-        return Ok(LibraryImport {
-            uri: node.children[1].children[0].token.clone().unwrap().str,
-            identifier: None,
-        });
+        if node.children.len() == 3 {
+            return Ok(LibraryImport {
+                uri: node.children[1].children[0].token.clone().unwrap().str,
+                identifier: None,
+                combinator_list: vec![],
+            });
+        } else if node.children.len() == 4 {
+            return Ok(LibraryImport {
+                uri: node.children[1].children[0].token.clone().unwrap().str,
+                identifier: None,
+                combinator_list: parse_combinator_list(&node.children[2])?,
+            });
+        } else if node.children.len() == 5 {
+            return Ok(LibraryImport {
+                uri: node.children[1].children[0].token.clone().unwrap().str,
+                identifier: Some(parse_identifier(&node.children[3])?),
+                combinator_list: vec![],
+            });
+        } else if node.children.len() == 6 {
+            return Ok(LibraryImport {
+                uri: node.children[1].children[0].token.clone().unwrap().str,
+                identifier: Some(parse_identifier(&node.children[3])?),
+                combinator_list: parse_combinator_list(&node.children[4])?,
+            });
+        }
     }
 
     Err(gen_error("parse_library_import", &node.rule_name))
@@ -122,4 +144,41 @@ fn parse_top_variable_declaration<'input>(
     }
 
     Err(gen_error("parse_top_variable_declaration", &node.rule_name))
+}
+
+fn parse_combinator_list<'input>(
+    node: &NodeInternal<'input>,
+) -> Result<Vec<Combinator<'input>>, Box<dyn Error>> {
+    if node.rule_name == "CombinatorList" {
+        if node.children.len() == 1 {
+            return Ok(vec![parse_combinator(&node.children[0])?]);
+        } else {
+            return flatten(
+                parse_combinator_list(&node.children[0]),
+                parse_combinator(&node.children[1])?,
+            );
+        }
+    }
+
+    Err(gen_error("parse_combinator_list", &node.rule_name))
+}
+
+fn parse_combinator<'input>(
+    node: &NodeInternal<'input>,
+) -> Result<Combinator<'input>, Box<dyn Error>> {
+    if node.rule_name == "Combinator" {
+        if node.children[0].rule_name == "show" {
+            return Ok(Combinator {
+                is_show: true,
+                target_list: parse_identifier_list(&node.children[1])?,
+            });
+        } else if node.children[0].rule_name == "hide" {
+            return Ok(Combinator {
+                is_show: false,
+                target_list: parse_identifier_list(&node.children[1])?,
+            });
+        }
+    }
+
+    Err(gen_error("parse_combinator", &node.rule_name))
 }

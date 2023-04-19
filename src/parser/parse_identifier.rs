@@ -6,6 +6,22 @@ use super::{
     util::gen_error,
 };
 
+pub fn parse_identifier_list<'input>(
+    node: &NodeInternal<'input>,
+) -> Result<Vec<Identifier<'input>>, Box<dyn Error>> {
+    if node.rule_name == "IdentifierList" {
+        if node.children.len() == 1 {
+            return Ok(vec![parse_identifier(&node.children[0])?]);
+        } else {
+            let mut list = parse_identifier_list(&node.children[0])?;
+            list.push(parse_identifier(&node.children[2])?);
+            return Ok(list);
+        }
+    }
+
+    Err(gen_error("parse_identifier_list", &node.rule_name))
+}
+
 pub fn parse_identifier<'input>(
     node: &NodeInternal<'input>,
 ) -> Result<Identifier<'input>, Box<dyn Error>> {

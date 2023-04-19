@@ -172,6 +172,12 @@ pub struct LibraryDeclaration<'input> {
 pub struct LibraryImport<'input> {
     pub uri: &'input str,
     pub identifier: Option<Identifier<'input>>,
+    pub combinator_list: Vec<Combinator<'input>>,
+}
+
+pub struct Combinator<'input> {
+    pub is_show: bool,
+    pub target_list: Vec<Identifier<'input>>,
 }
 
 pub struct FunctionSignature<'input> {

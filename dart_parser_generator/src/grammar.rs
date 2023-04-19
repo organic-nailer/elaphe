@@ -5,7 +5,7 @@ pub const START_SYMBOL: &'static str = "LibraryDeclaration";
 pub const EPSILON: &'static str = "[EMPTY]";
 pub const END: &'static str = "[END]";
 
-const DART_GRAMMARS: [&'static str; 133] = [
+const DART_GRAMMARS: [&'static str; 134] = [
 // Variables
 "InitializedVariableDeclaration ::= DeclaredIdentifier
     |/ DeclaredIdentifier '=' Expression
@@ -304,6 +304,8 @@ const DART_GRAMMARS: [&'static str; 133] = [
     |/ CombinatorList Combinator",
 "Combinator ::= 'show' IdentifierList
     |/ 'hide' IdentifierList",
+"IdentifierList ::= Identifier
+    |/ IdentifierList ',' Identifier",
 "TopFunctionDeclaration ::= FunctionSignature FunctionBody",
 "TopVariableDeclaration ::= 'var' InitializedIdentifierList ';'
     |/ Type InitializedIdentifierList ';'
@@ -317,7 +319,8 @@ const DART_GRAMMARS: [&'static str; 133] = [
 "TypeNotFunction ::= 'void'
     |/ TypeNotVoidNotFunction",
 "TypeNotVoidNotFunction ::= TypeName",
-"TypeName ::= TypeIdentifier",
+"TypeName ::= TypeIdentifier
+    |/ TypeIdentifier '.' TypeIdentifier",
 "TypeArguments ::= '<' TypeList '>'",
 "TypeList ::= Type
     |/ TypeList ',' Type",

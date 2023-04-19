@@ -293,7 +293,7 @@ fn calc_transition_map(
                         }
                         TransitionData::Reduce { rule: conflicted_rule } => {
                             // Reduce-Reduce conflict
-                            if *token == "as" {
+                            if *token == "as" || *token == "." {
                                 transition_map.insert(
                                     (state.to_string(), token.to_string()),
                                     TransitionData::ReduceReduceConflict {
