@@ -71,6 +71,8 @@ pub fn parse_expression<'input>(
         | "LogicalOrExpressionNotBrace"
         | "LogicalAndExpression"
         | "LogicalAndExpressionNotBrace"
+        | "BitwiseOrExpression"
+        | "BitwiseOrExpressionNotBrace"
         | "BitwiseXorExpression"
         | "BitwiseXorExpressionNotBrace"
         | "BitwiseAndExpression"
@@ -91,8 +93,6 @@ pub fn parse_expression<'input>(
         }
         "EqualityExpression"
         | "EqualityExpressionNotBrace"
-        | "BitwiseOrExpression"
-        | "BitwiseOrExpressionNotBrace"
         | "ShiftExpression"
         | "ShiftExpressionNotBrace"
         | "MultiplicativeExpression"
