@@ -6,7 +6,7 @@ use std::time::SystemTime;
 
 use ciborium::de;
 use dart_parser_generator::parser_generator;
-use parser::node::{LibraryDeclaration, NodeExpression};
+use parser::node::LibraryDeclaration;
 
 mod bytecode;
 mod bytecompiler;
