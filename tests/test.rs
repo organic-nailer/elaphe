@@ -974,3 +974,22 @@ fn slice() {
         panic!("{:?}", result);
     }
 }
+
+#[test]
+fn type_as_is() {
+    let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
+    let result = catch_unwind(|| {
+        elaphe::run(&output, "main() { print(3 is int); }").expect("execution failed.");
+        exec_py_and_assert(&output, "True\n");
+        elaphe::run(&output, "main() { print(2 is! int); }").expect("execution failed.");
+        exec_py_and_assert(&output, "False\n");
+        elaphe::run(&output, "main() { var x = 1; print(x as int); }").expect("execution failed.");
+        exec_py_and_assert(&output, "1\n");
+        elaphe::run(&output, "main() { var as = 1; print(as); }").expect("execution failed.");
+        exec_py_and_assert(&output, "1\n");
+    });
+    clean(&output);
+    if result.is_err() {
+        panic!("{:?}", result);
+    }
+}

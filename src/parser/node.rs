@@ -23,6 +23,14 @@ pub enum NodeExpression<'input> {
         left: Box<NodeExpression<'input>>,
         right: Box<NodeExpression<'input>>,
     },
+    TypeTest {
+        child: Box<NodeExpression<'input>>,
+        type_test: TypeTest<'input>,
+    },
+    TypeCast {
+        child: Box<NodeExpression<'input>>,
+        type_cast: DartType<'input>,
+    },
     NumericLiteral {
         value: &'input str,
     },
@@ -251,4 +259,9 @@ pub enum Member<'input> {
     VariableDecl {
         decl_list: Vec<VariableDeclaration<'input>>,
     },
+}
+
+pub struct TypeTest<'input> {
+    pub dart_type: DartType<'input>,
+    pub check_matching: bool,
 }

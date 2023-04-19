@@ -5,7 +5,7 @@ pub const START_SYMBOL: &'static str = "LibraryDeclaration";
 pub const EPSILON: &'static str = "[EMPTY]";
 pub const END: &'static str = "[END]";
 
-const DART_GRAMMARS: [&'static str; 131] = [
+const DART_GRAMMARS: [&'static str; 133] = [
 // Variables
 "InitializedVariableDeclaration ::= DeclaredIdentifier
     |/ DeclaredIdentifier '=' Expression
@@ -159,9 +159,13 @@ const DART_GRAMMARS: [&'static str; 131] = [
     |/ RelationalExpressionNotBrace EqualityOperator RelationalExpression",
 "EqualityOperator ::= '==' |/ '!='",
 "RelationalExpression ::= BitwiseOrExpression
-    |/ BitwiseOrExpression RelationalOperator BitwiseOrExpression",
+    |/ BitwiseOrExpression RelationalOperator BitwiseOrExpression
+    |/ BitwiseOrExpression TypeTest
+    |/ BitwiseOrExpression TypeCast",
 "RelationalExpressionNotBrace ::= BitwiseOrExpressionNotBrace
-    |/ BitwiseOrExpressionNotBrace RelationalOperator BitwiseOrExpression",
+    |/ BitwiseOrExpressionNotBrace RelationalOperator BitwiseOrExpression
+    |/ BitwiseOrExpressionNotBrace TypeTest
+    |/ BitwiseOrExpressionNotBrace TypeCast",
 "RelationalOperator ::= '<' |/ '>' |/ '<=' |/ '>='",
 "BitwiseOrExpression ::= BitwiseXorExpression
     |/ BitwiseOrExpression '|' BitwiseXorExpression",
@@ -225,6 +229,9 @@ const DART_GRAMMARS: [&'static str; 131] = [
     |/ ArgumentList ',' NamedArgument",
 "NamedArgument ::= Label Expression",
 "NormalArgument ::= Expression",
+"TypeTest ::= 'is' TypeNotVoid
+    |/ 'is' '!' TypeNotVoid",
+"TypeCast ::= 'as' TypeNotVoid",
 // Statements
 "Statements ::= [EMPTY]
     |/ Statements Statement",

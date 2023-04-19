@@ -18,12 +18,12 @@ pub fn parse_identifier<'input>(
             });
         } else if child_node.rule_name == "BUILT_IN_IDENTIFIER" {
             return Ok(Identifier {
-                value: child_node.token.clone().unwrap().str,
+                value: child_node.children[0].token.clone().unwrap().str,
                 kind: IdentifierKind::BuiltIn,
             });
         } else if child_node.rule_name == "OTHER_IDENTIFIER" {
             return Ok(Identifier {
-                value: child_node.token.clone().unwrap().str,
+                value: child_node.children[0].token.clone().unwrap().str,
                 kind: IdentifierKind::Other,
             });
         }

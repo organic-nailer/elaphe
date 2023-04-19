@@ -29,6 +29,10 @@ pub fn generate_parser(
 
     let closure_map = calc_goto_map(&extended_rules, &first_map, &parser_generator_lr0);
 
+    if output_transitions {
+        export_closures(&closure_map, "closure.yaml").unwrap();
+    }
+
     let transition_map = calc_transition_map(&parser_generator_lr0, &closure_map);
 
     let result = TransitionMap {
@@ -36,7 +40,6 @@ pub fn generate_parser(
     };
 
     if output_transitions {
-        export_closures(&closure_map, "closure.yaml").unwrap();
         export_transitions(&result, &closure_map, &parser_generator_lr0, "transitions.csv").unwrap();
     }
 
@@ -255,10 +258,8 @@ fn calc_transition_map(
 
         transition_map.insert(
             (key.0.clone(), key.1.to_string()),
-            TransitionData {
-                kind: TransitionKind::Shift,
-                target: Some(target_state.to_string()),
-                rule: None,
+            TransitionData::Shift {
+                target: target_state.to_string(),
             },
         );
     }
@@ -269,35 +270,67 @@ fn calc_transition_map(
         for rule in kernel.iter().filter(|r| r.reducible) {
             for token in rule.follow.iter() {
                 if transition_map.contains_key(&(state.to_string(), token.to_string())) {
-                    // Shift-Reduce conflict
-                    // priortize shift by default
-                    if *token == "else" { continue }
-                    if *token == "import" { continue }
-                    if *token == "on" { continue }
-                    if *token == "(" && rule.left == "Selector" { continue }
+                    let transition = transition_map
+                        .get(&(state.to_string(), token.to_string()))
+                        .unwrap();
+                    match transition {
+                        TransitionData::Shift { target } => {
+                            // Shift-Reduce conflict
+                            // priortize shift by default
+                            if *token == "else" { continue }
+                            if *token == "import" { continue }
+                            if *token == "on" { continue }
+                            if *token == "(" && rule.left == "Selector" { continue }
 
-                    error_transitions.push(ErrorTransition {
-                        state: state.to_string(),
-                        follow_token: token.to_string(),
-                        conflict_reduce_rule: rule.to_rule(),
-                        conflict_shift_state: transition_map
-                            .get(&(state.to_string(), token.to_string()))
-                            .unwrap()
-                            .target
-                            .clone().unwrap(),
-                    });
+                            error_transitions.push(ErrorTransition::ShiftReduce {
+                                state: state.to_string(),
+                                follow_token: token.to_string(),
+                                conflict_reduce_rule: SerializableRule::from_rule(rule.to_rule()),
+                                conflict_shift_state: target.clone(),
+                            });
+        
+                            continue
+                        }
+                        TransitionData::Reduce { rule: conflicted_rule } => {
+                            // Reduce-Reduce conflict
+                            if *token == "as" {
+                                transition_map.insert(
+                                    (state.to_string(), token.to_string()),
+                                    TransitionData::ReduceReduceConflict {
+                                        rules: vec![
+                                            SerializableRule::from_rule(rule.to_rule()),
+                                            conflicted_rule.clone(),
+                                        ],
+                                    },
+                                );
+                                continue
+                            }
 
-                    continue
-
-                    // panic!("Unhandled Shift-Reduce conflict: {token} in {state} with {rule:?}", token=token, state=state, rule=rule);
+                            error_transitions.push(ErrorTransition::ReduceReduce {
+                                state: state.to_string(),
+                                follow_token: token.to_string(),
+                                conflict_reduce_rule_1: SerializableRule::from_rule(rule.to_rule()),
+                                conflict_reduce_rule_2: conflicted_rule.clone(),
+                            });
+                        }
+                        TransitionData::Accept => {}
+                        TransitionData::ReduceReduceConflict { rules } => {
+                            let mut cloned_rules = rules.clone();
+                            cloned_rules.push(SerializableRule::from_rule(rule.to_rule()));
+                            transition_map.insert(
+                                (state.to_string(), token.to_string()),
+                                TransitionData::ReduceReduceConflict {
+                                    rules: cloned_rules,
+                                },
+                            );
+                        }
+                    }
                 }
 
                 transition_map.insert(
                     (state.to_string(), token.to_string()),
-                    TransitionData {
-                        kind: TransitionKind::Reduce,
-                        target: None,
-                        rule: Some(SerializableRule::from_rule(rule.to_rule())),
+                    TransitionData::Reduce {
+                        rule: SerializableRule::from_rule(rule.to_rule()),
                     },
                 );
             }
@@ -308,17 +341,13 @@ fn calc_transition_map(
         }) {
             transition_map.insert(
                 (state.to_string(), END.to_string()),
-                TransitionData {
-                    kind: TransitionKind::Accept,
-                    target: None,
-                    rule: None,
-                },
+                TransitionData::Accept
             );
         }
     }
 
     if !error_transitions.is_empty() {
-        panic!("Unhandled Shift-Reduce conflicts: {:?}", error_transitions);
+        panic!("Unhandled conflicts: {:?}", error_transitions);
     }
 
     transition_map
@@ -455,17 +484,17 @@ impl LALR1ProductionRuleData {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum TransitionKind {
-    Shift,
-    Reduce,
+pub enum TransitionData {
+    Shift {
+        target: String,
+    },
+    Reduce {
+        rule: SerializableRule,
+    },
     Accept,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct TransitionData {
-    pub kind: TransitionKind,
-    pub target: Option<String>,
-    pub rule: Option<SerializableRule>,
+    ReduceReduceConflict {
+        rules: Vec<SerializableRule>,
+    },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -484,9 +513,17 @@ impl SerializableRule {
 }
 
 #[derive(Clone, Debug)]
-struct ErrorTransition {
-    pub state: String,
-    pub follow_token: String,
-    pub conflict_reduce_rule: ProductionRuleData,
-    pub conflict_shift_state: String,
+enum ErrorTransition {
+    ShiftReduce {
+        state: String,
+        follow_token: String,
+        conflict_reduce_rule: SerializableRule,
+        conflict_shift_state: String,
+    },
+    ReduceReduce {
+        state: String,
+        follow_token: String,
+        conflict_reduce_rule_1: SerializableRule,
+        conflict_reduce_rule_2: SerializableRule,
+    },
 }

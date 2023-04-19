@@ -266,36 +266,36 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     panic!("Invalid AST. Increment target must be an identifier.");
                 }
             }
-            //     Node::TypeTestExpression { child, type_test } => {
-            //         // isinstance(child, type_test.)
-            //         self.push_load_var(&"isinstance".to_string());
-            //         self.compile(child, None);
-            //         if let DartType::Named {
-            //             type_name,
-            //             type_arguments: _,
-            //             is_nullable: _,
-            //         } = &type_test.dart_type
-            //         {
-            //             let name = type_name.identifier.value;
-            //             let p = (**self.context_stack.last().unwrap())
-            //                 .borrow_mut()
-            //                 .register_or_get_name(&name.to_string());
-            //             self.push_op(OpCode::LoadName(p));
-            //         } else {
-            //             panic!("Invalid Test Expression");
-            //         }
-            //         self.push_op(OpCode::CallFunction(2));
-            //         if !type_test.check_matching {
-            //             self.push_op(OpCode::UnaryNot);
-            //         }
-            //     }
-            //     Node::TypeCastExpression {
-            //         child,
-            //         type_cast: _,
-            //     } => {
-            //         // 実行時には型がないので無視
-            //         self.compile(child, None);
-            //     }
+            NodeExpression::TypeTest { child, type_test } => {
+                // isinstance(child, type_test.)
+                self.push_load_var(&"isinstance".to_string());
+                self.compile_expr(child);
+                if let DartType::Named {
+                    type_name,
+                    type_arguments: _,
+                    is_nullable: _,
+                } = &type_test.dart_type
+                {
+                    let name = type_name.identifier.value;
+                    let p = (**self.context_stack.last().unwrap())
+                        .borrow_mut()
+                        .register_or_get_name(&name.to_string());
+                    self.push_op(OpCode::LoadName(p));
+                } else {
+                    panic!("Invalid Test Expression");
+                }
+                self.push_op(OpCode::CallFunction(2));
+                if !type_test.check_matching {
+                    self.push_op(OpCode::UnaryNot);
+                }
+            }
+            NodeExpression::TypeCast {
+                child,
+                type_cast: _,
+            } => {
+                // 実行時には型がないので無視
+                self.compile_expr(child);
+            }
             NodeExpression::Assignment {
                 operator,
                 left,

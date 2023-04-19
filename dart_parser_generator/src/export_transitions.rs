@@ -1,6 +1,6 @@
 use std::{error::Error, collections::HashMap, io::{self, Write}, fs::File};
 
-use crate::{parser_generator::{TransitionMap, LALR1ProductionRuleData, TransitionKind}, parser_generator_lr0, hashable_set::HashableSet};
+use crate::{parser_generator::{TransitionMap, LALR1ProductionRuleData, TransitionData}, parser_generator_lr0, hashable_set::HashableSet};
 
 pub fn export_closures(
     closure_map: &HashMap<HashableSet<LALR1ProductionRuleData>, String>,
@@ -72,15 +72,18 @@ pub fn export_transitions(
         for symbol in &symbols {
             match transition_map.transitions.get(&(state.clone(), symbol.to_string())) {
                 Some(transition) => {
-                    match transition.kind {
-                        TransitionKind::Shift => {
-                            writer.write_field(&format!("s{}", &transition.target.clone().unwrap()[1..]))?;
+                    match transition {
+                        TransitionData::Shift { target } => {
+                            writer.write_field(&format!("s{}", &target[1..]))?;
                         }
-                        TransitionKind::Reduce => {
-                            writer.write_field(&format!("r{}", transition.rule.clone().unwrap().left))?;
+                        TransitionData::Reduce { rule } => {
+                            writer.write_field(&format!("r{}", rule.left))?;
                         }
-                        TransitionKind::Accept => {
+                        TransitionData::Accept => {
                             writer.write_field("A")?;
+                        }
+                        TransitionData::ReduceReduceConflict { rules } => {
+                            writer.write_field(rules.iter().map(|x| x.left.to_string()).collect::<Vec<String>>().join("/"))?;
                         }
                     }
                 }

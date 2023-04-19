@@ -1,11 +1,12 @@
 use std::error::Error;
 
 use super::{
-    node::NodeExpression,
+    node::{DartType, NodeExpression, TypeTest},
     node_internal::NodeInternal,
     parse_identifier::parse_identifier,
     parse_literal::{parse_list_literal, parse_set_or_map_literal, parse_string_literal_list},
     parse_selector::{parse_selector, parse_slice_expression},
+    parse_type::parse_type,
     util::{flatten, gen_error},
 };
 
@@ -70,8 +71,6 @@ pub fn parse_expression<'input>(
         | "LogicalOrExpressionNotBrace"
         | "LogicalAndExpression"
         | "LogicalAndExpressionNotBrace"
-        | "BitwiseOrExpression"
-        | "BitwiseOrExpressionNotBrace"
         | "BitwiseXorExpression"
         | "BitwiseXorExpressionNotBrace"
         | "BitwiseAndExpression"
@@ -92,14 +91,40 @@ pub fn parse_expression<'input>(
         }
         "EqualityExpression"
         | "EqualityExpressionNotBrace"
-        | "RelationalExpression"
-        | "RelationalExpressionNotBrace"
+        | "BitwiseOrExpression"
+        | "BitwiseOrExpressionNotBrace"
         | "ShiftExpression"
         | "ShiftExpressionNotBrace"
         | "MultiplicativeExpression"
         | "MultiplicativeExpressionNotBrace" => {
             if node.children.len() == 1 {
                 parse_expression(&node.children[0])
+            } else {
+                let left = parse_expression(&node.children[0])?;
+                let right = parse_expression(&node.children[2])?;
+                let operator = &node.children[1].children[0].token.clone().unwrap().str;
+                Ok(NodeExpression::Binary {
+                    left: Box::new(left),
+                    right: Box::new(right),
+                    operator,
+                })
+            }
+        }
+        "RelationalExpression" | "RelationalExpressionNotBrace" => {
+            if node.children.len() == 1 {
+                parse_expression(&node.children[0])
+            } else if node.children.len() == 2 {
+                if node.children[1].rule_name == "TypeTest" {
+                    Ok(NodeExpression::TypeTest {
+                        child: Box::new(parse_expression(&node.children[0])?),
+                        type_test: parse_type_test(&node.children[1])?,
+                    })
+                } else {
+                    Ok(NodeExpression::TypeCast {
+                        child: Box::new(parse_expression(&node.children[0])?),
+                        type_cast: parse_type_cast(&node.children[1])?,
+                    })
+                }
             } else {
                 let left = parse_expression(&node.children[0])?;
                 let right = parse_expression(&node.children[2])?;
@@ -207,4 +232,34 @@ pub fn parse_expression_list_opt<'input>(
     }
 
     Err(gen_error("parse_expression_list_opt", &node.rule_name))
+}
+
+fn parse_type_test<'input>(
+    node: &NodeInternal<'input>,
+) -> Result<TypeTest<'input>, Box<dyn Error>> {
+    if node.rule_name == "TypeTest" {
+        if node.children.len() == 2 {
+            return Ok(TypeTest {
+                dart_type: parse_type(&node.children[1])?,
+                check_matching: true,
+            });
+        } else if node.children.len() == 3 {
+            return Ok(TypeTest {
+                dart_type: parse_type(&node.children[2])?,
+                check_matching: false,
+            });
+        }
+    }
+
+    Err(gen_error("parse_type_test", &node.rule_name))
+}
+
+fn parse_type_cast<'input>(
+    node: &NodeInternal<'input>,
+) -> Result<DartType<'input>, Box<dyn Error>> {
+    if node.rule_name == "TypeCast" {
+        return Ok(parse_type(&node.children[1])?);
+    }
+
+    Err(gen_error("parse_type_cast", &node.rule_name))
 }
