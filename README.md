@@ -273,8 +273,10 @@ https://docs.google.com/document/d/1c956nDwu3t9qNN0C4HBvl9U6WSvCUY3umqpzohqlrKs/
     - [x] void
     - [ ] function type
     - [x] Identifier
-    - [ ] Identifier.Identifier
-- [ ] Other
+    - [x] Identifier.Identifier
+- [x] Other
+    - [x] built-in identifier as identifier
+    - [x] other identifier as identifier
 
 # Supplementary Information
 
