@@ -91,7 +91,7 @@ dependencies = [
 
 [[package]]
 name = "elaphe"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "ciborium",
  "copy_to_output",

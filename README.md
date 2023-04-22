@@ -200,12 +200,12 @@ https://docs.google.com/document/d/1c956nDwu3t9qNN0C4HBvl9U6WSvCUY3umqpzohqlrKs/
         - [x] null
         - [x] bool
         - [x] numeric
-        - [ ] String
+        - [x] String
             - [x] Single Quote
             - [x] Double Quote
-            - [ ] Multiline
-            - [ ] format
-            - [ ] Escape
+            - [x] Multiline
+            - [x] format
+            - [x] Escape
         - [ ] List
             - [x] Normal
             - [ ] Spread
