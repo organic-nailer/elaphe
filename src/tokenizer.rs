@@ -107,39 +107,39 @@ pub fn tokenize<'input>(input: &'input str) -> Result<Vec<Token<'input>>, Box<dy
     // let regex_string = Regex::new(r#"^(('[^\\'$]*')|("[^\\"$]*"))"#).unwrap();
     let regex_raw_string = Regex::new(r#"^r'[^'\r\n]*'|^r"[^"\r\n]*"#).unwrap();
     let regex_single_line_string_sq_begin_end =
-        Regex::new(r#"^'(((\\\\)|(\\')|(\\)|(\$[a-zA-Z_])|[^'\r\n\$]))*'"#).unwrap();
+        Regex::new(r#"^'(((\\\\)|(\\')|(\\\$)|(\\)|(\$[a-zA-Z_])|[^'\r\n\$]))*'"#).unwrap();
     let regex_single_line_string_sq_begin_mid =
-        Regex::new(r#"^'(((\\\\)|(\\')|(\\)|(\$[a-zA-Z_])|[^'\r\n\$]))*\$\{"#).unwrap();
+        Regex::new(r#"^'(((\\\\)|(\\')|(\\\$)|(\\)|(\$[a-zA-Z_])|[^'\r\n\$]))*\$\{"#).unwrap();
     let regex_single_line_string_sq_mid_mid =
-        Regex::new(r#"^\}(((\\\\)|(\\')|(\\)|(\$[a-zA-Z_])|[^'\r\n\$]))*\$\{"#).unwrap();
+        Regex::new(r#"^\}(((\\\\)|(\\')|(\\\$)|(\\)|(\$[a-zA-Z_])|[^'\r\n\$]))*\$\{"#).unwrap();
     let regex_single_line_string_sq_mid_end =
-        Regex::new(r#"^\}(((\\\\)|(\\')|(\\)|(\$[a-zA-Z_])|[^'\r\n\$]))*'"#).unwrap();
+        Regex::new(r#"^\}(((\\\\)|(\\')|(\\\$)|(\\)|(\$[a-zA-Z_])|[^'\r\n\$]))*'"#).unwrap();
     let regex_single_line_string_dq_begin_end =
-        Regex::new(r#"^"(((\\\\)|(\\")|(\\)|(\$[a-zA-Z_])|[^"\r\n\$]))*""#).unwrap();
+        Regex::new(r#"^"(((\\\\)|(\\")|(\\\$)|(\\)|(\$[a-zA-Z_])|[^"\r\n\$]))*""#).unwrap();
     let regex_single_line_string_dq_begin_mid =
-        Regex::new(r#"^"(((\\\\)|(\\")|(\\)|(\$[a-zA-Z_])|[^"\r\n\$]))*\$\{"#).unwrap();
+        Regex::new(r#"^"(((\\\\)|(\\")|(\\\$)|(\\)|(\$[a-zA-Z_])|[^"\r\n\$]))*\$\{"#).unwrap();
     let regex_single_line_string_dq_mid_mid =
-        Regex::new(r#"^\}(((\\\\)|(\\")|(\\)|(\$[a-zA-Z_])|[^"\r\n\$]))*\$\{"#).unwrap();
+        Regex::new(r#"^\}(((\\\\)|(\\")|(\\\$)|(\\)|(\$[a-zA-Z_])|[^"\r\n\$]))*\$\{"#).unwrap();
     let regex_single_line_string_dq_mid_end =
-        Regex::new(r#"^\}(((\\\\)|(\\")|(\\)|(\$[a-zA-Z_])|[^"\r\n\$]))*""#).unwrap();
+        Regex::new(r#"^\}(((\\\\)|(\\")|(\\\$)|(\\)|(\$[a-zA-Z_])|[^"\r\n\$]))*""#).unwrap();
 
     let regex_raw_multiline_string = Regex::new(r#"^r'''[\s\S]*?'''|r"""[\s\S]*?"""#).unwrap();
     let regex_multi_line_string_sq_begin_end =
-        Regex::new(r#"^'''(((\\\\)|(\\''')|(\\)|(\$[a-zA-Z_])|[^\$]))*?'''"#).unwrap();
+        Regex::new(r#"^'''(((\\\\)|(\\''')|(\\\$)|(\\)|(\$[a-zA-Z_])|[^\$]))*?'''"#).unwrap();
     let regex_multi_line_string_sq_begin_mid =
-        Regex::new(r#"^'''(((\\\\)|(\\''')|(\\)|(\$[a-zA-Z_])|[^\$]))*?\$\{"#).unwrap();
+        Regex::new(r#"^'''(((\\\\)|(\\''')|(\\\$)|(\\)|(\$[a-zA-Z_])|[^\$]))*?\$\{"#).unwrap();
     let regex_multi_line_string_sq_mid_mid =
-        Regex::new(r#"^\}(((\\\\)|(\\''')|(\\)|(\$[a-zA-Z_])|[^\$]))*?\$\{"#).unwrap();
+        Regex::new(r#"^\}(((\\\\)|(\\''')|(\\\$)|(\\)|(\$[a-zA-Z_])|[^\$]))*?\$\{"#).unwrap();
     let regex_multi_line_string_sq_mid_end =
-        Regex::new(r#"^\}(((\\\\)|(\\''')|(\\)|(\$[a-zA-Z_])|[^\$]))*?'''"#).unwrap();
+        Regex::new(r#"^\}(((\\\\)|(\\''')|(\\\$)|(\\)|(\$[a-zA-Z_])|[^\$]))*?'''"#).unwrap();
     let regex_multi_line_string_dq_begin_end =
-        Regex::new(r#"^"""(((\\\\)|(\\""")|(\\)|(\$[a-zA-Z_])|[^\$]))*?""""#).unwrap();
+        Regex::new(r#"^"""(((\\\\)|(\\""")|(\\\$)|(\\)|(\$[a-zA-Z_])|[^\$]))*?""""#).unwrap();
     let regex_multi_line_string_dq_begin_mid =
-        Regex::new(r#"^"""(((\\\\)|(\\""")|(\\)|(\$[a-zA-Z_])|[^\$]))*?\$\{"#).unwrap();
+        Regex::new(r#"^"""(((\\\\)|(\\""")|(\\\$)|(\\)|(\$[a-zA-Z_])|[^\$]))*?\$\{"#).unwrap();
     let regex_multi_line_string_dq_mid_mid =
-        Regex::new(r#"^\}(((\\\\)|(\\""")|(\\)|(\$[a-zA-Z_])|[^\$]))*?\$\{"#).unwrap();
+        Regex::new(r#"^\}(((\\\\)|(\\""")|(\\\$)|(\\)|(\$[a-zA-Z_])|[^\$]))*?\$\{"#).unwrap();
     let regex_multi_line_string_dq_mid_end =
-        Regex::new(r#"^\}(((\\\\)|(\\""")|(\\)|(\$[a-zA-Z_])|[^\$]))*?""""#).unwrap();
+        Regex::new(r#"^\}(((\\\\)|(\\""")|(\\\$)|(\\)|(\$[a-zA-Z_])|[^\$]))*?""""#).unwrap();
 
     let regex_number = Regex::new(r"^((0(x|X)[a-fA-F0-9]+)|((([0-9]+(\.[0-9]+)?((e|E)(\+|-)?[0-9]+)?)|(\.[0-9]+((e|E)(\+|-)?[0-9]+)?))))").unwrap();
     let regex_identifier_or_keyword = Regex::new(r"^[a-zA-Z_\$][0-9a-zA-Z_\$]*").unwrap();
@@ -285,9 +285,10 @@ pub fn tokenize<'input>(input: &'input str) -> Result<Vec<Token<'input>>, Box<dy
 
         match regex_raw_multiline_string.find(&input[current_index..]) {
             Some(string) => {
+                let first_spaces = count_first_spaces(&input[current_index + 4..]);
                 tokens.push(Token {
                     kind: TokenKind::StringBeginEnd,
-                    str: &input[current_index + 4..current_index + string.end() - 3],
+                    str: &input[current_index + 4 + first_spaces..current_index + string.end() - 3],
                 });
                 current_index += string.end();
                 continue 'tokenize;
@@ -309,9 +310,10 @@ pub fn tokenize<'input>(input: &'input str) -> Result<Vec<Token<'input>>, Box<dy
 
         match regex_multi_line_string_sq_begin_end.find(&input[current_index..]) {
             Some(string) => {
+                let first_spaces = count_first_spaces(&input[current_index + 3..]);
                 tokens.push(Token {
                     kind: TokenKind::StringBeginEnd,
-                    str: &input[current_index + 3..current_index + string.end() - 3],
+                    str: &input[current_index + 3 + first_spaces..current_index + string.end() - 3],
                 });
                 current_index += string.end();
                 continue 'tokenize;
@@ -321,9 +323,10 @@ pub fn tokenize<'input>(input: &'input str) -> Result<Vec<Token<'input>>, Box<dy
 
         match regex_multi_line_string_dq_begin_end.find(&input[current_index..]) {
             Some(string) => {
+                let first_spaces = count_first_spaces(&input[current_index + 3..]);
                 tokens.push(Token {
                     kind: TokenKind::StringBeginEnd,
-                    str: &input[current_index + 3..current_index + string.end() - 3],
+                    str: &input[current_index + 3 + first_spaces..current_index + string.end() - 3],
                 });
                 current_index += string.end();
                 continue 'tokenize;
@@ -333,9 +336,10 @@ pub fn tokenize<'input>(input: &'input str) -> Result<Vec<Token<'input>>, Box<dy
 
         match regex_multi_line_string_sq_begin_mid.find(&input[current_index..]) {
             Some(string) => {
+                let first_spaces = count_first_spaces(&input[current_index + 3..]);
                 tokens.push(Token {
                     kind: TokenKind::StringBeginMid,
-                    str: &input[current_index + 3..current_index + string.end() - 2],
+                    str: &input[current_index + 3 + first_spaces..current_index + string.end() - 2],
                 });
                 current_index += string.end();
                 string_interpolation_stack.push(StringInterpolationKind::TripleSingleQuote);
@@ -346,9 +350,10 @@ pub fn tokenize<'input>(input: &'input str) -> Result<Vec<Token<'input>>, Box<dy
 
         match regex_multi_line_string_dq_begin_mid.find(&input[current_index..]) {
             Some(string) => {
+                let first_spaces = count_first_spaces(&input[current_index + 3..]);
                 tokens.push(Token {
                     kind: TokenKind::StringBeginMid,
-                    str: &input[current_index + 3..current_index + string.end() - 2],
+                    str: &input[current_index + 3 + first_spaces..current_index + string.end() - 2],
                 });
                 current_index += string.end();
                 string_interpolation_stack.push(StringInterpolationKind::TripleDoubleQuote);
@@ -491,6 +496,34 @@ pub fn tokenize<'input>(input: &'input str) -> Result<Vec<Token<'input>>, Box<dy
         str: "",
     });
     Ok(tokens)
+}
+
+fn count_first_spaces(input: &str) -> usize {
+    let mut count = 0;
+    let mut chars = input.chars();
+    while let Some(c) = chars.next() {
+        if c == ' ' || c == '\t' {
+            count += 1;
+            continue;
+        } else if c == '\\' {
+            if let Some(c) = chars.next() {
+                if c == ' ' {
+                    count += 1;
+                    continue;
+                } else {
+                    break;
+                }
+            } else {
+                break;
+            }
+        } else if c == '\r' || c == '\n' {
+            count += 1;
+            break;
+        } else {
+            break;
+        }
+    }
+    count
 }
 
 #[cfg(test)]
@@ -672,7 +705,7 @@ mod tests {
         let result_str = result.iter().map(|t| t.str).collect::<Vec<&str>>();
         assert_eq!(result_str, vec!["ab$cd", "+", "ef$_gh", ""]);
 
-        let result = tokenize(r#"'ab$+cd' + "efgh""#).unwrap_err();
+        assert!(tokenize(r#"'ab$+cd' + "efgh""#).is_err());
 
         let result = tokenize(r#"'ab${1+2}cd${hoge}' + "ef${abc}gh${"Hello"}world""#).unwrap();
         let result_str = result.iter().map(|t| t.str).collect::<Vec<&str>>();

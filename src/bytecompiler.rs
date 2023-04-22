@@ -531,7 +531,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
 
                             self.push_op(OpCode::BinaryAdd);
                         }
-                        self.push_load_const(PyObject::new_string(str.to_string(), false));
+                        self.push_load_const(PyObject::new_string(replace_escape(&str), false));
                         if i > 0 {
                             self.push_op(OpCode::BinaryAdd);
                         }
@@ -1452,4 +1452,71 @@ impl<'a, 'b> ByteCompiler<'a, 'b> {
 
         result
     }
+}
+
+fn replace_escape(source: &str) -> String {
+    if !source.contains("\\") {
+        return source.to_string();
+    }
+
+    let mut result = String::new();
+    let mut chars = source.chars();
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            match chars.next().unwrap() {
+                'n' => result.push('\x0A'), // newline
+                'r' => result.push('\x0D'), // carriage return
+                'f' => result.push('\x0C'), // form feed
+                'b' => result.push('\x08'), // backspace
+                't' => result.push('\x09'), // tab
+                'v' => result.push('\x0B'), // vertical tab
+                'x' => {
+                    // \xXX is equivalent to \u{XX}
+                    let mut hex = String::new();
+                    hex.push(chars.next().unwrap());
+                    hex.push(chars.next().unwrap());
+                    result.push(unicode_hex_to_char(&hex));
+                }
+                'u' => {
+                    // \uXXXX or \u{X} or \u{XX} or \u{XXX} or \u{XXXX} or \u{XXXXX} or \u{XXXXXX}
+                    match chars.next().unwrap() {
+                        '{' => {
+                            let mut hex = String::new();
+                            let mut count = 0;
+                            loop {
+                                let c = chars.next().unwrap();
+                                if c == '}' {
+                                    break;
+                                }
+                                hex.push(c);
+                                count += 1;
+                                if count > 6 {
+                                    panic!("Invalid unicode escape sequence");
+                                }
+                            }
+                            result.push(unicode_hex_to_char(&hex));
+                        }
+                        c => {
+                            let mut hex = String::new();
+                            hex.push(c);
+                            hex.push(chars.next().unwrap());
+                            hex.push(chars.next().unwrap());
+                            hex.push(chars.next().unwrap());
+                            result.push(unicode_hex_to_char(&hex));
+                        }
+                    }
+                }
+                c => result.push(c),
+            }
+        } else {
+            result.push(c);
+        }
+    }
+
+    result
+}
+
+fn unicode_hex_to_char(hex: &String) -> char {
+    let hex = u32::from_str_radix(hex, 16).unwrap();
+    std::char::from_u32(hex).unwrap()
 }

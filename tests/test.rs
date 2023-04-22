@@ -100,12 +100,12 @@ World!
         "#,
         )
         .expect("execution failed.");
-        exec_py_and_assert(&output, "\nHello,\nWorld!\n\n");
+        exec_py_and_assert(&output, "Hello,\nWorld!\n\n");
         elaphe::run(
             &output,
             r#"
         main() {
-            print("""
+            print("""     
 Hello,
 World!
 """);
@@ -113,7 +113,7 @@ World!
         "#,
         )
         .expect("execution failed.");
-        exec_py_and_assert(&output, "\nHello,\nWorld!\n\n");
+        exec_py_and_assert(&output, "Hello,\nWorld!\n\n");
     });
     clean(&output);
     if result.is_err() {
@@ -151,6 +151,27 @@ fn string_interpolation() {
         )
         .expect("execution failed.");
         exec_py_and_assert(&output, "Hello, world!\n");
+    });
+    clean(&output);
+    if result.is_err() {
+        panic!("{:?}", result);
+    }
+}
+
+#[test]
+fn string_escape() {
+    let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
+    let result = catch_unwind(|| {
+        elaphe::run(&output, r#"main() { print('\n\r\f\b\t\v'); }"#).expect("execution failed.");
+        exec_py_and_assert(&output, "\n\r\x0C\x08\t\x0B\n");
+        elaphe::run(
+            &output,
+            r#"main() { print('\x4B\u{4f}\u6176\u{0061C9}'); }"#,
+        )
+        .expect("execution failed.");
+        exec_py_and_assert(&output, "KO慶應\n");
+        elaphe::run(&output, r#"main() { print('\a\c\'\\\$'); }"#).expect("execution failed.");
+        exec_py_and_assert(&output, "ac'\\$\n");
     });
     clean(&output);
     if result.is_err() {
