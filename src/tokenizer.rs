@@ -1,10 +1,15 @@
+use std::error::Error;
+
 use dart_parser_generator::grammar::END;
 use regex::Regex;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum TokenKind {
     Number,
-    String,
+    StringBeginEnd,
+    StringBeginMid,
+    StringMidMid,
+    StringMidEnd,
     Boolean,
     Null,
     Keyword,
@@ -29,7 +34,10 @@ impl Token<'_> {
             | TokenKind::BuiltInIdentifier
             | TokenKind::OtherIdentifier => self.str.to_string(),
             TokenKind::Number => String::from("NUMBER"),
-            TokenKind::String => String::from("STRING"),
+            TokenKind::StringBeginEnd => String::from("STRING_BEGIN_END"),
+            TokenKind::StringBeginMid => String::from("STRING_BEGIN_MID"),
+            TokenKind::StringMidMid => String::from("STRING_MID_MID"),
+            TokenKind::StringMidEnd => String::from("STRING_MID_END"),
             TokenKind::Boolean => String::from("BOOLEAN"),
             TokenKind::Null => String::from("NULL"),
             TokenKind::Identifier => String::from("IDENTIFIER"),
@@ -45,7 +53,7 @@ const RESERVED_KEYWORDS: [&'static str; 34] = [
     "with", "sl",
 ];
 
-const BUILT_IN_IDENTIFIER: [&'static str; 23] = [
+pub const BUILT_IN_IDENTIFIER: [&'static str; 23] = [
     "abstract",
     "as",
     "covariant",
@@ -71,7 +79,7 @@ const BUILT_IN_IDENTIFIER: [&'static str; 23] = [
     "typedef",
 ];
 
-const OTHER_IDENTIFIER: [&'static str; 8] = [
+pub const OTHER_IDENTIFIER: [&'static str; 8] = [
     "async", "hide", "of", "on", "show", "sync", "await", "yield",
 ];
 
@@ -81,16 +89,62 @@ const SYMBOLS: [&'static str; 49] = [
     "<", "!", "~", "|", "^", "&", "+", "-", "*", "/", "%", "(", ")", ",", ".", "[", "]",
 ];
 
-pub fn tokenize<'input>(input: &'input str) -> Vec<Token<'input>> {
+enum StringInterpolationKind {
+    SingleQuote,
+    DoubleQuote,
+    TripleSingleQuote,
+    TripleDoubleQuote,
+}
+
+pub fn tokenize<'input>(input: &'input str) -> Result<Vec<Token<'input>>, Box<dyn Error>> {
     let mut tokens: Vec<Token> = Vec::new();
     let mut current_index = 0;
 
     let regex_whitespace = Regex::new(r"^[\t\n\r ]+").unwrap();
     let regex_single_comment = Regex::new(r"^//[^\n]*").unwrap();
     let regex_multi_comment = Regex::new(r"^/\*(.|\n)*?\*/").unwrap();
-    let regex_string = Regex::new(r#"^(('[^\\'$]*')|("[^\\"$]*"))"#).unwrap();
+
+    // let regex_string = Regex::new(r#"^(('[^\\'$]*')|("[^\\"$]*"))"#).unwrap();
+    let regex_raw_string = Regex::new(r#"^r'[^'\r\n]*'|^r"[^"\r\n]*"#).unwrap();
+    let regex_single_line_string_sq_begin_end =
+        Regex::new(r#"^'(((\\\\)|(\\')|(\\)|(\$[a-zA-Z_])|[^'\r\n\$]))*'"#).unwrap();
+    let regex_single_line_string_sq_begin_mid =
+        Regex::new(r#"^'(((\\\\)|(\\')|(\\)|(\$[a-zA-Z_])|[^'\r\n\$]))*\$\{"#).unwrap();
+    let regex_single_line_string_sq_mid_mid =
+        Regex::new(r#"^\}(((\\\\)|(\\')|(\\)|(\$[a-zA-Z_])|[^'\r\n\$]))*\$\{"#).unwrap();
+    let regex_single_line_string_sq_mid_end =
+        Regex::new(r#"^\}(((\\\\)|(\\')|(\\)|(\$[a-zA-Z_])|[^'\r\n\$]))*'"#).unwrap();
+    let regex_single_line_string_dq_begin_end =
+        Regex::new(r#"^"(((\\\\)|(\\")|(\\)|(\$[a-zA-Z_])|[^"\r\n\$]))*""#).unwrap();
+    let regex_single_line_string_dq_begin_mid =
+        Regex::new(r#"^"(((\\\\)|(\\")|(\\)|(\$[a-zA-Z_])|[^"\r\n\$]))*\$\{"#).unwrap();
+    let regex_single_line_string_dq_mid_mid =
+        Regex::new(r#"^\}(((\\\\)|(\\")|(\\)|(\$[a-zA-Z_])|[^"\r\n\$]))*\$\{"#).unwrap();
+    let regex_single_line_string_dq_mid_end =
+        Regex::new(r#"^\}(((\\\\)|(\\")|(\\)|(\$[a-zA-Z_])|[^"\r\n\$]))*""#).unwrap();
+
+    let regex_raw_multiline_string = Regex::new(r#"^r'''[\s\S]*?'''|r"""[\s\S]*?"""#).unwrap();
+    let regex_multi_line_string_sq_begin_end =
+        Regex::new(r#"^'''(((\\\\)|(\\''')|(\\)|(\$[a-zA-Z_])|[^\$]))*?'''"#).unwrap();
+    let regex_multi_line_string_sq_begin_mid =
+        Regex::new(r#"^'''(((\\\\)|(\\''')|(\\)|(\$[a-zA-Z_])|[^\$]))*?\$\{"#).unwrap();
+    let regex_multi_line_string_sq_mid_mid =
+        Regex::new(r#"^\}(((\\\\)|(\\''')|(\\)|(\$[a-zA-Z_])|[^\$]))*?\$\{"#).unwrap();
+    let regex_multi_line_string_sq_mid_end =
+        Regex::new(r#"^\}(((\\\\)|(\\''')|(\\)|(\$[a-zA-Z_])|[^\$]))*?'''"#).unwrap();
+    let regex_multi_line_string_dq_begin_end =
+        Regex::new(r#"^"""(((\\\\)|(\\""")|(\\)|(\$[a-zA-Z_])|[^\$]))*?""""#).unwrap();
+    let regex_multi_line_string_dq_begin_mid =
+        Regex::new(r#"^"""(((\\\\)|(\\""")|(\\)|(\$[a-zA-Z_])|[^\$]))*?\$\{"#).unwrap();
+    let regex_multi_line_string_dq_mid_mid =
+        Regex::new(r#"^\}(((\\\\)|(\\""")|(\\)|(\$[a-zA-Z_])|[^\$]))*?\$\{"#).unwrap();
+    let regex_multi_line_string_dq_mid_end =
+        Regex::new(r#"^\}(((\\\\)|(\\""")|(\\)|(\$[a-zA-Z_])|[^\$]))*?""""#).unwrap();
+
     let regex_number = Regex::new(r"^((0(x|X)[a-fA-F0-9]+)|((([0-9]+(\.[0-9]+)?((e|E)(\+|-)?[0-9]+)?)|(\.[0-9]+((e|E)(\+|-)?[0-9]+)?))))").unwrap();
     let regex_identifier_or_keyword = Regex::new(r"^[a-zA-Z_\$][0-9a-zA-Z_\$]*").unwrap();
+
+    let mut string_interpolation_stack: Vec<StringInterpolationKind> = Vec::new();
 
     'tokenize: loop {
         if current_index >= input.len() {
@@ -121,13 +175,233 @@ pub fn tokenize<'input>(input: &'input str) -> Vec<Token<'input>> {
             None => {}
         }
 
-        match regex_string.find(&input[current_index..]) {
+        // string_interpolation_stackのtopは現在どの文字列リテラル内にいるかを表す
+        // Noneの場合は文字列リテラル内にいない
+        match string_interpolation_stack.last() {
+            Some(StringInterpolationKind::SingleQuote) => {
+                match regex_single_line_string_sq_mid_mid.find(&input[current_index..]) {
+                    Some(string) => {
+                        tokens.push(Token {
+                            kind: TokenKind::StringMidMid,
+                            str: &input[current_index + 1..current_index + string.end() - 2],
+                        });
+                        current_index += string.end();
+                        continue 'tokenize;
+                    }
+                    None => {}
+                }
+
+                match regex_single_line_string_sq_mid_end.find(&input[current_index..]) {
+                    Some(string) => {
+                        tokens.push(Token {
+                            kind: TokenKind::StringMidEnd,
+                            str: &input[current_index + 1..current_index + string.end() - 1],
+                        });
+                        current_index += string.end();
+                        string_interpolation_stack.pop();
+                        continue 'tokenize;
+                    }
+                    None => {}
+                }
+            }
+            Some(StringInterpolationKind::DoubleQuote) => {
+                match regex_single_line_string_dq_mid_mid.find(&input[current_index..]) {
+                    Some(string) => {
+                        tokens.push(Token {
+                            kind: TokenKind::StringMidMid,
+                            str: &input[current_index + 1..current_index + string.end() - 2],
+                        });
+                        current_index += string.end();
+                        continue 'tokenize;
+                    }
+                    None => {}
+                }
+
+                match regex_single_line_string_dq_mid_end.find(&input[current_index..]) {
+                    Some(string) => {
+                        tokens.push(Token {
+                            kind: TokenKind::StringMidEnd,
+                            str: &input[current_index + 1..current_index + string.end() - 1],
+                        });
+                        current_index += string.end();
+                        string_interpolation_stack.pop();
+                        continue 'tokenize;
+                    }
+                    None => {}
+                }
+            }
+            Some(StringInterpolationKind::TripleSingleQuote) => {
+                match regex_multi_line_string_sq_mid_mid.find(&input[current_index..]) {
+                    Some(string) => {
+                        tokens.push(Token {
+                            kind: TokenKind::StringMidMid,
+                            str: &input[current_index + 1..current_index + string.end() - 2],
+                        });
+                        current_index += string.end();
+                        continue 'tokenize;
+                    }
+                    None => {}
+                }
+                match regex_multi_line_string_sq_mid_end.find(&input[current_index..]) {
+                    Some(string) => {
+                        tokens.push(Token {
+                            kind: TokenKind::StringMidEnd,
+                            str: &input[current_index + 1..current_index + string.end() - 3],
+                        });
+                        current_index += string.end();
+                        string_interpolation_stack.pop();
+                        continue 'tokenize;
+                    }
+                    None => {}
+                }
+            }
+            Some(StringInterpolationKind::TripleDoubleQuote) => {
+                match regex_multi_line_string_dq_mid_mid.find(&input[current_index..]) {
+                    Some(string) => {
+                        tokens.push(Token {
+                            kind: TokenKind::StringMidMid,
+                            str: &input[current_index + 1..current_index + string.end() - 2],
+                        });
+                        current_index += string.end();
+                        continue 'tokenize;
+                    }
+                    None => {}
+                }
+                match regex_multi_line_string_dq_mid_end.find(&input[current_index..]) {
+                    Some(string) => {
+                        tokens.push(Token {
+                            kind: TokenKind::StringMidEnd,
+                            str: &input[current_index + 1..current_index + string.end() - 3],
+                        });
+                        current_index += string.end();
+                        string_interpolation_stack.pop();
+                        continue 'tokenize;
+                    }
+                    None => {}
+                }
+            }
+            None => {}
+        }
+
+        match regex_raw_multiline_string.find(&input[current_index..]) {
             Some(string) => {
                 tokens.push(Token {
-                    kind: TokenKind::String,
-                    str: &input[current_index..current_index + string.end()],
+                    kind: TokenKind::StringBeginEnd,
+                    str: &input[current_index + 4..current_index + string.end() - 3],
                 });
                 current_index += string.end();
+                continue 'tokenize;
+            }
+            None => {}
+        }
+
+        match regex_raw_string.find(&input[current_index..]) {
+            Some(string) => {
+                tokens.push(Token {
+                    kind: TokenKind::StringBeginEnd,
+                    str: &input[current_index + 2..current_index + string.end() - 1],
+                });
+                current_index += string.end();
+                continue 'tokenize;
+            }
+            None => {}
+        }
+
+        match regex_multi_line_string_sq_begin_end.find(&input[current_index..]) {
+            Some(string) => {
+                tokens.push(Token {
+                    kind: TokenKind::StringBeginEnd,
+                    str: &input[current_index + 3..current_index + string.end() - 3],
+                });
+                current_index += string.end();
+                continue 'tokenize;
+            }
+            None => {}
+        }
+
+        match regex_multi_line_string_dq_begin_end.find(&input[current_index..]) {
+            Some(string) => {
+                tokens.push(Token {
+                    kind: TokenKind::StringBeginEnd,
+                    str: &input[current_index + 3..current_index + string.end() - 3],
+                });
+                current_index += string.end();
+                continue 'tokenize;
+            }
+            None => {}
+        }
+
+        match regex_multi_line_string_sq_begin_mid.find(&input[current_index..]) {
+            Some(string) => {
+                tokens.push(Token {
+                    kind: TokenKind::StringBeginMid,
+                    str: &input[current_index + 3..current_index + string.end() - 2],
+                });
+                current_index += string.end();
+                string_interpolation_stack.push(StringInterpolationKind::TripleSingleQuote);
+                continue 'tokenize;
+            }
+            None => {}
+        }
+
+        match regex_multi_line_string_dq_begin_mid.find(&input[current_index..]) {
+            Some(string) => {
+                tokens.push(Token {
+                    kind: TokenKind::StringBeginMid,
+                    str: &input[current_index + 3..current_index + string.end() - 2],
+                });
+                current_index += string.end();
+                string_interpolation_stack.push(StringInterpolationKind::TripleDoubleQuote);
+                continue 'tokenize;
+            }
+            None => {}
+        }
+
+        match regex_single_line_string_sq_begin_end.find(&input[current_index..]) {
+            Some(string) => {
+                tokens.push(Token {
+                    kind: TokenKind::StringBeginEnd,
+                    str: &input[current_index + 1..current_index + string.end() - 1],
+                });
+                current_index += string.end();
+                continue 'tokenize;
+            }
+            None => {}
+        }
+
+        match regex_single_line_string_dq_begin_end.find(&input[current_index..]) {
+            Some(string) => {
+                tokens.push(Token {
+                    kind: TokenKind::StringBeginEnd,
+                    str: &input[current_index + 1..current_index + string.end() - 1],
+                });
+                current_index += string.end();
+                continue 'tokenize;
+            }
+            None => {}
+        }
+
+        match regex_single_line_string_sq_begin_mid.find(&input[current_index..]) {
+            Some(string) => {
+                tokens.push(Token {
+                    kind: TokenKind::StringBeginMid,
+                    str: &input[current_index + 1..current_index + string.end() - 2],
+                });
+                current_index += string.end();
+                string_interpolation_stack.push(StringInterpolationKind::SingleQuote);
+                continue 'tokenize;
+            }
+            None => {}
+        }
+
+        match regex_single_line_string_dq_begin_mid.find(&input[current_index..]) {
+            Some(string) => {
+                tokens.push(Token {
+                    kind: TokenKind::StringBeginMid,
+                    str: &input[current_index + 1..current_index + string.end() - 2],
+                });
+                current_index += string.end();
+                string_interpolation_stack.push(StringInterpolationKind::DoubleQuote);
                 continue 'tokenize;
             }
             None => {}
@@ -210,13 +484,13 @@ pub fn tokenize<'input>(input: &'input str) -> Vec<Token<'input>> {
             }
         }
 
-        panic!("Unexpected token at {}", current_index);
+        return Err(format!("Unexpected token at {}", current_index).into());
     }
     tokens.push(Token {
         kind: TokenKind::EOF,
         str: "",
     });
-    tokens
+    Ok(tokens)
 }
 
 #[cfg(test)]
@@ -226,7 +500,7 @@ mod tests {
     #[test]
     fn lexer() {
         let source = "1 + 2.3*.9e+3/10.2e-20 + 0x2A";
-        let result = tokenize(source);
+        let result = tokenize(source).unwrap();
         assert_eq!(
             result,
             vec![
@@ -274,13 +548,13 @@ mod tests {
         );
 
         let source = "'hoge ho123.4' + true + false +null";
-        let result = tokenize(source);
+        let result = tokenize(source).unwrap();
         assert_eq!(
             result,
             vec![
                 Token {
-                    kind: TokenKind::String,
-                    str: "'hoge ho123.4'",
+                    kind: TokenKind::StringBeginEnd,
+                    str: "hoge ho123.4",
                 },
                 Token {
                     kind: TokenKind::Symbol,
@@ -314,7 +588,7 @@ mod tests {
         );
 
         let source = "var truely = true; as finally";
-        let result = tokenize(source);
+        let result = tokenize(source).unwrap();
         assert_eq!(
             result,
             vec![
@@ -350,6 +624,62 @@ mod tests {
                     kind: TokenKind::EOF,
                     str: ""
                 }
+            ]
+        );
+    }
+
+    #[test]
+    fn lexer_string() {
+        let result = tokenize(r#"'abcd' + "efgh""#).unwrap();
+        let result_str = result.iter().map(|t| t.str).collect::<Vec<&str>>();
+        assert_eq!(result_str, vec!["abcd", "+", "efgh", ""]);
+
+        let result = tokenize(r#"'''abcd''' + """efgh""""#).unwrap();
+        let result_str = result.iter().map(|t| t.str).collect::<Vec<&str>>();
+        assert_eq!(result_str, vec!["abcd", "+", "efgh", ""]);
+
+        let result = tokenize(r#"'ab\'cd' "ef\"gh" 'ab\\' "ef\\" 'ab\\\'cd' "ef\\\"gh""#).unwrap();
+        let result_str = result.iter().map(|t| t.str).collect::<Vec<&str>>();
+        assert_eq!(
+            result_str,
+            vec![
+                r#"ab\'cd"#,
+                r#"ef\"gh"#,
+                r#"ab\\"#,
+                r#"ef\\"#,
+                r#"ab\\\'cd"#,
+                r#"ef\\\"gh"#,
+                ""
+            ]
+        );
+
+        let result = tokenize(r#"'''ab\'''cd''' """ef\"""gh""" '''ab\\''' """ef\\""" '''ab\\\'''cd''' """ef\\\"""gh""""#).unwrap();
+        let result_str = result.iter().map(|t| t.str).collect::<Vec<&str>>();
+        assert_eq!(
+            result_str,
+            vec![
+                r#"ab\'''cd"#,
+                r#"ef\"""gh"#,
+                r#"ab\\"#,
+                r#"ef\\"#,
+                r#"ab\\\'''cd"#,
+                r#"ef\\\"""gh"#,
+                ""
+            ]
+        );
+
+        let result = tokenize(r#"'ab$cd' + "ef$_gh""#).unwrap();
+        let result_str = result.iter().map(|t| t.str).collect::<Vec<&str>>();
+        assert_eq!(result_str, vec!["ab$cd", "+", "ef$_gh", ""]);
+
+        let result = tokenize(r#"'ab$+cd' + "efgh""#).unwrap_err();
+
+        let result = tokenize(r#"'ab${1+2}cd${hoge}' + "ef${abc}gh${"Hello"}world""#).unwrap();
+        let result_str = result.iter().map(|t| t.str).collect::<Vec<&str>>();
+        assert_eq!(
+            result_str,
+            vec![
+                "ab", "1", "+", "2", "cd", "hoge", "", "+", "ef", "abc", "gh", "Hello", "world", ""
             ]
         );
     }

@@ -88,6 +88,69 @@ fn string_literal() {
         exec_py_and_assert(&output, "\"world\"\n");
         elaphe::run(&output, r#"main() { print("'world'"); }"#).expect("execution failed.");
         exec_py_and_assert(&output, "'world'\n");
+        elaphe::run(
+            &output,
+            r#"
+        main() {
+            print('''
+Hello,
+World!
+''');
+        }
+        "#,
+        )
+        .expect("execution failed.");
+        exec_py_and_assert(&output, "\nHello,\nWorld!\n\n");
+        elaphe::run(
+            &output,
+            r#"
+        main() {
+            print("""
+Hello,
+World!
+""");
+        }
+        "#,
+        )
+        .expect("execution failed.");
+        exec_py_and_assert(&output, "\nHello,\nWorld!\n\n");
+    });
+    clean(&output);
+    if result.is_err() {
+        panic!("{:?}", result);
+    }
+}
+
+#[test]
+fn string_interpolation() {
+    let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
+    let result = catch_unwind(|| {
+        elaphe::run(
+            &output,
+            "main() { var x = 'world!'; print('Hello, ${x}'); }",
+        )
+        .expect("execution failed.");
+        exec_py_and_assert(&output, "Hello, world!\n");
+        elaphe::run(&output, "main() { print('1+1=${1+1}'); }").expect("execution failed.");
+        exec_py_and_assert(&output, "1+1=2\n");
+        elaphe::run(
+            &output,
+            r#"main() { var x = "elaphe"; print("Hello, ${x} and ${"dart"}!"); }"#,
+        )
+        .expect("execution failed.");
+        exec_py_and_assert(&output, "Hello, elaphe and dart!\n");
+        elaphe::run(
+            &output,
+            r#"main() { var x = "recursive"; print("This is ${'${x} interpolation'}."); }"#,
+        )
+        .expect("execution failed.");
+        exec_py_and_assert(&output, "This is recursive interpolation.\n");
+        elaphe::run(
+            &output,
+            "main() { var a = 'Hello'; var b = 'world'; print('$a, $b!'); }",
+        )
+        .expect("execution failed.");
+        exec_py_and_assert(&output, "Hello, world!\n");
     });
     clean(&output);
     if result.is_err() {

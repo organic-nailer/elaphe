@@ -5,7 +5,7 @@ pub const START_SYMBOL: &'static str = "LibraryDeclaration";
 pub const EPSILON: &'static str = "[EMPTY]";
 pub const END: &'static str = "[END]";
 
-const DART_GRAMMARS: [&'static str; 134] = [
+const DART_GRAMMARS: [&'static str; 136] = [
 // Variables
 "InitializedVariableDeclaration ::= DeclaredIdentifier
     |/ DeclaredIdentifier '=' Expression
@@ -104,8 +104,8 @@ const DART_GRAMMARS: [&'static str; 134] = [
     |/ ListLiteral
     |/ SetOrMapLiteralNotBrace
     |/ Identifier",
-"StringLiteralList ::= 'STRING'
-    |/ StringLiteralList 'STRING'",
+"StringLiteralList ::= StringLiteral
+    |/ StringLiteralList StringLiteral",
 "ListLiteral ::= '[' ']'
     |/ 'const' '[' ']'
     |/ '[' ElementList CommaOpt ']'
@@ -299,7 +299,7 @@ const DART_GRAMMARS: [&'static str; 134] = [
     |/ 'import' Uri 'as' Identifier ';'
     |/ 'import' Uri CombinatorList ';'
     |/ 'import' Uri 'as' Identifier CombinatorList ';'",
-"Uri ::= 'STRING'",
+"Uri ::= 'STRING_BEGIN_END'",
 "CombinatorList ::= Combinator
     |/ CombinatorList Combinator",
 "Combinator ::= 'show' IdentifierList
@@ -334,6 +334,12 @@ const DART_GRAMMARS: [&'static str; 134] = [
     |/ 'dynamic'",
 "BUILT_IN_IDENTIFIER ::= 'abstract' |/ 'as' |/ 'covariant' |/ 'deferred' |/ 'dynamic' |/ 'export' |/ 'external' |/ 'extension' |/ 'factory' |/ 'Function' |/ 'get' |/ 'implements' |/ 'import' |/ 'interface' |/ 'late' |/ 'library' |/ 'mixin' |/ 'operator' |/ 'part' |/ 'required' |/ 'set' |/ 'static' |/ 'typedef'",
 "OTHER_IDENTIFIER ::= 'async' |/ 'hide' |/ 'of' |/ 'on' |/ 'show' |/ 'sync' |/ 'await' |/ 'yield'",
+
+// String
+"StringLiteral ::= 'STRING_BEGIN_END'
+    |/ 'STRING_BEGIN_MID' StringInterpolation 'STRING_MID_END'",
+"StringInterpolation ::= Expression
+    |/ StringInterpolation 'STRING_MID_MID' Expression",
 
 // Others
 "CommaOpt ::= [EMPTY]

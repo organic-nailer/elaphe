@@ -18,6 +18,12 @@ mod tokenizer;
 pub fn run(output: &str, source: &str) -> Result<(), ()> {
     // Tokenize
     let token_list = tokenizer::tokenize(source);
+    if token_list.is_err() {
+        println!("{:?}", token_list.err());
+        println!("failed to tokenize the passed source: {}", source);
+        return Err(());
+    }
+    let token_list = token_list.unwrap();
 
     // Parse
     let reader = std::fs::File::open(concat!(env!("OUT_DIR"), "/parser.bin")).unwrap();

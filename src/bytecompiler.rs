@@ -35,8 +35,6 @@ pub struct ByteCompiler<'ctx, 'value> {
 impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
     fn compile_import(&mut self, node: &LibraryImport) {
         let uri = &node.uri;
-        let len = uri.len();
-        let uri = &uri[1..len - 1];
 
         let identifier = match &node.identifier {
             Some(v) => Some(v.value),
@@ -522,16 +520,36 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 self.push_load_const(PyObject::new_numeric(value, false));
             }
             NodeExpression::StringLiteral { str_list } => {
-                let value = str_list
-                    .iter()
-                    .map(|v| {
-                        let len = v.len();
-                        &v[1..len - 1]
-                    })
-                    .collect::<Vec<&'value str>>()
-                    .join("");
+                for (i, single_str) in str_list.iter().enumerate() {
+                    for (i, str) in single_str.string_list.iter().enumerate() {
+                        // string + str(expr) + string + str(expr) + ...
+                        if i > 0 {
+                            // str(expr)
+                            self.push_load_var(&"str".to_string());
+                            self.compile_expr(&single_str.interpolation_list[i - 1]);
+                            self.push_op(OpCode::CallFunction(1));
 
-                self.push_load_const(PyObject::new_string(value.to_string(), false));
+                            self.push_op(OpCode::BinaryAdd);
+                        }
+                        self.push_load_const(PyObject::new_string(str.to_string(), false));
+                        if i > 0 {
+                            self.push_op(OpCode::BinaryAdd);
+                        }
+                    }
+                    if i > 0 {
+                        self.push_op(OpCode::BinaryAdd);
+                    }
+                }
+                // let value = str_list
+                //     .iter()
+                //     .map(|v| {
+                //         let len = v.len();
+                //         &v[1..len - 1]
+                //     })
+                //     .collect::<Vec<&'value str>>()
+                //     .join("");
+
+                // self.push_load_const(PyObject::new_string(value.to_string(), false));
             }
             NodeExpression::BooleanLiteral { value } => {
                 self.push_load_const(PyObject::new_boolean(value, false));

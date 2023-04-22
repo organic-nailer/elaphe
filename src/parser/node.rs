@@ -35,7 +35,7 @@ pub enum NodeExpression<'input> {
         value: &'input str,
     },
     StringLiteral {
-        str_list: Vec<&'input str>,
+        str_list: Vec<StringWithInterpolation<'input>>,
     },
     BooleanLiteral {
         value: &'input str,
@@ -270,4 +270,9 @@ pub enum Member<'input> {
 pub struct TypeTest<'input> {
     pub dart_type: DartType<'input>,
     pub check_matching: bool,
+}
+
+pub struct StringWithInterpolation<'input> {
+    pub string_list: Vec<&'input str>,
+    pub interpolation_list: Vec<NodeExpression<'input>>,
 }
