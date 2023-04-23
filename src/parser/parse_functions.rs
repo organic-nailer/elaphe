@@ -14,14 +14,21 @@ use super::{
 
 pub fn parse_function_body<'input>(
     node: &NodeInternal<'input>,
+    returns_none: bool,
 ) -> Result<NodeStatement<'input>, Box<dyn Error>> {
     if node.rule_name == "FunctionBody" {
         if node.children.len() == 1 {
             return parse_block_statement(&node.children[0]);
         } else {
-            return Ok(NodeStatement::Expression {
-                expr: Box::new(parse_expression(&node.children[1])?),
-            });
+            if returns_none {
+                return Ok(NodeStatement::Expression {
+                    expr: Box::new(parse_expression(&node.children[1])?),
+                });
+            } else {
+                return Ok(NodeStatement::Return {
+                    value: Some(Box::new(parse_expression(&node.children[1])?)),
+                });
+            }
         }
     }
 

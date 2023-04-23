@@ -1,7 +1,7 @@
 use std::{error::Error, vec};
 
 use super::{
-    node::{Combinator, LibraryDeclaration, LibraryImport, NodeStatement},
+    node::{Combinator, DartType, LibraryDeclaration, LibraryImport, NodeStatement},
     node_internal::NodeInternal,
     parse_class::parse_class_declaration,
     parse_functions::{parse_function_body, parse_function_signature},
@@ -115,9 +115,17 @@ fn parse_top_function_declaration<'input>(
     node: &NodeInternal<'input>,
 ) -> Result<NodeStatement<'input>, Box<dyn Error>> {
     if node.rule_name == "TopFunctionDeclaration" {
+        let signature = parse_function_signature(&node.children[0])?;
+        let return_is_void = match &signature.return_type {
+            Some(return_type) => match return_type {
+                DartType::Void => true,
+                _ => false,
+            },
+            None => false,
+        };
         return Ok(NodeStatement::FunctionDeclaration {
             signature: parse_function_signature(&node.children[0])?,
-            body: Box::new(parse_function_body(&node.children[1])?),
+            body: Box::new(parse_function_body(&node.children[1], return_is_void)?),
         });
     }
 

@@ -1,7 +1,7 @@
 use std::error::Error;
 
 use super::{
-    node::{Member, NodeStatement},
+    node::{DartType, Member, NodeStatement},
     node_internal::NodeInternal,
     parse_functions::{parse_function_body, parse_function_signature},
     parse_identifier::parse_identifier,
@@ -67,9 +67,17 @@ fn parse_member_impl<'input>(
     node: &NodeInternal<'input>,
 ) -> Result<Member<'input>, Box<dyn Error>> {
     if node.rule_name == "MemberImpl" {
+        let signature = parse_function_signature(&node.children[0])?;
+        let return_is_void = match &signature.return_type {
+            Some(return_type) => match return_type {
+                DartType::Void => true,
+                _ => false,
+            },
+            None => false,
+        };
         return Ok(Member::MethodImpl {
-            signature: parse_function_signature(&node.children[0])?,
-            body: Box::new(parse_function_body(&node.children[1])?),
+            signature,
+            body: Box::new(parse_function_body(&node.children[1], return_is_void)?),
         });
     }
 
