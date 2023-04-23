@@ -22,10 +22,10 @@ fn parse_type_not_function<'input>(
     node: &NodeInternal<'input>,
 ) -> Result<DartType<'input>, Box<dyn Error>> {
     if node.rule_name == "TypeNotFunction" {
-        if node.children[0].token.clone().unwrap().str == "void" {
-            return Ok(DartType::Void);
-        } else {
+        if node.children[0].rule_name == "TypeNotVoidNotFunction" {
             return parse_type_not_void_not_function(&node.children[0]);
+        } else if node.children[0].token.clone().unwrap().str == "void" {
+            return Ok(DartType::Void);
         }
     }
 
