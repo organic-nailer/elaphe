@@ -1,3 +1,4 @@
+use std::time::SystemTime;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::bytecode::{calc_stack_size, OpCode};
@@ -11,6 +12,8 @@ pub fn run_root<'value>(
     file_name: &String,
     root_node: &'value LibraryDeclaration<'value>,
     source: &'value str,
+    time_start_build: SystemTime,
+    is_root: bool,
 ) -> PyObject {
     let global_context = Rc::new(RefCell::new(GlobalContext {
         constant_list: vec![],
@@ -36,20 +39,22 @@ pub fn run_root<'value>(
         .push_const(PyObject::None(false));
 
     for node in &root_node.import_list {
-        compiler.compile_import(node);
+        compiler.compile_import(node, time_start_build);
     }
 
     for node in &root_node.top_level_declaration_list {
         compiler.compile_stmt(&node, None);
     }
 
-    // main関数を実行
-    let main_position = (*global_context)
-        .borrow_mut()
-        .register_or_get_name(&"main".to_string());
-    compiler.push_op(OpCode::LoadName(main_position));
-    compiler.push_op(OpCode::CallFunction(0));
-    compiler.push_op(OpCode::PopTop);
+    if is_root {
+        // main関数を実行
+        let main_position = (*global_context)
+            .borrow_mut()
+            .register_or_get_name(&"main".to_string());
+        compiler.push_op(OpCode::LoadName(main_position));
+        compiler.push_op(OpCode::CallFunction(0));
+        compiler.push_op(OpCode::PopTop);
+    }
     compiler.push_op(OpCode::LoadConst(0));
     compiler.push_op(OpCode::ReturnValue);
 

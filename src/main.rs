@@ -1,3 +1,4 @@
+use elaphe::{build_from_code, build_from_file};
 use getopts::Options;
 use std::error::Error;
 use std::path::{Path, PathBuf};
@@ -7,6 +8,7 @@ use std::{env, fs};
 
 fn main() -> Result<(), Box<dyn Error>> {
     let args: Vec<String> = env::args().collect();
+    let now = std::time::SystemTime::now();
 
     if args.len() == 1 {
         panic!("invalid arguments");
@@ -22,32 +24,32 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
         };
 
-        let output = "main.pyc";
-
         if !matches.free.is_empty() {
             // ファイル名で実行
             let file_name = matches.free[0].clone();
-            let source = fs::read_to_string(file_name)?;
+            let output = Path::new(&file_name).with_extension("pyc");
+            let output = output.to_str().unwrap();
 
-            compile_and_run(output, &source)?;
-            Ok(())
+            build_from_file(output, &file_name, now, true)?;
+            execute_pyc(output)
         } else {
             // 文字列を実行
             let source = matches.opt_str("c");
+
+            let output = "main.pyc";
             match source {
                 Some(source) => {
-                    compile_and_run(output, &source)?;
-                    Ok(())
+                    build_from_code(output, &source, now)?;
+                    execute_pyc(output)
                 }
                 None => Err("invalid arguments".into()),
             }
         }
     } else if command == "build" {
-        let output = "main.pyc";
         let file_name = args[2].clone();
-        let source = fs::read_to_string(file_name)?;
-        compile_only(output, &source)?;
-        Ok(())
+        let output = Path::new(&file_name).with_extension("pyc");
+        let output = output.to_str().unwrap();
+        build_from_file(output, &file_name, now, true)
     } else if command == "init" {
         let dir = &args[2];
         elaphe_init(dir)?;
@@ -61,26 +63,19 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 }
 
-fn compile_only(output: &str, source: &str) -> Result<(), Box<dyn Error>> {
-    match elaphe::run(output, &source) {
-        Ok(_) => println!("{} is generated!", output),
-        Err(_) => {
-            return Err("".into());
-        }
-    }
-    Ok(())
-}
+// fn compile_only(output: &str, source: &str) -> Result<(), Box<dyn Error>> {
+//     match elaphe::run(output, &source) {
+//         Ok(_) => println!("{} is generated!", output),
+//         Err(_) => {
+//             return Err("".into());
+//         }
+//     }
+//     Ok(())
+// }
 
-fn compile_and_run(output: &str, source: &str) -> Result<(), Box<dyn Error>> {
-    match elaphe::run(output, &source) {
-        Ok(_) => println!("{} is generated!", output),
-        Err(_) => {
-            return Err("".into());
-        }
-    }
-
-    println!("run {}", output);
-    match Command::new("python").args(&["main.pyc"]).output() {
+fn execute_pyc(file_name: &str) -> Result<(), Box<dyn Error>> {
+    println!("run {}", file_name);
+    match Command::new("python").args(&[file_name]).output() {
         Ok(e) => {
             println!("----- result -----");
             println!("{}", str::from_utf8(&e.stdout).unwrap());

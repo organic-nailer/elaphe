@@ -42,6 +42,7 @@ pub enum OpCode {
     InplaceXor,
     InplaceOr,
     ReturnValue,
+    ImportStar,
     PopBlock,
     PopExcept,
     StoreName(u8),
@@ -132,6 +133,7 @@ impl OpCode {
             OpCode::InplaceXor => 78,
             OpCode::InplaceOr => 79,
             OpCode::ReturnValue => 83,
+            OpCode::ImportStar => 84,
             OpCode::PopBlock => 87,
             OpCode::PopExcept => 89,
             OpCode::StoreName(_) => 90,
@@ -275,6 +277,7 @@ impl OpCode {
 
             OpCode::ImportName(_) => -1,
             OpCode::ImportFrom(_) => 1,
+            OpCode::ImportStar => -1,
 
             OpCode::StoreGlobal(_) | OpCode::StoreFast(_) | OpCode::StoreName(_) => -1,
 

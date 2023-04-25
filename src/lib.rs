@@ -1,3 +1,4 @@
+use std::error::Error;
 use std::fs;
 use std::fs::{File, OpenOptions};
 use std::io::Write;
@@ -15,13 +16,43 @@ mod parser;
 mod pyobject;
 mod tokenizer;
 
-pub fn run(output: &str, source: &str) -> Result<(), ()> {
+pub fn build_from_file(
+    output: &str,
+    source_file: &str,
+    time_start_build: SystemTime,
+    is_root: bool,
+) -> Result<(), Box<dyn Error>> {
+    let source = fs::read_to_string(source_file).unwrap();
+    run(output, &source, time_start_build, is_root)
+}
+
+pub fn build_from_code(
+    output: &str,
+    code: &str,
+    time_start_build: SystemTime,
+) -> Result<(), Box<dyn Error>> {
+    run(output, &code, time_start_build, true)
+}
+
+pub fn build_from_code_single(output: &str, code: &str) -> Result<(), Box<dyn Error>> {
+    run(output, &code, SystemTime::now(), true)
+}
+
+fn run(
+    output: &str,
+    source: &str,
+    time_start_build: SystemTime,
+    is_root: bool,
+) -> Result<(), Box<dyn Error>> {
     // Tokenize
     let token_list = tokenizer::tokenize(source);
     if token_list.is_err() {
-        println!("{:?}", token_list.err());
-        println!("failed to tokenize the passed source: {}", source);
-        return Err(());
+        return Err(format!(
+            "failed to tokenize the passed source: {}, {:?}",
+            source,
+            token_list.err()
+        )
+        .into());
     }
     let token_list = token_list.unwrap();
 
@@ -30,26 +61,43 @@ pub fn run(output: &str, source: &str) -> Result<(), ()> {
     let transition_map: parser_generator::TransitionMap = de::from_reader(reader).unwrap();
     let node = parser::parse(token_list, transition_map);
     if node.is_err() {
-        println!("{:?}", node.err());
-        println!("failed to parse the passed source: {}", source);
-        return Err(());
+        return Err(format!(
+            "failed to parse the passed source: {}, {:?}",
+            source,
+            node.err()
+        )
+        .into());
     }
     let node_list = node.unwrap();
 
     {
         let path = Path::new(output);
         match fs::remove_file(path) {
-            Result::Ok(_) => (), // println!("file removed"),
-            Result::Err(_) => println!("file does not exists"),
+            Result::Ok(_) => (),  // println!("file removed"),
+            Result::Err(_) => (), // println!("file does not exists"),
         }
         let mut file = OpenOptions::new()
             .create(true)
             .write(true)
             .open(&path)
             .unwrap();
+        let filename = path
+            .with_extension("pyc")
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_string();
 
         write_header(&mut file);
-        write_root_py_code(&mut file, source, node_list);
+        write_root_py_code(
+            &mut file,
+            filename,
+            source,
+            node_list,
+            time_start_build,
+            is_root,
+        );
     }
     Ok(())
 }
@@ -67,8 +115,16 @@ fn write_header(file: &mut File) {
     file.write(&(file_size.to_le_bytes())).unwrap();
 }
 
-fn write_root_py_code(file: &mut File, source: &str, node: LibraryDeclaration) {
-    let code = bytecompiler::runroot::run_root(&"main.py".to_string(), &node, source);
+fn write_root_py_code(
+    file: &mut File,
+    file_name: String,
+    source: &str,
+    node: LibraryDeclaration,
+    time_start_build: SystemTime,
+    is_root: bool,
+) {
+    let code =
+        bytecompiler::runroot::run_root(&file_name, &node, source, time_start_build, is_root);
 
     code.write(file);
 }

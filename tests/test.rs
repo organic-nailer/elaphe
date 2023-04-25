@@ -22,10 +22,12 @@ fn clean(filename: &str) {
 fn calc_operations() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
-        elaphe::run(&output, "main() { print((1+2)*5); }").expect("execution failed.");
+        elaphe::build_from_code_single(&output, "main() { print((1+2)*5); }")
+            .expect("execution failed.");
         exec_py_and_assert(&output, "15\n");
 
-        elaphe::run(&output, "main() { print(5*(1-2)); }").expect("execution failed.");
+        elaphe::build_from_code_single(&output, "main() { print(5*(1-2)); }")
+            .expect("execution failed.");
         exec_py_and_assert(&output, "-5\n");
     });
     clean(&output);
@@ -38,10 +40,12 @@ fn calc_operations() {
 fn calc_float() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
-        elaphe::run(&output, "main() { print(1 + 2.3); }").expect("execution failed.");
+        elaphe::build_from_code_single(&output, "main() { print(1 + 2.3); }")
+            .expect("execution failed.");
         exec_py_and_assert(&output, "3.3\n");
 
-        elaphe::run(&output, "main() { print(.5 * 4e+2); }").expect("execution failed.");
+        elaphe::build_from_code_single(&output, "main() { print(.5 * 4e+2); }")
+            .expect("execution failed.");
         exec_py_and_assert(&output, "200.0\n");
     });
     clean(&output);
@@ -54,7 +58,8 @@ fn calc_float() {
 fn calc_hex() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
-        elaphe::run(&output, "main() { print(0x47 - 0X05); }").expect("execution failed.");
+        elaphe::build_from_code_single(&output, "main() { print(0x47 - 0X05); }")
+            .expect("execution failed.");
         exec_py_and_assert(&output, "66\n");
     });
     clean(&output);
@@ -67,7 +72,8 @@ fn calc_hex() {
 fn calc_boolean() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
-        elaphe::run(&output, "main() { print(true + false); }").expect("execution failed.");
+        elaphe::build_from_code_single(&output, "main() { print(true + false); }")
+            .expect("execution failed.");
         exec_py_and_assert(&output, "1\n");
     });
     clean(&output);
@@ -80,15 +86,19 @@ fn calc_boolean() {
 fn string_literal() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
-        elaphe::run(&output, "main() { print('abc' + 'defg'); }").expect("execution failed.");
+        elaphe::build_from_code_single(&output, "main() { print('abc' + 'defg'); }")
+            .expect("execution failed.");
         exec_py_and_assert(&output, "abcdefg\n");
-        elaphe::run(&output, "main() { print('abc' 'defg'); }").expect("execution failed.");
+        elaphe::build_from_code_single(&output, "main() { print('abc' 'defg'); }")
+            .expect("execution failed.");
         exec_py_and_assert(&output, "abcdefg\n");
-        elaphe::run(&output, r#"main() { print('"world"'); }"#).expect("execution failed.");
+        elaphe::build_from_code_single(&output, r#"main() { print('"world"'); }"#)
+            .expect("execution failed.");
         exec_py_and_assert(&output, "\"world\"\n");
-        elaphe::run(&output, r#"main() { print("'world'"); }"#).expect("execution failed.");
+        elaphe::build_from_code_single(&output, r#"main() { print("'world'"); }"#)
+            .expect("execution failed.");
         exec_py_and_assert(&output, "'world'\n");
-        elaphe::run(
+        elaphe::build_from_code_single(
             &output,
             r#"
         main() {
@@ -101,7 +111,7 @@ World!
         )
         .expect("execution failed.");
         exec_py_and_assert(&output, "Hello,\nWorld!\n\n");
-        elaphe::run(
+        elaphe::build_from_code_single(
             &output,
             r#"
         main() {
@@ -125,27 +135,28 @@ World!
 fn string_interpolation() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
-        elaphe::run(
+        elaphe::build_from_code_single(
             &output,
             "main() { var x = 'world!'; print('Hello, ${x}'); }",
         )
         .expect("execution failed.");
         exec_py_and_assert(&output, "Hello, world!\n");
-        elaphe::run(&output, "main() { print('1+1=${1+1}'); }").expect("execution failed.");
+        elaphe::build_from_code_single(&output, "main() { print('1+1=${1+1}'); }")
+            .expect("execution failed.");
         exec_py_and_assert(&output, "1+1=2\n");
-        elaphe::run(
+        elaphe::build_from_code_single(
             &output,
             r#"main() { var x = "elaphe"; print("Hello, ${x} and ${"dart"}!"); }"#,
         )
         .expect("execution failed.");
         exec_py_and_assert(&output, "Hello, elaphe and dart!\n");
-        elaphe::run(
+        elaphe::build_from_code_single(
             &output,
             r#"main() { var x = "recursive"; print("This is ${'${x} interpolation'}."); }"#,
         )
         .expect("execution failed.");
         exec_py_and_assert(&output, "This is recursive interpolation.\n");
-        elaphe::run(
+        elaphe::build_from_code_single(
             &output,
             "main() { var a = 'Hello'; var b = 'world'; print('$a, $b!'); }",
         )
@@ -162,15 +173,17 @@ fn string_interpolation() {
 fn string_escape() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
-        elaphe::run(&output, r#"main() { print('\n\r\f\b\t\v'); }"#).expect("execution failed.");
+        elaphe::build_from_code_single(&output, r#"main() { print('\n\r\f\b\t\v'); }"#)
+            .expect("execution failed.");
         exec_py_and_assert(&output, "\n\r\x0C\x08\t\x0B\n");
-        elaphe::run(
+        elaphe::build_from_code_single(
             &output,
             r#"main() { print('\x4B\u{4f}\u6176\u{0061C9}'); }"#,
         )
         .expect("execution failed.");
         exec_py_and_assert(&output, "KO慶應\n");
-        elaphe::run(&output, r#"main() { print('\a\c\'\\\$'); }"#).expect("execution failed.");
+        elaphe::build_from_code_single(&output, r#"main() { print('\a\c\'\\\$'); }"#)
+            .expect("execution failed.");
         exec_py_and_assert(&output, "ac'\\$\n");
     });
     clean(&output);
@@ -183,17 +196,23 @@ fn string_escape() {
 fn compare_op() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
-        elaphe::run(&output, "main() { print(1 == 2); }").expect("execution failed.");
+        elaphe::build_from_code_single(&output, "main() { print(1 == 2); }")
+            .expect("execution failed.");
         exec_py_and_assert(&output, "False\n");
-        elaphe::run(&output, "main() { print(1 != 2); }").expect("execution failed.");
+        elaphe::build_from_code_single(&output, "main() { print(1 != 2); }")
+            .expect("execution failed.");
         exec_py_and_assert(&output, "True\n");
-        elaphe::run(&output, "main() { print(1 >= 2); }").expect("execution failed.");
+        elaphe::build_from_code_single(&output, "main() { print(1 >= 2); }")
+            .expect("execution failed.");
         exec_py_and_assert(&output, "False\n");
-        elaphe::run(&output, "main() { print(1.3 < 2.1); }").expect("execution failed.");
+        elaphe::build_from_code_single(&output, "main() { print(1.3 < 2.1); }")
+            .expect("execution failed.");
         exec_py_and_assert(&output, "True\n");
-        elaphe::run(&output, "main() { print(1 > 2); }").expect("execution failed.");
+        elaphe::build_from_code_single(&output, "main() { print(1 > 2); }")
+            .expect("execution failed.");
         exec_py_and_assert(&output, "False\n");
-        elaphe::run(&output, "main() { print(1 <= 2); }").expect("execution failed.");
+        elaphe::build_from_code_single(&output, "main() { print(1 <= 2); }")
+            .expect("execution failed.");
         exec_py_and_assert(&output, "True\n");
     });
     clean(&output);
@@ -206,27 +225,38 @@ fn compare_op() {
 fn binary_op() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
-        elaphe::run(&output, "main() { print(1 << 2); }").expect("execution failed.");
+        elaphe::build_from_code_single(&output, "main() { print(1 << 2); }")
+            .expect("execution failed.");
         exec_py_and_assert(&output, "4\n");
-        elaphe::run(&output, "main() { print(8 >> 2); }").expect("execution failed.");
+        elaphe::build_from_code_single(&output, "main() { print(8 >> 2); }")
+            .expect("execution failed.");
         exec_py_and_assert(&output, "2\n");
-        elaphe::run(&output, "main() { print(3 & 6); }").expect("execution failed.");
+        elaphe::build_from_code_single(&output, "main() { print(3 & 6); }")
+            .expect("execution failed.");
         exec_py_and_assert(&output, "2\n");
-        elaphe::run(&output, "main() { print(3 | 6); }").expect("execution failed.");
+        elaphe::build_from_code_single(&output, "main() { print(3 | 6); }")
+            .expect("execution failed.");
         exec_py_and_assert(&output, "7\n");
-        elaphe::run(&output, "main() { print(3 ^ 6); }").expect("execution failed.");
+        elaphe::build_from_code_single(&output, "main() { print(3 ^ 6); }")
+            .expect("execution failed.");
         exec_py_and_assert(&output, "5\n");
-        elaphe::run(&output, "main() { print(5 + 2); }").expect("execution failed.");
+        elaphe::build_from_code_single(&output, "main() { print(5 + 2); }")
+            .expect("execution failed.");
         exec_py_and_assert(&output, "7\n");
-        elaphe::run(&output, "main() { print(5 - 2); }").expect("execution failed.");
+        elaphe::build_from_code_single(&output, "main() { print(5 - 2); }")
+            .expect("execution failed.");
         exec_py_and_assert(&output, "3\n");
-        elaphe::run(&output, "main() { print(5 * 2); }").expect("execution failed.");
+        elaphe::build_from_code_single(&output, "main() { print(5 * 2); }")
+            .expect("execution failed.");
         exec_py_and_assert(&output, "10\n");
-        elaphe::run(&output, "main() { print(5 / 2); }").expect("execution failed.");
+        elaphe::build_from_code_single(&output, "main() { print(5 / 2); }")
+            .expect("execution failed.");
         exec_py_and_assert(&output, "2.5\n");
-        elaphe::run(&output, "main() { print(5 ~/ 2); }").expect("execution failed.");
+        elaphe::build_from_code_single(&output, "main() { print(5 ~/ 2); }")
+            .expect("execution failed.");
         exec_py_and_assert(&output, "2\n");
-        elaphe::run(&output, "main() { print(5 % 2); }").expect("execution failed.");
+        elaphe::build_from_code_single(&output, "main() { print(5 % 2); }")
+            .expect("execution failed.");
         exec_py_and_assert(&output, "1\n");
     });
     clean(&output);
@@ -239,11 +269,14 @@ fn binary_op() {
 fn unary_op() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
-        elaphe::run(&output, "main() { print(1+-2); }").expect("execution failed.");
+        elaphe::build_from_code_single(&output, "main() { print(1+-2); }")
+            .expect("execution failed.");
         exec_py_and_assert(&output, "-1\n");
-        elaphe::run(&output, "main() { print(~2); }").expect("execution failed.");
+        elaphe::build_from_code_single(&output, "main() { print(~2); }")
+            .expect("execution failed.");
         exec_py_and_assert(&output, "-3\n");
-        elaphe::run(&output, "main() { print(!(1!=2)); }").expect("execution failed.");
+        elaphe::build_from_code_single(&output, "main() { print(!(1!=2)); }")
+            .expect("execution failed.");
         exec_py_and_assert(&output, "False\n");
     });
     clean(&output);
@@ -256,7 +289,8 @@ fn unary_op() {
 fn statement_list() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
-        elaphe::run(&output, "main() { {print(1+2);print(3-4);} }").expect("execution failed.");
+        elaphe::build_from_code_single(&output, "main() { {print(1+2);print(3-4);} }")
+            .expect("execution failed.");
         exec_py_and_assert(&output, "3\n-1\n");
     });
     clean(&output);
@@ -269,7 +303,8 @@ fn statement_list() {
 fn global_variable() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
-        elaphe::run(&output, "var x = 4; main() { {print(x*x);} }").expect("execution failed.");
+        elaphe::build_from_code_single(&output, "var x = 4; main() { {print(x*x);} }")
+            .expect("execution failed.");
         exec_py_and_assert(&output, "16\n");
     });
     clean(&output);
@@ -282,7 +317,8 @@ fn global_variable() {
 fn local_variable() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
-        elaphe::run(&output, "main() { var x = 4; {print(x*x);} }").expect("execution failed.");
+        elaphe::build_from_code_single(&output, "main() { var x = 4; {print(x*x);} }")
+            .expect("execution failed.");
         exec_py_and_assert(&output, "16\n");
     });
     clean(&output);
@@ -295,7 +331,7 @@ fn local_variable() {
 fn if_statement() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
-        elaphe::run(
+        elaphe::build_from_code_single(
             &output,
             "
         main() {
@@ -324,7 +360,7 @@ fn if_statement() {
 fn for_statement() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
-        elaphe::run(
+        elaphe::build_from_code_single(
             &output,
             "
         main() {
@@ -347,7 +383,7 @@ fn for_statement() {
 fn while_statement() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
-        elaphe::run(
+        elaphe::build_from_code_single(
             &output,
             "
         main() {
@@ -372,7 +408,7 @@ fn while_statement() {
 fn do_statement() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
-        elaphe::run(
+        elaphe::build_from_code_single(
             &output,
             "
         main() {
@@ -397,43 +433,53 @@ fn do_statement() {
 fn assignment_expressions() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
-        elaphe::run(&output, "main() { var x = 4; x = 10; print(x); }").expect("execution failed.");
+        elaphe::build_from_code_single(&output, "main() { var x = 4; x = 10; print(x); }")
+            .expect("execution failed.");
         exec_py_and_assert(&output, "10\n");
-        elaphe::run(&output, "main() { var x = 4; print(x = 2); }").expect("execution failed.");
-        exec_py_and_assert(&output, "2\n");
-        elaphe::run(&output, "main() { var x = 4; print(x += 2); }").expect("execution failed.");
-        exec_py_and_assert(&output, "6\n");
-        elaphe::run(&output, "main() { var x = 4; x *= 2; print(x); }").expect("execution failed.");
-        exec_py_and_assert(&output, "8\n");
-        elaphe::run(&output, "main() { var x = 5; x /= 2; print(x); }").expect("execution failed.");
-        exec_py_and_assert(&output, "2.5\n");
-        elaphe::run(&output, "main() { var x = 5; x %= 2; print(x); }").expect("execution failed.");
-        exec_py_and_assert(&output, "1\n");
-        elaphe::run(&output, "main() { var x = 5; x ~/= 2; print(x); }")
+        elaphe::build_from_code_single(&output, "main() { var x = 4; print(x = 2); }")
             .expect("execution failed.");
         exec_py_and_assert(&output, "2\n");
-        elaphe::run(&output, "main() { var x = 4; x <<= 2; print(x); }")
+        elaphe::build_from_code_single(&output, "main() { var x = 4; print(x += 2); }")
+            .expect("execution failed.");
+        exec_py_and_assert(&output, "6\n");
+        elaphe::build_from_code_single(&output, "main() { var x = 4; x *= 2; print(x); }")
+            .expect("execution failed.");
+        exec_py_and_assert(&output, "8\n");
+        elaphe::build_from_code_single(&output, "main() { var x = 5; x /= 2; print(x); }")
+            .expect("execution failed.");
+        exec_py_and_assert(&output, "2.5\n");
+        elaphe::build_from_code_single(&output, "main() { var x = 5; x %= 2; print(x); }")
+            .expect("execution failed.");
+        exec_py_and_assert(&output, "1\n");
+        elaphe::build_from_code_single(&output, "main() { var x = 5; x ~/= 2; print(x); }")
+            .expect("execution failed.");
+        exec_py_and_assert(&output, "2\n");
+        elaphe::build_from_code_single(&output, "main() { var x = 4; x <<= 2; print(x); }")
             .expect("execution failed.");
         exec_py_and_assert(&output, "16\n");
-        elaphe::run(&output, "main() { var x = 4; x >>= 2; print(x); }")
+        elaphe::build_from_code_single(&output, "main() { var x = 4; x >>= 2; print(x); }")
             .expect("execution failed.");
         exec_py_and_assert(&output, "1\n");
-        elaphe::run(&output, "main() { var x = 3; x &= 6; print(x); }").expect("execution failed.");
-        exec_py_and_assert(&output, "2\n");
-        elaphe::run(&output, "main() { var x = 3; x ^= 6; print(x); }").expect("execution failed.");
-        exec_py_and_assert(&output, "5\n");
-        elaphe::run(&output, "main() { var x = 3; x |= 6; print(x); }").expect("execution failed.");
-        exec_py_and_assert(&output, "7\n");
-        elaphe::run(&output, "main() { var x = null; x ??= 2; print(x); }")
+        elaphe::build_from_code_single(&output, "main() { var x = 3; x &= 6; print(x); }")
             .expect("execution failed.");
         exec_py_and_assert(&output, "2\n");
-        elaphe::run(&output, "main() { var x = 4; x ??= 2; print(x); }")
+        elaphe::build_from_code_single(&output, "main() { var x = 3; x ^= 6; print(x); }")
+            .expect("execution failed.");
+        exec_py_and_assert(&output, "5\n");
+        elaphe::build_from_code_single(&output, "main() { var x = 3; x |= 6; print(x); }")
+            .expect("execution failed.");
+        exec_py_and_assert(&output, "7\n");
+        elaphe::build_from_code_single(&output, "main() { var x = null; x ??= 2; print(x); }")
+            .expect("execution failed.");
+        exec_py_and_assert(&output, "2\n");
+        elaphe::build_from_code_single(&output, "main() { var x = 4; x ??= 2; print(x); }")
             .expect("execution failed.");
         exec_py_and_assert(&output, "4\n");
-        elaphe::run(&output, "main() { var x = null; print(x ??= 2); }")
+        elaphe::build_from_code_single(&output, "main() { var x = null; print(x ??= 2); }")
             .expect("execution failed.");
         exec_py_and_assert(&output, "2\n");
-        elaphe::run(&output, "main() { var x = 4; print(x ??= 2); }").expect("execution failed.");
+        elaphe::build_from_code_single(&output, "main() { var x = 4; print(x ??= 2); }")
+            .expect("execution failed.");
         exec_py_and_assert(&output, "4\n");
     });
     clean(&output);
@@ -446,7 +492,7 @@ fn assignment_expressions() {
 fn top_level_functions() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
-        elaphe::run(
+        elaphe::build_from_code_single(
             &output,
             "
         sub() => print(10);
@@ -470,7 +516,7 @@ fn top_level_functions() {
 fn top_level_variables() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
-        elaphe::run(
+        elaphe::build_from_code_single(
             &output,
             "
         var x = 1;
@@ -499,7 +545,7 @@ fn top_level_variables() {
 fn function_with_arguments() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
-        elaphe::run(
+        elaphe::build_from_code_single(
             &output,
             "
         add(a,b) {
@@ -525,7 +571,7 @@ fn function_with_arguments() {
 fn import_libraries() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
-        elaphe::run(
+        elaphe::build_from_code_single(
             &output,
             "
         import 'elaphe/math.d.dart';
@@ -551,10 +597,10 @@ fn import_libraries() {
 fn conditional_expression() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
-        elaphe::run(&output, "main() { var x = 1; print(x == 2 ? 10 : 20); }")
+        elaphe::build_from_code_single(&output, "main() { var x = 1; print(x == 2 ? 10 : 20); }")
             .expect("execution failed.");
         exec_py_and_assert(&output, "20\n");
-        elaphe::run(&output, "main() { var x = 2; print(x == 2 ? 10 : 20); }")
+        elaphe::build_from_code_single(&output, "main() { var x = 2; print(x == 2 ? 10 : 20); }")
             .expect("execution failed.");
         exec_py_and_assert(&output, "10\n");
     });
@@ -568,16 +614,17 @@ fn conditional_expression() {
 fn logical_expression() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
-        elaphe::run(&output, "main() { var x = 1; print(x == 1 && x == 2); }")
+        elaphe::build_from_code_single(&output, "main() { var x = 1; print(x == 1 && x == 2); }")
             .expect("execution failed.");
         exec_py_and_assert(&output, "False\n");
-        elaphe::run(&output, "main() { var x = 2; print(x == 1 || x == 2); }")
+        elaphe::build_from_code_single(&output, "main() { var x = 2; print(x == 1 || x == 2); }")
             .expect("execution failed.");
         exec_py_and_assert(&output, "True\n");
-        elaphe::run(&output, "main() { var x = null; print(x ?? 10); }")
+        elaphe::build_from_code_single(&output, "main() { var x = null; print(x ?? 10); }")
             .expect("execution failed.");
         exec_py_and_assert(&output, "10\n");
-        elaphe::run(&output, "main() { var x = 1; print(x ?? 10); }").expect("execution failed.");
+        elaphe::build_from_code_single(&output, "main() { var x = 1; print(x ?? 10); }")
+            .expect("execution failed.");
         exec_py_and_assert(&output, "1\n");
     });
     clean(&output);
@@ -590,7 +637,7 @@ fn logical_expression() {
 fn loop_label() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
-        elaphe::run(
+        elaphe::build_from_code_single(
             &output,
             "
         main() { 
@@ -628,7 +675,7 @@ fn loop_label() {
 fn comment() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
-        elaphe::run(
+        elaphe::build_from_code_single(
             &output,
             "
         main() { 
@@ -656,7 +703,7 @@ fn comment() {
 fn return_value() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
-        elaphe::run(
+        elaphe::build_from_code_single(
             &output,
             "
         add(x,y) {
@@ -681,7 +728,7 @@ fn return_value() {
 fn switch_statement() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
-        elaphe::run(
+        elaphe::build_from_code_single(
             &output,
             r#"
         main() { 
@@ -714,16 +761,16 @@ fn switch_statement() {
 fn update_expression() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
-        elaphe::run(&output, "main() { var x = 1; print(x++); print(x); }")
+        elaphe::build_from_code_single(&output, "main() { var x = 1; print(x++); print(x); }")
             .expect("execution failed.");
         exec_py_and_assert(&output, "1\n2\n");
-        elaphe::run(&output, "main() { var x = 1; print(x--); print(x); }")
+        elaphe::build_from_code_single(&output, "main() { var x = 1; print(x--); print(x); }")
             .expect("execution failed.");
         exec_py_and_assert(&output, "1\n0\n");
-        elaphe::run(&output, "main() { var x = 1; print(++x); print(x); }")
+        elaphe::build_from_code_single(&output, "main() { var x = 1; print(++x); print(x); }")
             .expect("execution failed.");
         exec_py_and_assert(&output, "2\n2\n");
-        elaphe::run(&output, "main() { var x = 1; print(--x); print(x); }")
+        elaphe::build_from_code_single(&output, "main() { var x = 1; print(--x); print(x); }")
             .expect("execution failed.");
         exec_py_and_assert(&output, "0\n0\n");
     });
@@ -737,7 +784,7 @@ fn update_expression() {
 fn try_statement() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
-        elaphe::run(
+        elaphe::build_from_code_single(
             &output,
             r#"
         main() {
@@ -759,7 +806,7 @@ fn try_statement() {
         )
         .expect("execution failed.");
         exec_py_and_assert(&output, "try\nIOError\nfinally\n");
-        elaphe::run(
+        elaphe::build_from_code_single(
             &output,
             r#"
         main() {
@@ -792,11 +839,14 @@ fn try_statement() {
 fn collection_literal() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
-        elaphe::run(&output, "main() { print([1,2,3]); }").expect("execution failed.");
+        elaphe::build_from_code_single(&output, "main() { print([1,2,3]); }")
+            .expect("execution failed.");
         exec_py_and_assert(&output, "[1, 2, 3]\n");
-        elaphe::run(&output, "main() { print({1,2,3}); }").expect("execution failed.");
+        elaphe::build_from_code_single(&output, "main() { print({1,2,3}); }")
+            .expect("execution failed.");
         exec_py_and_assert(&output, "{1, 2, 3}\n");
-        elaphe::run(&output, "main() { print({'a':1, 'b':2}); }").expect("execution failed.");
+        elaphe::build_from_code_single(&output, "main() { print({'a':1, 'b':2}); }")
+            .expect("execution failed.");
         exec_py_and_assert(&output, "{'a': 1, 'b': 2}\n");
     });
     clean(&output);
@@ -809,28 +859,28 @@ fn collection_literal() {
 fn subscr() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
-        elaphe::run(&output, "main() { var x = [0,1,2]; print(x[2]); }")
+        elaphe::build_from_code_single(&output, "main() { var x = [0,1,2]; print(x[2]); }")
             .expect("execution failed.");
         exec_py_and_assert(&output, "2\n");
-        elaphe::run(
+        elaphe::build_from_code_single(
             &output,
             "main() { var x = [0,1,2]; print(x[2] = 10); print(x); }",
         )
         .expect("execution failed.");
         exec_py_and_assert(&output, "10\n[0, 1, 10]\n");
-        elaphe::run(
+        elaphe::build_from_code_single(
             &output,
             "main() { var x = [0,1,2]; print(x[2] += 10); print(x); }",
         )
         .expect("execution failed.");
         exec_py_and_assert(&output, "12\n[0, 1, 12]\n");
-        elaphe::run(
+        elaphe::build_from_code_single(
             &output,
             "main() { var x = [0,1,null]; print(x[2] ??= 10); print(x); }",
         )
         .expect("execution failed.");
         exec_py_and_assert(&output, "10\n[0, 1, 10]\n");
-        elaphe::run(
+        elaphe::build_from_code_single(
             &output,
             "main() { var x = [0,1,2]; print(x[2] ??= 10); print(x); }",
         )
@@ -847,19 +897,24 @@ fn subscr() {
 fn type_annotation() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
-        elaphe::run(&output, "main() { int x = 1; print(x); }").expect("execution failed.");
+        elaphe::build_from_code_single(&output, "main() { int x = 1; print(x); }")
+            .expect("execution failed.");
         exec_py_and_assert(&output, "1\n");
-        elaphe::run(&output, "main() { final int x = 1; print(x); }").expect("execution failed.");
+        elaphe::build_from_code_single(&output, "main() { final int x = 1; print(x); }")
+            .expect("execution failed.");
         exec_py_and_assert(&output, "1\n");
-        elaphe::run(&output, "main() { final x = 1; print(x); }").expect("execution failed.");
+        elaphe::build_from_code_single(&output, "main() { final x = 1; print(x); }")
+            .expect("execution failed.");
         exec_py_and_assert(&output, "1\n");
-        elaphe::run(&output, "main() { const x = 1; print(x); }").expect("execution failed.");
+        elaphe::build_from_code_single(&output, "main() { const x = 1; print(x); }")
+            .expect("execution failed.");
         exec_py_and_assert(&output, "1\n");
-        elaphe::run(&output, "main() { const int x = 1; print(x); }").expect("execution failed.");
+        elaphe::build_from_code_single(&output, "main() { const int x = 1; print(x); }")
+            .expect("execution failed.");
         exec_py_and_assert(&output, "1\n");
-        // elaphe::run(&output, "main() { np.int32 x = 1; print(x); }").expect("execution failed.");
+        // elaphe::build_from_code_single(&output, "main() { np.int32 x = 1; print(x); }").expect("execution failed.");
         exec_py_and_assert(&output, "1\n");
-        elaphe::run(&output, "main() { late final int x = 1; print(x); }")
+        elaphe::build_from_code_single(&output, "main() { late final int x = 1; print(x); }")
             .expect("execution failed.");
         exec_py_and_assert(&output, "1\n");
     });
@@ -873,10 +928,10 @@ fn type_annotation() {
 fn variable_declaration() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
-        elaphe::run(&output, "main() { int x = 1, y = 2; print(x + y); }")
+        elaphe::build_from_code_single(&output, "main() { int x = 1, y = 2; print(x + y); }")
             .expect("execution failed.");
         exec_py_and_assert(&output, "3\n");
-        elaphe::run(&output, "int x = 1, y = 2; main() { print(x + y); }")
+        elaphe::build_from_code_single(&output, "int x = 1, y = 2; main() { print(x + y); }")
             .expect("execution failed.");
         exec_py_and_assert(&output, "3\n");
     });
@@ -890,7 +945,7 @@ fn variable_declaration() {
 fn function_parameters() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
-        elaphe::run(
+        elaphe::build_from_code_single(
             &output,
             r#"
         hoge1(int x, int y) {
@@ -927,7 +982,7 @@ fn function_parameters() {
 fn class_method() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
-        elaphe::run(
+        elaphe::build_from_code_single(
             &output,
             r#"
         class Hoge {
@@ -955,7 +1010,7 @@ fn class_method() {
 fn class_field() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
-        elaphe::run(
+        elaphe::build_from_code_single(
             &output,
             r#"
         class Hoge {
@@ -1001,7 +1056,7 @@ fn class_field() {
 fn class_constructor() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
-        elaphe::run(
+        elaphe::build_from_code_single(
             &output,
             r#"
         class Hoge {
@@ -1033,7 +1088,7 @@ fn class_constructor() {
 fn slice() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
-        elaphe::run(
+        elaphe::build_from_code_single(
             &output,
             r#"
         void main() {
@@ -1063,13 +1118,17 @@ fn slice() {
 fn type_as_is() {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
     let result = catch_unwind(|| {
-        elaphe::run(&output, "main() { print(3 is int); }").expect("execution failed.");
+        elaphe::build_from_code_single(&output, "main() { print(3 is int); }")
+            .expect("execution failed.");
         exec_py_and_assert(&output, "True\n");
-        elaphe::run(&output, "main() { print(2 is! int); }").expect("execution failed.");
+        elaphe::build_from_code_single(&output, "main() { print(2 is! int); }")
+            .expect("execution failed.");
         exec_py_and_assert(&output, "False\n");
-        elaphe::run(&output, "main() { var x = 1; print(x as int); }").expect("execution failed.");
+        elaphe::build_from_code_single(&output, "main() { var x = 1; print(x as int); }")
+            .expect("execution failed.");
         exec_py_and_assert(&output, "1\n");
-        elaphe::run(&output, "main() { var as = 1; print(as); }").expect("execution failed.");
+        elaphe::build_from_code_single(&output, "main() { var as = 1; print(as); }")
+            .expect("execution failed.");
         exec_py_and_assert(&output, "1\n");
     });
     clean(&output);
