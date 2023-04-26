@@ -577,9 +577,9 @@ fn import_libraries() {
         import 'elaphe/math.d.dart';
 
         main() {
-            var x = math.sqrt(4);
+            var x = sqrt(4);
             print(x);
-            var y = math.floor(math.pi);
+            var y = floor(pi);
             print(y);
         }
         ",
