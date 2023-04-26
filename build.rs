@@ -8,7 +8,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // generate parser
         let rules = grammar::get_dart_grammar();
         let transition_map =
-            parser_generator::generate_parser(&rules, grammar::START_SYMBOL, false);
+            parser_generator::generate_parser(&rules, grammar::START_SYMBOL, false)?;
 
         // write binary to file
         let out_dir = env::var("OUT_DIR").unwrap();

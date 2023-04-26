@@ -1,11 +1,13 @@
-use std::{error::Error, collections::HashMap, io::{self, Write}, fs::File};
+use std::{collections::HashMap, io::{self, Write}, fs::File};
+
+use anyhow::Result;
 
 use crate::{parser_generator::{TransitionMap, LALR1ProductionRuleData, TransitionData}, parser_generator_lr0, hashable_set::HashableSet};
 
 pub fn export_closures(
     closure_map: &HashMap<HashableSet<LALR1ProductionRuleData>, String>,
     out_path: &str,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<()> {
     let mut writer = io::BufWriter::new(File::create(out_path)?);
 
     let mut sorted_closure_map: Vec<(&HashableSet<LALR1ProductionRuleData>, &String)> = closure_map.iter().collect();
@@ -50,7 +52,7 @@ pub fn export_transitions(
     closure_map: &HashMap<HashableSet<LALR1ProductionRuleData>, String>,
     parser_generator_lr0: &parser_generator_lr0::ParserGeneratorLR0,
     out_path: &str,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<()> {
     let mut writer = csv::WriterBuilder::new().quote_style(csv::QuoteStyle::Necessary).from_path(out_path)?;
 
     writer.write_field("")?;

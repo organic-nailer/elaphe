@@ -5,6 +5,7 @@ use crate::{
     export_transitions::{export_transitions, export_closures},
 };
 use std::collections::{HashMap, HashSet};
+use anyhow::{Result, bail, ensure};
 use serde::{Serialize, Deserialize};
 
 pub type State = String;
@@ -15,7 +16,7 @@ pub fn generate_parser(
     rules: &Vec<ProductionRuleData>,
     start_symbol: &'static str,
     output_transitions: bool,
-) -> TransitionMap {
+) -> Result<TransitionMap> {
     let initial_grammar = ProductionRuleData {
         left: "[START]",
         right: vec![start_symbol, END],
@@ -33,7 +34,7 @@ pub fn generate_parser(
         export_closures(&closure_map, "closure.yaml").unwrap();
     }
 
-    let transition_map = calc_transition_map(&parser_generator_lr0, &closure_map);
+    let transition_map = calc_transition_map(&parser_generator_lr0, &closure_map)?;
 
     let result = TransitionMap {
         transitions: transition_map,
@@ -43,7 +44,7 @@ pub fn generate_parser(
         export_transitions(&result, &closure_map, &parser_generator_lr0, "transitions.csv").unwrap();
     }
 
-    result
+    Ok(result)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -245,15 +246,12 @@ fn calc_goto_map(
 fn calc_transition_map(
     parser_generator_lr0: &ParserGeneratorLR0,
     closure_map: &HashMap<HashableSet<LALR1ProductionRuleData>, String>,
-) -> HashMap<(String, String), TransitionData> {
+) -> Result<HashMap<(String, String), TransitionData>> {
     let mut transition_map: HashMap<(String, String), TransitionData> = HashMap::new();
 
     for (key, target_state) in &parser_generator_lr0.goto_table {
         if transition_map.contains_key(&(key.0.clone(), key.1.to_string())) {
-            panic!(
-                "LALR1 collision. Transition map already contains key: {:?}",
-                key
-            );
+            bail!("LALR1 collision. Transition map already contains key: {:?}", key);
         }
 
         transition_map.insert(
@@ -346,11 +344,13 @@ fn calc_transition_map(
         }
     }
 
-    if !error_transitions.is_empty() {
-        panic!("Unhandled conflicts: {:?}", error_transitions);
-    }
+    ensure!(
+        error_transitions.is_empty(),
+        "Unhandled conflicts: {:?}",
+        error_transitions
+    );
 
-    transition_map
+    Ok(transition_map)
 }
 
 fn get_closure(
@@ -513,6 +513,7 @@ impl SerializableRule {
 }
 
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 enum ErrorTransition {
     ShiftReduce {
         state: String,
