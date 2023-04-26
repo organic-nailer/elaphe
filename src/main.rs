@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, ensure, Context, Result};
 use elaphe::{build_from_code, build_from_file};
 use getopts::Options;
 use std::path::{Path, PathBuf};
@@ -10,19 +10,15 @@ fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
     let now = std::time::SystemTime::now();
 
-    if args.len() == 1 {
-        panic!("invalid arguments");
-    }
+    ensure!(args.len() >= 2, "invalid arguments. please input command.");
+
     let command = &args[1];
     if command == "run" {
         let mut opts = Options::new();
         opts.optopt("c", "", "eval string", "CODE");
-        let matches = match opts.parse(&args[2..]) {
-            Ok(m) => m,
-            Err(f) => {
-                panic!("{}", f.to_string())
-            }
-        };
+        let matches = opts
+            .parse(&args[2..])
+            .with_context(|| "failed to parse arguments")?;
 
         if !matches.free.is_empty() {
             // ファイル名で実行

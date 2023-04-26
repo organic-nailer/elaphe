@@ -4,7 +4,7 @@ use std::rc::Rc;
 use std::time::SystemTime;
 use std::{cell::RefCell, collections::HashMap};
 
-use anyhow::Result;
+use anyhow::{bail, ensure, Result};
 
 use crate::build_from_file;
 use crate::bytecode::ByteCode;
@@ -58,9 +58,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
         // → import A as B
         // 相対インポートは禁止
         // Schemeは禁止
-        if uri.contains(":") {
-            panic!("invalid import uri: {}", uri);
-        }
+        ensure!(!uri.contains(":"), "invalid import uri: {}", uri);
 
         // ignore relative representations
         // ex) ../../A/B/C -> A/B/C
@@ -232,7 +230,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                         "/" => self.push_op(OpCode::BinaryTrueDivide),
                         "%" => self.push_op(OpCode::BinaryModulo),
                         "~/" => self.push_op(OpCode::BinaryFloorDivide),
-                        _ => panic!("unknown operator: {}", *operator),
+                        _ => bail!("unknown binary operator: {}", *operator),
                     }
                 }
             }
@@ -257,7 +255,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     "-" => self.push_op(OpCode::UnaryNegative),
                     "!" => self.push_op(OpCode::UnaryNot),
                     "~" => self.push_op(OpCode::UnaryInvert),
-                    _ => panic!("unknown unary operator: {}", *operator),
+                    _ => bail!("unknown unary operator: {}", *operator),
                 }
             }
             NodeExpression::Update {
@@ -291,7 +289,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                         self.push_store_var(&value);
                     }
                 } else {
-                    panic!("Invalid AST. Increment target must be an identifier.");
+                    bail!("Invalid AST. Increment target must be an identifier.");
                 }
             }
             NodeExpression::TypeTest { child, type_test } => {
@@ -310,7 +308,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                         .register_or_get_name(&name.to_string());
                     self.push_op(OpCode::LoadName(p));
                 } else {
-                    panic!("Invalid Test Expression");
+                    bail!("Invalid Test Expression");
                 }
                 self.push_op(OpCode::CallFunction(2));
                 if !type_test.check_matching {
@@ -344,11 +342,13 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                                 self.compile_expr(child)?;
 
                                 match selector {
-                                    Selector::Args { args: _ } => panic!("Invalid lhs value."),
+                                    Selector::Args { args: _ } => {
+                                        bail!("Invalid lhs value. Function call is not allowed.")
+                                    }
                                     Selector::Method {
                                         identifier: _,
                                         arguments: _,
-                                    } => panic!("Invalid lhs value."),
+                                    } => bail!("Invalid lhs value. Method call is not allowed."),
                                     Selector::Attr { identifier } => {
                                         let name = identifier.value;
                                         let p = (**self.context_stack.last().unwrap())
@@ -362,7 +362,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                                     }
                                 }
                             }
-                            _ => panic!("Invalid lhs value."),
+                            _ => bail!("Invalid lhs value."),
                         }
                     }
                     "*=" | "/=" | "~/=" | "%=" | "+=" | "-=" | "<<=" | ">>=" | "&=" | "^="
@@ -393,11 +393,13 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                         NodeExpression::Selector { child, selector } => {
                             self.compile_expr(child)?;
                             match selector {
-                                Selector::Args { args: _ } => panic!("Invalid lhs value."),
+                                Selector::Args { args: _ } => {
+                                    bail!("Invalid lhs value. Function call is not allowed.")
+                                }
                                 Selector::Method {
                                     identifier: _,
                                     arguments: _,
-                                } => panic!("Invalid lhs value."),
+                                } => bail!("Invalid lhs value. Method call is not allowed."),
                                 Selector::Attr { identifier } => {
                                     let name = identifier.value;
                                     let p = (**self.context_stack.last().unwrap())
@@ -455,7 +457,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                                 }
                             }
                         }
-                        _ => panic!("Invalid lhs value."),
+                        _ => bail!("Invalid lhs value."),
                     },
                     "??=" => match &**left {
                         NodeExpression::Identifier { identifier } => {
@@ -477,11 +479,13 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                         NodeExpression::Selector { child, selector } => {
                             self.compile_expr(child)?;
                             match selector {
-                                Selector::Args { args: _ } => panic!("Invalid lhs value."),
+                                Selector::Args { args: _ } => {
+                                    bail!("Invalid lhs value. Function call is not allowed.")
+                                }
                                 Selector::Method {
                                     identifier: _,
                                     arguments: _,
-                                } => panic!("Invalid lhs value."),
+                                } => bail!("Invalid lhs value. Method call is not allowed."),
                                 Selector::Attr { identifier } => {
                                     let name = identifier.value;
                                     let p = (**self.context_stack.last().unwrap())
@@ -541,9 +545,9 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                                 }
                             }
                         }
-                        _ => panic!("Invalid lhs value."),
+                        _ => bail!("Invalid lhs value."),
                     },
-                    _ => panic!("Unknown assignment operator: {}", operator),
+                    _ => bail!("Unknown assignment operator: {}", operator),
                 }
             }
             NodeExpression::NumericLiteral { value } => {
@@ -561,7 +565,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
 
                             self.push_op(OpCode::BinaryAdd);
                         }
-                        self.push_load_const(PyObject::new_string(replace_escape(&str), false));
+                        self.push_load_const(PyObject::new_string(replace_escape(&str)?, false));
                         if i > 0 {
                             self.push_op(OpCode::BinaryAdd);
                         }
@@ -598,7 +602,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                             key_expr: _,
                             value_expr: _,
                         } => {
-                            panic!("Invalid List Literal");
+                            bail!("Invalid List Literal. Map is not allowed.");
                         }
                     }
                 }
@@ -623,7 +627,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     for elem in element_list {
                         match elem {
                             CollectionElement::ExpressionElement { expr: _ } => {
-                                panic!("Invalid Map Literal");
+                                bail!("Invalid Map Literal. Expression is not allowed.");
                             }
                             CollectionElement::MapElement {
                                 key_expr,
@@ -646,7 +650,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                                 key_expr: _,
                                 value_expr: _,
                             } => {
-                                panic!("Invalid Set Literal");
+                                bail!("Invalid Set Literal. Map is not allowed.");
                             }
                         }
                     }
@@ -794,14 +798,14 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                         Some(v) => {
                             self.push_op(OpCode::JumpAbsolute(*v));
                         }
-                        None => panic!("label {} is not existing in this scope.", label_str),
+                        None => bail!("label {} is not existing in this scope.", label_str),
                     }
                 }
                 None => match self.default_scope_stack.last() {
                     Some(v) => {
                         self.push_op(OpCode::JumpAbsolute(v.break_label));
                     }
-                    None => panic!("break statement is not available here"),
+                    None => bail!("break statement is not available here"),
                 },
             },
             NodeStatement::Continue { label } => match label {
@@ -811,15 +815,15 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                         Some(v) => {
                             self.push_op(OpCode::JumpAbsolute(*v));
                         }
-                        None => panic!("label {} is not existing in this scope.", label_str),
+                        None => bail!("label {} is not existing in this scope.", label_str),
                     }
                 }
                 None => match self.default_scope_stack.last() {
                     Some(v) => match v.continue_label {
                         Some(continue_label) => self.push_op(OpCode::JumpAbsolute(continue_label)),
-                        None => panic!("continue statement is not available here"),
+                        None => bail!("continue statement is not available here"),
                     },
-                    None => panic!("continue statement is not available here"),
+                    None => bail!("continue statement is not available here"),
                 },
             },
             NodeStatement::Return { value } => {
@@ -1489,9 +1493,9 @@ impl<'a, 'b> ByteCompiler<'a, 'b> {
     }
 }
 
-fn replace_escape(source: &str) -> String {
+fn replace_escape(source: &str) -> Result<String> {
     if !source.contains("\\") {
-        return source.to_string();
+        return Ok(source.to_string());
     }
 
     let mut result = String::new();
@@ -1526,7 +1530,7 @@ fn replace_escape(source: &str) -> String {
                                 hex.push(c);
                                 count += 1;
                                 if count > 6 {
-                                    panic!("Invalid unicode escape sequence");
+                                    bail!("Invalid unicode escape sequence");
                                 }
                             }
                             result.push(unicode_hex_to_char(&hex));
@@ -1548,7 +1552,7 @@ fn replace_escape(source: &str) -> String {
         }
     }
 
-    result
+    Ok(result)
 }
 
 fn unicode_hex_to_char(hex: &String) -> char {

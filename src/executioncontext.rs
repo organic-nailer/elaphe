@@ -55,7 +55,7 @@ impl ExecutionContext for GlobalContext {
     }
 
     fn get_local_variable(&self, _symbol: &String) -> u8 {
-        panic!("Not Implemented");
+        unreachable!("GlobalContext has no local variable");
     }
 
     fn check_variable_scope(&self, symbol: &String) -> VariableScope {
