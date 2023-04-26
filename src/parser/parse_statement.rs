@@ -2,6 +2,8 @@ use std::vec;
 
 use anyhow::{bail, Result};
 
+use crate::parser::parse_functions::parse_declared_identifier;
+
 use super::{
     node::{DefaultCase, Identifier, NodeStatement, SwitchCase, TryCatchPart, TryOnPart},
     node_internal::NodeInternal,
@@ -122,26 +124,46 @@ fn parse_if_statement<'input>(node: &NodeInternal<'input>) -> Result<NodeStateme
 fn parse_for_statement<'input>(node: &NodeInternal<'input>) -> Result<NodeStatement<'input>> {
     if node.rule_name == "ForStatement" {
         let parts_node = &node.children[2];
-        let parts_init_node = &parts_node.children[0];
-        let init = if parts_init_node.children.len() == 1 {
-            if parts_init_node.children[0].rule_name == "LocalVariableDeclaration" {
-                Some(Box::new(parse_local_variable_declaration(
-                    &parts_init_node.children[0],
-                )?))
+        if parts_node.children.len() == 4 {
+            // for ( ExpressionList ; Expression ; ExpressionList ) Statement
+            let parts_init_node = &parts_node.children[0];
+            let init = if parts_init_node.children.len() == 1 {
+                if parts_init_node.children[0].rule_name == "LocalVariableDeclaration" {
+                    Some(Box::new(parse_local_variable_declaration(
+                        &parts_init_node.children[0],
+                    )?))
+                } else {
+                    None
+                }
             } else {
-                None
-            }
+                Some(Box::new(NodeStatement::Expression {
+                    expr: Box::new(parse_expression(&parts_init_node.children[0])?),
+                }))
+            };
+            return Ok(NodeStatement::For {
+                init,
+                condition: parse_expression_opt(&parts_node.children[1])?,
+                update: parse_expression_list_opt(&parts_node.children[3])?,
+                stmt: Box::new(parse_statement(&node.children[4])?),
+            });
         } else {
-            Some(Box::new(NodeStatement::Expression {
-                expr: Box::new(parse_expression(&parts_init_node.children[0])?),
-            }))
-        };
-        return Ok(NodeStatement::For {
-            init,
-            condition: parse_expression_opt(&parts_node.children[1])?,
-            update: parse_expression_list_opt(&parts_node.children[3])?,
-            stmt: Box::new(parse_statement(&node.children[4])?),
-        });
+            // for ( identifier in Expression ) Statement
+            if parts_node.children[0].rule_name == "DeclaredIdentifier" {
+                return Ok(NodeStatement::ForIn {
+                    variable: parse_declared_identifier(&parts_node.children[0])?,
+                    is_variable_declared: true,
+                    iterable: Box::new(parse_expression(&parts_node.children[2])?),
+                    stmt: Box::new(parse_statement(&node.children[4])?),
+                });
+            } else {
+                return Ok(NodeStatement::ForIn {
+                    variable: parse_identifier(&parts_node.children[0])?,
+                    is_variable_declared: false,
+                    iterable: Box::new(parse_expression(&parts_node.children[2])?),
+                    stmt: Box::new(parse_statement(&node.children[4])?),
+                });
+            }
+        }
     }
 
     bail!("Parse Error in parse_for_statement: {}", node.rule_name);

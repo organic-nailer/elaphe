@@ -37,6 +37,7 @@ pub enum OpCode {
     BinaryAnd,
     BinaryXor,
     BinaryOr,
+    GetIter,
     LoadBuildClass,
     InplaceLShift,
     InplaceRShift,
@@ -48,6 +49,7 @@ pub enum OpCode {
     PopBlock,
     PopExcept,
     StoreName(u8),
+    ForIter(u32),
     StoreAttr(u8),
     StoreGlobal(u8),
     LoadConst(u8),
@@ -128,6 +130,7 @@ impl OpCode {
             OpCode::BinaryAnd => 64,
             OpCode::BinaryXor => 65,
             OpCode::BinaryOr => 66,
+            OpCode::GetIter => 68,
             OpCode::LoadBuildClass => 71,
             OpCode::InplaceLShift => 75,
             OpCode::InplaceRShift => 76,
@@ -139,6 +142,7 @@ impl OpCode {
             OpCode::PopBlock => 87,
             OpCode::PopExcept => 89,
             OpCode::StoreName(_) => 90,
+            OpCode::ForIter(_) => 93,
             OpCode::StoreAttr(_) => 95,
             OpCode::StoreGlobal(_) => 97,
             OpCode::LoadConst(_) => 100,
@@ -182,7 +186,8 @@ impl OpCode {
             | OpCode::PopJumpIfFalse(v)
             | OpCode::PopJumpIfTrue(v)
             | OpCode::JumpIfNotExcMatch(v)
-            | OpCode::SetupFinally(v) => {
+            | OpCode::SetupFinally(v)
+            | OpCode::ForIter(v) => {
                 let operand = *label_table.get(&v).unwrap();
                 ByteCode {
                     operation: self.get_value(),
@@ -327,6 +332,9 @@ impl OpCode {
             OpCode::StoreAttr(_) => -2,
 
             OpCode::LoadBuildClass => 1,
+
+            OpCode::GetIter => 0,
+            OpCode::ForIter(_) => 1,
         }
     }
 }

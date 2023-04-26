@@ -1095,9 +1095,6 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 update,
                 stmt,
             } => {
-                // init is statement
-                // condition is expression
-                // update is expression list
                 let label_for_end = self.gen_jump_label();
                 let label_loop_start = self.gen_jump_label();
                 self.default_scope_stack.push(DefaultScope {
@@ -1136,6 +1133,36 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 if let Some(stmt_label) = label {
                     self.continue_label_table.remove(stmt_label);
                 }
+            }
+            NodeStatement::ForIn {
+                variable,
+                is_variable_declared,
+                iterable,
+                stmt,
+            } => {
+                if *is_variable_declared {
+                    (**self.context_stack.last().unwrap())
+                        .borrow_mut()
+                        .declare_variable(&variable.value.to_string());
+                }
+                self.compile_expr(iterable)?;
+                self.push_op(OpCode::GetIter);
+
+                let label_for_end = self.gen_jump_label();
+                let label_loop_start = self.gen_jump_label();
+
+                self.set_jump_label_value(label_loop_start);
+                self.push_op(OpCode::ForIter(label_for_end));
+                let label_for_zero = self.byte_operations.borrow().len() as u8;
+
+                let var_name = variable.value.to_string();
+                self.push_store_var(&var_name);
+
+                self.compile_stmt(stmt, None)?;
+
+                self.push_op(OpCode::JumpAbsolute(label_loop_start));
+
+                self.set_jump_label_value_offset(label_for_end, label_for_zero);
             }
             NodeStatement::While { condition, stmt } => {
                 let label_while_end = self.gen_jump_label();

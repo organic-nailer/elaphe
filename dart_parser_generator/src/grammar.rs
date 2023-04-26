@@ -255,7 +255,9 @@ const DART_GRAMMARS: [&'static str; 136] = [
 "IfStatement ::= 'if' '(' Expression ')' Statement
     |/ 'if' '(' Expression ')' Statement 'else' Statement",
 "ForStatement ::= 'for' '(' ForLoopParts ')' Statement",
-"ForLoopParts ::= ForInitializerStatement ExpressionOpt ';' ExpressionListOpt",
+"ForLoopParts ::= ForInitializerStatement ExpressionOpt ';' ExpressionListOpt
+    |/ DeclaredIdentifier 'in' Expression
+    |/ Identifier 'in' Expression",
 "ForInitializerStatement ::= LocalVariableDeclaration
     |/ ExpressionOpt ';'",
 "WhileStatement ::= 'while' '(' Expression ')' Statement",

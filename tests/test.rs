@@ -61,7 +61,7 @@ fn calc_float() -> Result<()> {
 #[test]
 fn calc_hex() -> Result<()> {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
-    elaphe::build_from_code_single(&output, "mai() { print(0x47 - 0X05); }")?;
+    elaphe::build_from_code_single(&output, "main() { print(0x47 - 0X05); }")?;
     exec_py_and_assert(&output, "66\n")?;
     clean(&output);
     Ok(())
@@ -286,6 +286,36 @@ fn for_statement() -> Result<()> {
         ",
     )?;
     exec_py_and_assert(&output, "0\n1\n2\n3\n4\n")?;
+    clean(&output);
+    Ok(())
+}
+
+#[test]
+fn for_in_statement() -> Result<()> {
+    let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
+    elaphe::build_from_code_single(
+        &output,
+        "
+        main() {
+            var i;
+            for (i in [0, 1, 2, 3, 4]) {
+                print(i);
+            }
+        }
+        ",
+    )?;
+    exec_py_and_assert(&output, "0\n1\n2\n3\n4\n")?;
+    elaphe::build_from_code_single(
+        &output,
+        "
+        main() {
+            for (var i in [0, 1]) {
+                print(i);
+            }
+        }
+        ",
+    )?;
+    exec_py_and_assert(&output, "0\n1\n")?;
     clean(&output);
     Ok(())
 }

@@ -117,6 +117,12 @@ pub enum NodeStatement<'input> {
         update: Option<Vec<Box<NodeExpression<'input>>>>,
         stmt: Box<NodeStatement<'input>>,
     },
+    ForIn {
+        variable: Identifier<'input>,
+        is_variable_declared: bool,
+        iterable: Box<NodeExpression<'input>>,
+        stmt: Box<NodeStatement<'input>>,
+    },
     While {
         condition: Box<NodeExpression<'input>>,
         stmt: Box<NodeStatement<'input>>,
