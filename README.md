@@ -245,7 +245,7 @@ https://docs.google.com/document/d/1c956nDwu3t9qNN0C4HBvl9U6WSvCUY3umqpzohqlrKs/
     - [ ] Local Function Declaration
     - [x] for
     - [ ] await for
-    - [ ] for in
+    - [x] for in
     - [x] while
     - [x] do
     - [ ] switch
