@@ -1,5 +1,7 @@
 use std::{cmp, collections::HashMap};
 
+use anyhow::{bail, Result};
+
 pub struct ByteCode {
     operation: u8,
     operand: u8,
@@ -80,7 +82,7 @@ pub enum OpCode {
 }
 
 impl OpCode {
-    pub fn compare_op_from_str(op: &str) -> OpCode {
+    pub fn compare_op_from_str(op: &str) -> Result<OpCode> {
         let operand: u8 = match op {
             "<" => 0,
             "<=" => 1,
@@ -88,9 +90,9 @@ impl OpCode {
             "!=" => 3,
             ">" => 4,
             ">=" => 5,
-            _ => panic!("Unknown compare op: {}", op),
+            _ => bail!("Unknown compare op: {}", op),
         };
-        OpCode::CompareOp(operand)
+        Ok(OpCode::CompareOp(operand))
     }
 }
 

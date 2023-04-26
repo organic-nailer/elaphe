@@ -1,13 +1,12 @@
-use std::error::Error;
+use anyhow::{bail, Result};
 
 use super::{
     node::{DartType, DartTypeName},
     node_internal::NodeInternal,
     parse_identifier::parse_identifier,
-    util::gen_error,
 };
 
-pub fn parse_type<'input>(node: &NodeInternal<'input>) -> Result<DartType<'input>, Box<dyn Error>> {
+pub fn parse_type<'input>(node: &NodeInternal<'input>) -> Result<DartType<'input>> {
     if node.rule_name == "Type" {
         return parse_type_not_function(&node.children[0]);
     }
@@ -15,12 +14,10 @@ pub fn parse_type<'input>(node: &NodeInternal<'input>) -> Result<DartType<'input
         return parse_type_not_void_not_function(&node.children[0]);
     }
 
-    Err(gen_error("parse_type", &node.rule_name))
+    bail!("Parse Error in parse_type: {}", node.rule_name);
 }
 
-fn parse_type_not_function<'input>(
-    node: &NodeInternal<'input>,
-) -> Result<DartType<'input>, Box<dyn Error>> {
+fn parse_type_not_function<'input>(node: &NodeInternal<'input>) -> Result<DartType<'input>> {
     if node.rule_name == "TypeNotFunction" {
         if node.children[0].rule_name == "TypeNotVoidNotFunction" {
             return parse_type_not_void_not_function(&node.children[0]);
@@ -29,12 +26,12 @@ fn parse_type_not_function<'input>(
         }
     }
 
-    Err(gen_error("parse_type_not_function", &node.rule_name))
+    bail!("Parse Error in parse_type_not_function: {}", node.rule_name);
 }
 
 fn parse_type_not_void_not_function<'input>(
     node: &NodeInternal<'input>,
-) -> Result<DartType<'input>, Box<dyn Error>> {
+) -> Result<DartType<'input>> {
     if node.rule_name == "TypeNotVoidNotFunction" {
         return Ok(DartType::Named {
             type_name: parse_type_name(&node.children[0])?,
@@ -43,15 +40,13 @@ fn parse_type_not_void_not_function<'input>(
         });
     }
 
-    Err(gen_error(
-        "parse_type_not_void_not_function",
-        &node.rule_name,
-    ))
+    bail!(
+        "Parse Error in parse_type_not_void_not_function: {}",
+        node.rule_name
+    );
 }
 
-fn parse_type_name<'input>(
-    node: &NodeInternal<'input>,
-) -> Result<DartTypeName<'input>, Box<dyn Error>> {
+fn parse_type_name<'input>(node: &NodeInternal<'input>) -> Result<DartTypeName<'input>> {
     if node.rule_name == "TypeName" {
         return Ok(DartTypeName {
             identifier: parse_identifier(&node.children[0])?,
@@ -59,5 +54,5 @@ fn parse_type_name<'input>(
         });
     }
 
-    Err(gen_error("parse_type_name", &node.rule_name))
+    bail!("Parse Error in parse_type_name: {}", node.rule_name);
 }

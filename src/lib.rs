@@ -1,10 +1,10 @@
-use std::error::Error;
 use std::fs;
 use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::path::Path;
 use std::time::SystemTime;
 
+use anyhow::{Context, Result};
 use ciborium::de;
 use dart_parser_generator::parser_generator;
 use parser::node::LibraryDeclaration;
@@ -21,54 +21,29 @@ pub fn build_from_file(
     source_file: &str,
     time_start_build: SystemTime,
     is_root: bool,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<()> {
     let source = fs::read_to_string(source_file).unwrap();
     run(output, &source, time_start_build, is_root)
 }
 
-pub fn build_from_code(
-    output: &str,
-    code: &str,
-    time_start_build: SystemTime,
-) -> Result<(), Box<dyn Error>> {
+pub fn build_from_code(output: &str, code: &str, time_start_build: SystemTime) -> Result<()> {
     run(output, &code, time_start_build, true)
 }
 
-pub fn build_from_code_single(output: &str, code: &str) -> Result<(), Box<dyn Error>> {
+pub fn build_from_code_single(output: &str, code: &str) -> Result<()> {
     run(output, &code, SystemTime::now(), true)
 }
 
-fn run(
-    output: &str,
-    source: &str,
-    time_start_build: SystemTime,
-    is_root: bool,
-) -> Result<(), Box<dyn Error>> {
+fn run(output: &str, source: &str, time_start_build: SystemTime, is_root: bool) -> Result<()> {
     // Tokenize
-    let token_list = tokenizer::tokenize(source);
-    if token_list.is_err() {
-        return Err(format!(
-            "failed to tokenize the passed source: {}, {:?}",
-            source,
-            token_list.err()
-        )
-        .into());
-    }
-    let token_list = token_list.unwrap();
+    let token_list = tokenizer::tokenize(source)
+        .with_context(|| format!("failed to tokenize the passed source: {}", source))?;
 
     // Parse
     let reader = std::fs::File::open(concat!(env!("OUT_DIR"), "/parser.bin")).unwrap();
     let transition_map: parser_generator::TransitionMap = de::from_reader(reader).unwrap();
-    let node = parser::parse(token_list, transition_map);
-    if node.is_err() {
-        return Err(format!(
-            "failed to parse the passed source: {}, {:?}",
-            source,
-            node.err()
-        )
-        .into());
-    }
-    let node_list = node.unwrap();
+    let node = parser::parse(token_list, transition_map)
+        .with_context(|| format!("failed to parse the passed source: {}", source))?;
 
     {
         let path = Path::new(output);
@@ -90,14 +65,7 @@ fn run(
             .to_string();
 
         write_header(&mut file);
-        write_root_py_code(
-            &mut file,
-            filename,
-            source,
-            node_list,
-            time_start_build,
-            is_root,
-        );
+        write_root_py_code(&mut file, filename, source, node, time_start_build, is_root)?;
     }
     Ok(())
 }
@@ -122,9 +90,10 @@ fn write_root_py_code(
     node: LibraryDeclaration,
     time_start_build: SystemTime,
     is_root: bool,
-) {
+) -> Result<()> {
     let code =
-        bytecompiler::runroot::run_root(&file_name, &node, source, time_start_build, is_root);
+        bytecompiler::runroot::run_root(&file_name, &node, source, time_start_build, is_root)?;
 
-    code.write(file);
+    code.write(file)?;
+    Ok(())
 }

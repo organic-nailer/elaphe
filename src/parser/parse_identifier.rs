@@ -1,14 +1,13 @@
-use std::error::Error;
+use anyhow::{bail, Result};
 
 use super::{
     node::{Identifier, IdentifierKind},
     node_internal::NodeInternal,
-    util::gen_error,
 };
 
 pub fn parse_identifier_list<'input>(
     node: &NodeInternal<'input>,
-) -> Result<Vec<Identifier<'input>>, Box<dyn Error>> {
+) -> Result<Vec<Identifier<'input>>> {
     if node.rule_name == "IdentifierList" {
         if node.children.len() == 1 {
             return Ok(vec![parse_identifier(&node.children[0])?]);
@@ -19,12 +18,10 @@ pub fn parse_identifier_list<'input>(
         }
     }
 
-    Err(gen_error("parse_identifier_list", &node.rule_name))
+    bail!("Parse Error in parse_identifier_list: {}", node.rule_name);
 }
 
-pub fn parse_identifier<'input>(
-    node: &NodeInternal<'input>,
-) -> Result<Identifier<'input>, Box<dyn Error>> {
+pub fn parse_identifier<'input>(node: &NodeInternal<'input>) -> Result<Identifier<'input>> {
     if node.rule_name == "Identifier" || node.rule_name == "TypeIdentifier" {
         let child_node = &node.children[0];
         if child_node.rule_name == "IDENTIFIER" {
@@ -45,5 +42,5 @@ pub fn parse_identifier<'input>(
         }
     }
 
-    Err(gen_error("parse_identifier", &node.rule_name))
+    bail!("Parse Error in parse_identifier: {}", node.rule_name);
 }

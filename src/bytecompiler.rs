@@ -1,9 +1,10 @@
-use std::error::Error;
 use std::fs;
 use std::path::Path;
 use std::rc::Rc;
 use std::time::SystemTime;
 use std::{cell::RefCell, collections::HashMap};
+
+use anyhow::Result;
 
 use crate::build_from_file;
 use crate::bytecode::ByteCode;
@@ -38,11 +39,7 @@ pub struct ByteCompiler<'ctx, 'value> {
 }
 
 impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
-    fn compile_import(
-        &mut self,
-        node: &LibraryImport,
-        time_start_build: SystemTime,
-    ) -> Result<(), Box<dyn Error>> {
+    fn compile_import(&mut self, node: &LibraryImport, time_start_build: SystemTime) -> Result<()> {
         let uri = &node.uri;
 
         let identifier = match &node.identifier {
@@ -184,7 +181,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
         Ok(())
     }
 
-    fn compile_expr(&mut self, node: &'value NodeExpression) {
+    fn compile_expr(&mut self, node: &'value NodeExpression) -> Result<()> {
         match node {
             NodeExpression::Binary {
                 left,
@@ -192,37 +189,37 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 right,
             } => {
                 if *operator == "??" {
-                    self.compile_expr(left);
+                    self.compile_expr(left)?;
                     self.push_op(OpCode::DupTop);
                     self.push_load_const(PyObject::None(false));
-                    self.push_op(OpCode::compare_op_from_str("=="));
+                    self.push_op(OpCode::compare_op_from_str("==")?);
                     let label_end = self.gen_jump_label();
                     self.push_op(OpCode::PopJumpIfFalse(label_end));
                     self.push_op(OpCode::PopTop);
-                    self.compile_expr(right);
+                    self.compile_expr(right)?;
                     self.set_jump_label_value(label_end);
                 } else if *operator == "||" {
-                    self.compile_expr(left);
+                    self.compile_expr(left)?;
                     self.push_op(OpCode::DupTop);
                     let label_end = self.gen_jump_label();
                     self.push_op(OpCode::PopJumpIfTrue(label_end));
                     self.push_op(OpCode::PopTop);
-                    self.compile_expr(right);
+                    self.compile_expr(right)?;
                     self.set_jump_label_value(label_end);
                 } else if *operator == "&&" {
-                    self.compile_expr(left);
+                    self.compile_expr(left)?;
                     self.push_op(OpCode::DupTop);
                     let label_end = self.gen_jump_label();
                     self.push_op(OpCode::PopJumpIfFalse(label_end));
                     self.push_op(OpCode::PopTop);
-                    self.compile_expr(right);
+                    self.compile_expr(right)?;
                     self.set_jump_label_value(label_end);
                 } else {
-                    self.compile_expr(left);
-                    self.compile_expr(right);
+                    self.compile_expr(left)?;
+                    self.compile_expr(right)?;
                     match *operator {
                         "==" | "!=" | ">=" | ">" | "<=" | "<" => {
-                            self.push_op(OpCode::compare_op_from_str(operator))
+                            self.push_op(OpCode::compare_op_from_str(operator)?)
                         }
                         "<<" => self.push_op(OpCode::BinaryLShift),
                         ">>" => self.push_op(OpCode::BinaryRShift),
@@ -246,16 +243,16 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             } => {
                 let label_conditional_end = self.gen_jump_label();
                 let label_false_start = self.gen_jump_label();
-                self.compile_expr(condition);
+                self.compile_expr(condition)?;
                 self.push_op(OpCode::PopJumpIfFalse(label_false_start));
-                self.compile_expr(true_expr);
+                self.compile_expr(true_expr)?;
                 self.push_op(OpCode::JumpAbsolute(label_conditional_end));
                 self.set_jump_label_value(label_false_start);
-                self.compile_expr(false_expr);
+                self.compile_expr(false_expr)?;
                 self.set_jump_label_value(label_conditional_end);
             }
             NodeExpression::Unary { operator, expr } => {
-                self.compile_expr(expr);
+                self.compile_expr(expr)?;
                 match *operator {
                     "-" => self.push_op(OpCode::UnaryNegative),
                     "!" => self.push_op(OpCode::UnaryNot),
@@ -300,7 +297,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             NodeExpression::TypeTest { child, type_test } => {
                 // isinstance(child, type_test.)
                 self.push_load_var(&"isinstance".to_string());
-                self.compile_expr(child);
+                self.compile_expr(child)?;
                 if let DartType::Named {
                     type_name,
                     type_arguments: _,
@@ -325,7 +322,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 type_cast: _,
             } => {
                 // 実行時には型がないので無視
-                self.compile_expr(child);
+                self.compile_expr(child)?;
             }
             NodeExpression::Assignment {
                 operator,
@@ -334,7 +331,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             } => {
                 match *operator {
                     "=" => {
-                        self.compile_expr(right);
+                        self.compile_expr(right)?;
                         // DartではAssignment Expressionが代入先の最終的な値を残す
                         self.push_op(OpCode::DupTop);
 
@@ -344,7 +341,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                                 self.push_store_var(&value);
                             }
                             NodeExpression::Selector { child, selector } => {
-                                self.compile_expr(child);
+                                self.compile_expr(child)?;
 
                                 match selector {
                                     Selector::Args { args: _ } => panic!("Invalid lhs value."),
@@ -360,7 +357,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                                         self.push_op(OpCode::StoreAttr(p));
                                     }
                                     Selector::Index { expr } => {
-                                        self.compile_expr(expr);
+                                        self.compile_expr(expr)?;
                                         self.push_op(OpCode::StoreSubScr);
                                     }
                                 }
@@ -374,7 +371,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                             let value = identifier.value.to_string();
                             self.push_load_var(&value);
 
-                            self.compile_expr(right);
+                            self.compile_expr(right)?;
                             match *operator {
                                 "*=" => self.push_op(OpCode::InplaceMultiply),
                                 "/=" => self.push_op(OpCode::InplaceTrueDivide),
@@ -394,7 +391,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                             self.push_store_var(&value);
                         }
                         NodeExpression::Selector { child, selector } => {
-                            self.compile_expr(child);
+                            self.compile_expr(child)?;
                             match selector {
                                 Selector::Args { args: _ } => panic!("Invalid lhs value."),
                                 Selector::Method {
@@ -410,7 +407,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                                     self.push_op(OpCode::DupTop);
                                     self.push_op(OpCode::LoadAttr(p));
 
-                                    self.compile_expr(right);
+                                    self.compile_expr(right)?;
                                     match *operator {
                                         "*=" => self.push_op(OpCode::InplaceMultiply),
                                         "/=" => self.push_op(OpCode::InplaceTrueDivide),
@@ -431,11 +428,11 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                                     self.push_op(OpCode::StoreAttr(p));
                                 }
                                 Selector::Index { expr } => {
-                                    self.compile_expr(expr);
+                                    self.compile_expr(expr)?;
                                     self.push_op(OpCode::DupTopTwo);
                                     self.push_op(OpCode::BinarySubScr);
 
-                                    self.compile_expr(right);
+                                    self.compile_expr(right)?;
                                     match *operator {
                                         "*=" => self.push_op(OpCode::InplaceMultiply),
                                         "/=" => self.push_op(OpCode::InplaceTrueDivide),
@@ -467,18 +464,18 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                             self.push_load_var(&value);
                             self.push_op(OpCode::DupTop);
                             self.push_load_const(PyObject::None(false));
-                            self.push_op(OpCode::compare_op_from_str("=="));
+                            self.push_op(OpCode::compare_op_from_str("==")?);
                             let label_end = self.gen_jump_label();
                             self.push_op(OpCode::PopJumpIfFalse(label_end));
 
                             self.push_op(OpCode::PopTop);
-                            self.compile_expr(right);
+                            self.compile_expr(right)?;
                             self.push_op(OpCode::DupTop);
                             self.push_store_var(&value);
                             self.set_jump_label_value(label_end);
                         }
                         NodeExpression::Selector { child, selector } => {
-                            self.compile_expr(child);
+                            self.compile_expr(child)?;
                             match selector {
                                 Selector::Args { args: _ } => panic!("Invalid lhs value."),
                                 Selector::Method {
@@ -496,12 +493,12 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
 
                                     self.push_op(OpCode::DupTop);
                                     self.push_load_const(PyObject::None(false));
-                                    self.push_op(OpCode::compare_op_from_str("=="));
+                                    self.push_op(OpCode::compare_op_from_str("==")?);
                                     let label_false = self.gen_jump_label();
                                     self.push_op(OpCode::PopJumpIfFalse(label_false));
 
                                     self.push_op(OpCode::PopTop);
-                                    self.compile_expr(right);
+                                    self.compile_expr(right)?;
                                     self.push_op(OpCode::DupTop);
                                     self.push_op(OpCode::RotThree);
                                     self.push_op(OpCode::RotThree);
@@ -516,18 +513,18 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                                     self.set_jump_label_value(label_end);
                                 }
                                 Selector::Index { expr } => {
-                                    self.compile_expr(expr);
+                                    self.compile_expr(expr)?;
                                     self.push_op(OpCode::DupTopTwo);
                                     self.push_op(OpCode::BinarySubScr);
 
                                     self.push_op(OpCode::DupTop);
                                     self.push_load_const(PyObject::None(false));
-                                    self.push_op(OpCode::compare_op_from_str("=="));
+                                    self.push_op(OpCode::compare_op_from_str("==")?);
                                     let label_false = self.gen_jump_label();
                                     self.push_op(OpCode::PopJumpIfFalse(label_false));
 
                                     self.push_op(OpCode::PopTop);
-                                    self.compile_expr(right);
+                                    self.compile_expr(right)?;
                                     self.push_op(OpCode::DupTop);
                                     self.push_op(OpCode::RotFour);
                                     self.push_op(OpCode::RotFour);
@@ -550,7 +547,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 }
             }
             NodeExpression::NumericLiteral { value } => {
-                self.push_load_const(PyObject::new_numeric(value, false));
+                self.push_load_const(PyObject::new_numeric(value, false)?);
             }
             NodeExpression::StringLiteral { str_list } => {
                 for (i, single_str) in str_list.iter().enumerate() {
@@ -559,7 +556,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                         if i > 0 {
                             // str(expr)
                             self.push_load_var(&"str".to_string());
-                            self.compile_expr(&single_str.interpolation_list[i - 1]);
+                            self.compile_expr(&single_str.interpolation_list[i - 1])?;
                             self.push_op(OpCode::CallFunction(1));
 
                             self.push_op(OpCode::BinaryAdd);
@@ -585,7 +582,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 // self.push_load_const(PyObject::new_string(value.to_string(), false));
             }
             NodeExpression::BooleanLiteral { value } => {
-                self.push_load_const(PyObject::new_boolean(value, false));
+                self.push_load_const(PyObject::new_boolean(value, false)?);
             }
             NodeExpression::NullLiteral => {
                 self.push_load_const(PyObject::None(false));
@@ -595,7 +592,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 for elem in element_list {
                     match elem {
                         CollectionElement::ExpressionElement { expr } => {
-                            self.compile_expr(expr);
+                            self.compile_expr(expr)?;
                         }
                         CollectionElement::MapElement {
                             key_expr: _,
@@ -632,8 +629,8 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                                 key_expr,
                                 value_expr,
                             } => {
-                                self.compile_expr(key_expr);
-                                self.compile_expr(value_expr);
+                                self.compile_expr(key_expr)?;
+                                self.compile_expr(value_expr)?;
                             }
                         }
                     }
@@ -643,7 +640,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     for elem in element_list {
                         match elem {
                             CollectionElement::ExpressionElement { expr } => {
-                                self.compile_expr(expr);
+                                self.compile_expr(expr)?;
                             }
                             CollectionElement::MapElement {
                                 key_expr: _,
@@ -662,13 +659,13 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             }
             NodeExpression::Selector { child, selector } => {
                 // 右辺値として処理される場合
-                self.compile_expr(child);
+                self.compile_expr(child)?;
 
                 match selector {
                     Selector::Args { args } => {
                         let mut name_list: Vec<&str> = vec![];
                         for param in args {
-                            self.compile_expr(&param.expr);
+                            self.compile_expr(&param.expr)?;
                             if let Some(v) = &param.identifier {
                                 name_list.push(v.value);
                             }
@@ -694,7 +691,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                         self.push_op(OpCode::LoadAttr(p));
                     }
                     Selector::Index { expr } => {
-                        self.compile_expr(expr);
+                        self.compile_expr(expr)?;
 
                         self.push_op(OpCode::BinarySubScr);
                     }
@@ -710,7 +707,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
 
                         let mut name_list: Vec<&str> = vec![];
                         for param in arguments {
-                            self.compile_expr(&param.expr);
+                            self.compile_expr(&param.expr)?;
                             if let Some(v) = &param.identifier {
                                 name_list.push(&v.value);
                             }
@@ -733,7 +730,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             NodeExpression::Slice { start, end, step } => {
                 match start {
                     Some(v) => {
-                        self.compile_expr(v);
+                        self.compile_expr(v)?;
                     }
                     None => {
                         self.push_load_const(PyObject::None(false));
@@ -742,7 +739,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
 
                 match end {
                     Some(v) => {
-                        self.compile_expr(v);
+                        self.compile_expr(v)?;
                     }
                     None => {
                         self.push_load_const(PyObject::None(false));
@@ -751,7 +748,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
 
                 match step {
                     Some(v) => {
-                        self.compile_expr(v);
+                        self.compile_expr(v)?;
                         self.push_op(OpCode::BuildSlice(3));
                     }
                     None => {
@@ -760,7 +757,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 }
             }
             NodeExpression::Throw { expr } => {
-                self.compile_expr(expr);
+                self.compile_expr(expr)?;
                 self.push_op(OpCode::RaiseVarargs(1));
             }
             NodeExpression::This => {
@@ -773,9 +770,10 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 self.push_op(OpCode::LoadFast(p));
             }
         }
+        Ok(())
     }
 
-    fn compile_stmt(&mut self, node: &'value NodeStatement, label: Option<&String>) {
+    fn compile_stmt(&mut self, node: &'value NodeStatement, label: Option<&String>) -> Result<()> {
         match node {
             NodeStatement::Labeled { label, stmt } => {
                 let label_str = label.value.to_string();
@@ -784,7 +782,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 // break用のラベルはこの時点で用意する
                 self.break_label_table.insert(label_str.clone(), label_id);
 
-                self.compile_stmt(stmt, Some(&label_str));
+                self.compile_stmt(stmt, Some(&label_str))?;
 
                 self.set_jump_label_value(label_id);
                 self.break_label_table.remove(&label_str);
@@ -826,7 +824,9 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             },
             NodeStatement::Return { value } => {
                 match value {
-                    Some(v) => self.compile_expr(v),
+                    Some(v) => {
+                        self.compile_expr(v)?;
+                    }
                     None => {
                         self.push_load_const(PyObject::None(false));
                     }
@@ -835,7 +835,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             }
             NodeStatement::Empty => {}
             NodeStatement::Expression { expr } => {
-                self.compile_expr(expr);
+                self.compile_expr(expr)?;
                 self.push_op(OpCode::PopTop);
             }
             NodeStatement::Block { statements } => {
@@ -844,7 +844,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     variables: vec![],
                 })));
                 for child in statements {
-                    self.compile_stmt(child, None);
+                    self.compile_stmt(child, None)?;
                 }
                 self.context_stack.pop();
             }
@@ -855,7 +855,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 for declaration in decl_list {
                     match &declaration.expr {
                         Some(e) => {
-                            self.compile_expr(e);
+                            self.compile_expr(e)?;
                             let value = declaration.identifier.value.to_string();
                             let position = (**self.context_stack.last().unwrap())
                                 .borrow_mut()
@@ -890,8 +890,8 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     body,
                     None,
                     None,
-                    |_| (),
-                );
+                    |_| Ok(()),
+                )?;
             }
             NodeStatement::ClassDeclaration {
                 identifier,
@@ -906,7 +906,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     member_list,
                     self,
                     self.source,
-                ));
+                )?);
 
                 self.push_load_const(PyObject::new_string(name.clone(), false));
 
@@ -929,7 +929,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 match if_false_stmt {
                     Some(if_false_stmt) => {
                         // if expr stmt else stmt
-                        self.compile_expr(condition);
+                        self.compile_expr(condition)?;
                         let label_false_starts = self.gen_jump_label();
                         self.push_op(OpCode::PopJumpIfFalse(label_false_starts));
 
@@ -937,7 +937,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                             outer: self.context_stack.last().unwrap().clone(),
                             variables: vec![],
                         })));
-                        self.compile_stmt(if_true_stmt, None);
+                        self.compile_stmt(if_true_stmt, None)?;
                         self.context_stack.pop();
 
                         let label_if_ends = self.gen_jump_label();
@@ -949,17 +949,17 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                             outer: self.context_stack.last().unwrap().clone(),
                             variables: vec![],
                         })));
-                        self.compile_stmt(if_false_stmt, None);
+                        self.compile_stmt(if_false_stmt, None)?;
                         self.context_stack.pop();
 
                         self.set_jump_label_value(label_if_ends);
                     }
                     None => {
                         // if expr stmt
-                        self.compile_expr(condition);
+                        self.compile_expr(condition)?;
                         let label_if_ends = self.gen_jump_label();
                         self.push_op(OpCode::PopJumpIfFalse(label_if_ends));
-                        self.compile_stmt(if_true_stmt, None);
+                        self.compile_stmt(if_true_stmt, None)?;
 
                         self.set_jump_label_value(label_if_ends);
                     }
@@ -976,14 +976,14 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 let label_finally_zero = self.byte_operations.borrow().len() as u8;
 
                 // 通常フロー
-                self.compile_stmt(block_try, None);
+                self.compile_stmt(block_try, None)?;
                 self.push_op(OpCode::PopBlock);
-                self.compile_stmt(block_finally, None);
+                self.compile_stmt(block_finally, None)?;
                 self.push_op(OpCode::JumpAbsolute(label_end));
 
                 // 例外が起きたときのフロー
                 self.set_jump_label_value_offset(label_finally, label_finally_zero);
-                self.compile_stmt(block_finally, None);
+                self.compile_stmt(block_finally, None)?;
                 self.push_op(OpCode::Reraise);
 
                 self.set_jump_label_value(label_end);
@@ -999,7 +999,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 let label_finally_zero = self.byte_operations.borrow().len() as u8;
 
                 // 通常のフロー
-                self.compile_stmt(block_try, None);
+                self.compile_stmt(block_try, None)?;
                 self.push_op(OpCode::PopBlock);
                 self.push_op(OpCode::JumpAbsolute(label_end));
 
@@ -1072,7 +1072,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                         }
                     }
 
-                    self.compile_stmt(&on_part.block, None);
+                    self.compile_stmt(&on_part.block, None)?;
                     self.push_op(OpCode::PopExcept);
                     self.push_op(OpCode::JumpAbsolute(label_end));
 
@@ -1105,11 +1105,11 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                         .insert(stmt_label.to_string(), label_loop_start);
                 }
                 if let Some(node) = init {
-                    self.compile_stmt(node, None);
+                    self.compile_stmt(node, None)?;
                 }
                 self.set_jump_label_value(label_loop_start);
                 if let Some(node) = condition {
-                    self.compile_expr(node);
+                    self.compile_expr(node)?;
                     self.push_op(OpCode::PopJumpIfFalse(label_for_end));
                 }
 
@@ -1117,12 +1117,12 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     outer: self.context_stack.last().unwrap().clone(),
                     variables: vec![],
                 })));
-                self.compile_stmt(stmt, None);
+                self.compile_stmt(stmt, None)?;
                 self.context_stack.pop();
 
                 if let Some(node_list) = update {
                     for node in node_list {
-                        self.compile_expr(node);
+                        self.compile_expr(node)?;
                         self.push_op(OpCode::PopTop);
                     }
                 }
@@ -1145,14 +1145,14 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                         .insert(stmt_label.to_string(), label_loop_start);
                 }
                 self.set_jump_label_value(label_loop_start);
-                self.compile_expr(condition);
+                self.compile_expr(condition)?;
                 self.push_op(OpCode::PopJumpIfFalse(label_while_end));
 
                 self.context_stack.push(Rc::new(RefCell::new(BlockContext {
                     outer: self.context_stack.last().unwrap().clone(),
                     variables: vec![],
                 })));
-                self.compile_stmt(stmt, None);
+                self.compile_stmt(stmt, None)?;
                 self.context_stack.pop();
 
                 self.push_op(OpCode::JumpAbsolute(label_loop_start));
@@ -1181,10 +1181,10 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     outer: self.context_stack.last().unwrap().clone(),
                     variables: vec![],
                 })));
-                self.compile_stmt(stmt, None);
+                self.compile_stmt(stmt, None)?;
                 self.context_stack.pop();
 
-                self.compile_expr(condition);
+                self.compile_expr(condition)?;
                 self.push_op(OpCode::PopJumpIfTrue(label_do_start));
                 self.set_jump_label_value(label_do_end);
 
@@ -1198,7 +1198,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                 case_list,
                 default_case,
             } => {
-                self.compile_expr(expr);
+                self.compile_expr(expr)?;
                 let label_switch_end = self.gen_jump_label();
                 self.default_scope_stack.push(DefaultScope {
                     break_label: label_switch_end,
@@ -1213,8 +1213,8 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     let case = &case_list[case_index];
                     let case_label = case_labels[case_index];
                     self.push_op(OpCode::DupTop);
-                    self.compile_expr(&case.expr);
-                    self.push_op(OpCode::compare_op_from_str("=="));
+                    self.compile_expr(&case.expr)?;
+                    self.push_op(OpCode::compare_op_from_str("==")?);
                     self.push_op(OpCode::PopJumpIfTrue(case_label));
                 }
                 let label_default_start = self.gen_jump_label();
@@ -1226,22 +1226,23 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
                     let case_label = case_labels[case_index];
                     self.set_jump_label_value(case_label);
                     for stmt in &case.stmt_list {
-                        self.compile_stmt(stmt, None);
+                        self.compile_stmt(stmt, None)?;
                     }
                 }
                 if let Some(default_case) = default_case {
                     self.set_jump_label_value(label_default_start);
                     for stmt in &default_case.stmt_list {
-                        self.compile_stmt(stmt, None);
+                        self.compile_stmt(stmt, None)?;
                     }
                 }
                 self.set_jump_label_value(label_switch_end);
                 self.default_scope_stack.pop();
             }
         }
+        Ok(())
     }
 
-    fn compile_declare_function<F: FnOnce(&mut ByteCompiler<'ctx, 'value>)>(
+    fn compile_declare_function<F: FnOnce(&mut ByteCompiler<'ctx, 'value>) -> Result<()>>(
         &mut self,
         name: &String,
         param: &'value FunctionParamSignature,
@@ -1249,7 +1250,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
         function_name_prefix: Option<String>,
         implicit_arg: Option<&String>,
         preface: F,
-    ) {
+    ) -> Result<()> {
         let mut argument_list: Vec<String> = vec![];
         if let Some(name) = implicit_arg {
             argument_list.push(name.clone());
@@ -1283,7 +1284,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             body,
             self.source,
             preface,
-        );
+        )?;
 
         // 通常引数のデフォルト値の設定
         let has_default = !param.option_list.is_empty();
@@ -1292,7 +1293,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             for v in &param.option_list {
                 match &v.expr {
                     Some(expr) => {
-                        self.compile_expr(expr);
+                        self.compile_expr(expr)?;
                     }
                     None => {
                         self.push_load_const(PyObject::None(false));
@@ -1309,7 +1310,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             for v in &param.named_list {
                 match &v.expr {
                     Some(expr) => {
-                        self.compile_expr(expr);
+                        self.compile_expr(expr)?;
                         name_list.push(v.identifier.value);
                     }
                     None => (),
@@ -1347,6 +1348,7 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             .borrow_mut()
             .declare_variable(&name);
         self.push_op(OpCode::StoreName(p));
+        Ok(())
     }
 
     fn push_op(&self, op: OpCode) {

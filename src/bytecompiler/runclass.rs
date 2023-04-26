@@ -1,5 +1,7 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
+use anyhow::{bail, Result};
+
 use crate::bytecode::{calc_stack_size, OpCode};
 use crate::executioncontext::{ClassContext, ExecutionContext, PyContext};
 use crate::parser::node::{
@@ -15,7 +17,7 @@ pub fn run_class<'ctx, 'value, 'cpl>(
     member_list: &'value Vec<Member>,
     outer_compiler: &'cpl ByteCompiler<'ctx, 'value>,
     source: &'value str,
-) -> PyObject {
+) -> Result<PyObject> {
     let py_context = Rc::new(RefCell::new(PyContext {
         outer: outer_compiler.context_stack.last().unwrap().clone(),
         constant_list: vec![],
@@ -110,11 +112,11 @@ pub fn run_class<'ctx, 'value, 'cpl>(
             method,
             code_name,
             instance_variable_declaration_list,
-        );
+        )?;
     }
 
     for method in method_declaration_list {
-        compile_method(&mut compiler, &method, code_name)
+        compile_method(&mut compiler, &method, code_name)?;
     }
 
     // 終わり
@@ -133,7 +135,7 @@ pub fn run_class<'ctx, 'value, 'cpl>(
 
     let py_context = Rc::try_unwrap(py_context).ok().unwrap().into_inner();
 
-    PyObject::Code {
+    Ok(PyObject::Code {
         file_name: file_name.to_string(),
         code_name: code_name.to_string(),
         num_args: 0,
@@ -155,14 +157,14 @@ pub fn run_class<'ctx, 'value, 'cpl>(
             add_ref: false,
         }),
         add_ref: false,
-    }
+    })
 }
 
 fn compile_method<'ctx, 'value, 'cpl>(
     compiler: &'cpl mut ByteCompiler<'ctx, 'value>,
     node: &'value Member,
     class_name: &'value str,
-) {
+) -> Result<()> {
     if let Member::MethodImpl { signature, body } = node {
         let prefix = format!("{}{}", class_name, ".");
         compiler.compile_declare_function(
@@ -171,8 +173,11 @@ fn compile_method<'ctx, 'value, 'cpl>(
             &body,
             Some(prefix),
             Some(&"self".to_string()),
-            |_| (),
-        );
+            |_| Ok(()),
+        )?;
+        Ok(())
+    } else {
+        bail!("Members except MethodImpl are not supported.");
     }
 }
 
@@ -181,12 +186,14 @@ fn compile_constructor<'ctx, 'value, 'cpl>(
     node: &'value Member,
     class_name: &'value str,
     instance_variable_declaration_list: Vec<&'value Vec<VariableDeclaration>>,
-) {
+) -> Result<()> {
     let preface = |compiler: &mut ByteCompiler<'ctx, 'value>| {
         for decl_list in instance_variable_declaration_list {
             for decl in decl_list {
                 match &decl.expr {
-                    Some(expr) => compiler.compile_expr(&*expr),
+                    Some(expr) => {
+                        compiler.compile_expr(&*expr)?;
+                    }
                     None => {
                         compiler.push_load_const(PyObject::None(false));
                     }
@@ -205,6 +212,7 @@ fn compile_constructor<'ctx, 'value, 'cpl>(
                 compiler.push_op(OpCode::StoreAttr(p));
             }
         }
+        Ok(())
     };
     match node {
         Member::MethodImpl { signature, body } => {
@@ -216,7 +224,7 @@ fn compile_constructor<'ctx, 'value, 'cpl>(
                 Some(prefix),
                 Some(&"self".to_string()),
                 preface,
-            );
+            )?;
         }
         Member::ConstructorImpl { signature, body } => {
             let prefix = format!("{}{}", class_name, ".");
@@ -227,8 +235,9 @@ fn compile_constructor<'ctx, 'value, 'cpl>(
                 Some(prefix),
                 Some(&"self".to_string()),
                 preface,
-            );
+            )?;
         }
         _ => (),
     }
+    Ok(())
 }

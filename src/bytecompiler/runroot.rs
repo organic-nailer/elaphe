@@ -1,6 +1,8 @@
 use std::time::SystemTime;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
+use anyhow::Result;
+
 use crate::bytecode::{calc_stack_size, OpCode};
 use crate::executioncontext::{ExecutionContext, GlobalContext};
 use crate::parser::node::LibraryDeclaration;
@@ -14,7 +16,7 @@ pub fn run_root<'value>(
     source: &'value str,
     time_start_build: SystemTime,
     is_root: bool,
-) -> PyObject {
+) -> Result<PyObject> {
     let global_context = Rc::new(RefCell::new(GlobalContext {
         constant_list: vec![],
         name_list: vec![],
@@ -39,11 +41,11 @@ pub fn run_root<'value>(
         .push_const(PyObject::None(false));
 
     for node in &root_node.import_list {
-        compiler.compile_import(node, time_start_build);
+        compiler.compile_import(node, time_start_build)?;
     }
 
     for node in &root_node.top_level_declaration_list {
-        compiler.compile_stmt(&node, None);
+        compiler.compile_stmt(&node, None)?;
     }
 
     if is_root {
@@ -75,7 +77,7 @@ pub fn run_root<'value>(
         add_ref: false,
     };
 
-    PyObject::Code {
+    Ok(PyObject::Code {
         file_name: file_name.to_string(),
         code_name: "<module>".to_string(),
         num_args: 0,
@@ -91,5 +93,5 @@ pub fn run_root<'value>(
             add_ref: false,
         }),
         add_ref: true,
-    }
+    })
 }

@@ -1,17 +1,13 @@
-use std::error::Error;
+use anyhow::{bail, Result};
 
 use super::{
-    node::VariableDeclaration,
-    node_internal::NodeInternal,
-    parse_expression::parse_expression,
-    parse_functions::parse_declared_identifier,
-    parse_identifier::parse_identifier,
-    util::{flatten, gen_error},
+    node::VariableDeclaration, node_internal::NodeInternal, parse_expression::parse_expression,
+    parse_functions::parse_declared_identifier, parse_identifier::parse_identifier, util::flatten,
 };
 
 pub fn parse_initialized_variable_declaration<'input>(
     node: &NodeInternal<'input>,
-) -> Result<Vec<VariableDeclaration<'input>>, Box<dyn Error>> {
+) -> Result<Vec<VariableDeclaration<'input>>> {
     if node.rule_name == "InitializedVariableDeclaration" {
         if node.children.len() == 1 {
             return Ok(vec![VariableDeclaration {
@@ -31,15 +27,15 @@ pub fn parse_initialized_variable_declaration<'input>(
         }
     }
 
-    Err(gen_error(
-        "parse_initialized_variable_declaration",
-        &node.rule_name,
-    ))
+    bail!(
+        "Parse Error in parse_initialized_variable_declaration: {}",
+        node.rule_name
+    );
 }
 
 fn parse_initialized_identifier<'input>(
     node: &NodeInternal<'input>,
-) -> Result<VariableDeclaration<'input>, Box<dyn Error>> {
+) -> Result<VariableDeclaration<'input>> {
     if node.rule_name == "InitializedIdentifier" {
         if node.children.len() == 1 {
             return Ok(VariableDeclaration {
@@ -54,12 +50,15 @@ fn parse_initialized_identifier<'input>(
         }
     }
 
-    Err(gen_error("parse_initialized_identifier", &node.rule_name))
+    bail!(
+        "Parse Error in parse_initialized_identifier: {}",
+        node.rule_name
+    );
 }
 
 pub fn parse_initialized_identifier_list<'input>(
     node: &NodeInternal<'input>,
-) -> Result<Vec<VariableDeclaration<'input>>, Box<dyn Error>> {
+) -> Result<Vec<VariableDeclaration<'input>>> {
     if node.rule_name == "InitializedIdentifierList" {
         if node.children.len() == 1 {
             return Ok(vec![parse_initialized_identifier(&node.children[0])?]);
@@ -71,8 +70,8 @@ pub fn parse_initialized_identifier_list<'input>(
         }
     }
 
-    Err(gen_error(
-        "parse_initialized_identifier_list",
-        &node.rule_name,
-    ))
+    bail!(
+        "Parse Error in parse_initialized_identifier_list: {}",
+        node.rule_name
+    );
 }

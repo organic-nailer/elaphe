@@ -1,8 +1,8 @@
+use anyhow::{bail, ensure, Result};
 use dart_parser_generator::{
     grammar::EPSILON,
     parser_generator::{SerializableRule, State, TransitionData, TransitionMap},
 };
-use std::error::Error;
 
 use crate::tokenizer::Token;
 
@@ -26,12 +26,9 @@ mod util;
 pub fn parse<'input>(
     input: Vec<Token<'input>>,
     transition_map: TransitionMap,
-) -> Result<LibraryDeclaration, Box<dyn Error>> {
-    let result = parse_internally(input, transition_map);
-    match result {
-        Ok(internal_node) => parse_library(&internal_node),
-        Err(e) => Err(e),
-    }
+) -> Result<LibraryDeclaration> {
+    let internal_node = parse_internally(input, transition_map)?;
+    parse_library(&internal_node)
 }
 
 // 初期状態
@@ -58,7 +55,7 @@ pub fn parse<'input>(
 fn parse_internally<'input>(
     input: Vec<Token<'input>>,
     transition_map: TransitionMap,
-) -> Result<NodeInternal<'input>, Box<dyn Error>> {
+) -> Result<NodeInternal<'input>> {
     let mut stack: Vec<String> = Vec::new();
     let node_stack: Vec<NodeInternal> = Vec::new();
     let parse_index = 0;
@@ -74,21 +71,20 @@ fn build_internal_node<'input>(
     mut stack: Vec<State>,
     mut node_stack: Vec<NodeInternal<'input>>,
     mut parse_index: usize,
-) -> Result<NodeInternal<'input>, Box<dyn Error>> {
+) -> Result<NodeInternal<'input>> {
     let mut accepted = false;
     while parse_index < input.len() || !stack.is_empty() {
         let transition = transition_map
             .transitions
             .get(&(stack.last().unwrap().clone(), input[parse_index].kind_str()));
 
-        if transition.is_none() {
-            return Err(format!(
-                "No Transition Error: {:?}, {}",
-                input[parse_index],
-                stack.last().unwrap()
-            )
-            .into());
-        }
+        ensure!(
+            transition.is_some(),
+            "No Transition Error: {:?}, {}",
+            input[parse_index],
+            stack.last().unwrap()
+        );
+
         let transition = transition.unwrap();
         match transition {
             TransitionData::Shift { target } => {
@@ -149,7 +145,7 @@ fn build_internal_node<'input>(
                     }
                 }
 
-                return Err("Reduce-Reduce Conflict".into());
+                bail!("Reduce-Reduce Conflict");
             }
         }
     }
@@ -157,7 +153,7 @@ fn build_internal_node<'input>(
     if accepted {
         Ok(node_stack.pop().unwrap())
     } else {
-        panic!("Parse Error");
+        bail!("Parse Error")
     }
 }
 
@@ -167,7 +163,7 @@ fn reduce_rule<'input>(
     transition_map: &TransitionMap,
     token: Token,
     rule: &SerializableRule,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<()> {
     let mut children = Vec::new();
     let child_size = if rule.right.len() == 1 && rule.right[0] == EPSILON {
         0
@@ -189,23 +185,22 @@ fn reduce_rule<'input>(
     let next_transition = transition_map
         .transitions
         .get(&(stack.last().unwrap().clone(), rule.left.to_string()));
-    if next_transition.is_none() {
-        return Err(format!(
-            "No Transition Error: {:?}, {}",
-            token,
-            stack.last().unwrap()
-        )
-        .into());
-    }
+
+    ensure!(
+        next_transition.is_some(),
+        "No Transition Error: {:?}, {}",
+        token,
+        stack.last().unwrap()
+    );
+
     if let TransitionData::Shift { target } = next_transition.unwrap() {
         stack.push(target.clone());
         Ok(())
     } else {
-        return Err(format!(
+        bail!(
             "No Transition Error: {:?}, {}",
             token,
             stack.last().unwrap()
-        )
-        .into());
+        );
     }
 }

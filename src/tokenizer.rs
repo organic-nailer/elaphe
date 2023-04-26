@@ -1,4 +1,4 @@
-use std::error::Error;
+use anyhow::{bail, Result};
 
 use dart_parser_generator::grammar::END;
 use regex::Regex;
@@ -96,7 +96,7 @@ enum StringInterpolationKind {
     TripleDoubleQuote,
 }
 
-pub fn tokenize<'input>(input: &'input str) -> Result<Vec<Token<'input>>, Box<dyn Error>> {
+pub fn tokenize<'input>(input: &'input str) -> Result<Vec<Token<'input>>> {
     let mut tokens: Vec<Token> = Vec::new();
     let mut current_index = 0;
 
@@ -489,7 +489,7 @@ pub fn tokenize<'input>(input: &'input str) -> Result<Vec<Token<'input>>, Box<dy
             }
         }
 
-        return Err(format!("Unexpected token at {}", current_index).into());
+        bail!("Unexpected token at {}", current_index);
     }
     tokens.push(Token {
         kind: TokenKind::EOF,

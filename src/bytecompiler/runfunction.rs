@@ -1,5 +1,7 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
+use anyhow::Result;
+
 use crate::bytecode::{calc_stack_size, OpCode};
 use crate::executioncontext::{BlockContext, ExecutionContext, PyContext};
 use crate::parser::node::NodeStatement;
@@ -7,7 +9,12 @@ use crate::pyobject::PyObject;
 
 use super::ByteCompiler;
 
-pub fn run_function<'ctx, 'value, 'cpl, F: FnOnce(&mut ByteCompiler<'ctx, 'value>)>(
+pub fn run_function<
+    'ctx,
+    'value,
+    'cpl,
+    F: FnOnce(&mut ByteCompiler<'ctx, 'value>) -> Result<()>,
+>(
     file_name: &String,
     code_name: &String,
     argument_list: Vec<String>,
@@ -18,7 +25,7 @@ pub fn run_function<'ctx, 'value, 'cpl, F: FnOnce(&mut ByteCompiler<'ctx, 'value
     body: &'value NodeStatement,
     source: &'value str,
     preface: F,
-) -> PyObject {
+) -> Result<PyObject> {
     let py_context = Rc::new(RefCell::new(PyContext {
         outer: outer_compiler.context_stack.last().unwrap().clone(),
         constant_list: vec![],
@@ -47,9 +54,9 @@ pub fn run_function<'ctx, 'value, 'cpl, F: FnOnce(&mut ByteCompiler<'ctx, 'value
         source,
     };
 
-    preface(&mut compiler);
+    preface(&mut compiler)?;
 
-    compiler.compile_stmt(body, None);
+    compiler.compile_stmt(body, None)?;
 
     compiler.push_load_const(PyObject::None(false));
     compiler.push_op(OpCode::ReturnValue);
@@ -66,7 +73,7 @@ pub fn run_function<'ctx, 'value, 'cpl, F: FnOnce(&mut ByteCompiler<'ctx, 'value
 
     let py_context = Rc::try_unwrap(py_context).ok().unwrap().into_inner();
 
-    PyObject::Code {
+    Ok(PyObject::Code {
         file_name: file_name.to_string(),
         code_name: code_name.to_string(),
         num_args,
@@ -92,5 +99,5 @@ pub fn run_function<'ctx, 'value, 'cpl, F: FnOnce(&mut ByteCompiler<'ctx, 'value
             add_ref: false,
         }),
         add_ref: false,
-    }
+    })
 }

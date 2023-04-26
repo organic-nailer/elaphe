@@ -1,5 +1,7 @@
 use std::{fs::File, io::Write};
 
+use anyhow::{bail, Context, Result};
+
 use crate::bytecode::{self, ByteCode};
 
 #[allow(dead_code)]
@@ -34,21 +36,24 @@ pub enum PyObject {
 }
 
 impl PyObject {
-    pub fn new_numeric(value: &str, add_ref: bool) -> PyObject {
+    pub fn new_numeric(value: &str, add_ref: bool) -> Result<PyObject> {
         if value.starts_with("0x") || value.starts_with("0X") {
             // 16進数の場合
-            let value = i32::from_str_radix(&value[2..], 16).unwrap();
-            PyObject::Int(value, add_ref)
+            let value = i32::from_str_radix(&value[2..], 16)
+                .with_context(|| format!("Failed to parse hex: {}", value))?;
+            Ok(PyObject::Int(value, add_ref))
         } else {
             match value.parse::<i32>() {
                 Ok(value) => {
                     // 整数の場合
-                    PyObject::Int(value, add_ref)
+                    Ok(PyObject::Int(value, add_ref))
                 }
                 Err(_) => {
                     // 小数の場合
-                    let value = value.parse::<f64>().unwrap();
-                    PyObject::Float(value, add_ref)
+                    let value = value
+                        .parse::<f64>()
+                        .with_context(|| format!("Failed to parse float: {}", value))?;
+                    Ok(PyObject::Float(value, add_ref))
                 }
             }
         }
@@ -70,49 +75,49 @@ impl PyObject {
         }
     }
 
-    pub fn new_boolean(value: &str, add_ref: bool) -> PyObject {
+    pub fn new_boolean(value: &str, add_ref: bool) -> Result<PyObject> {
         match value {
-            "true" => PyObject::True(add_ref),
-            "false" => PyObject::False(add_ref),
-            _ => panic!("Unknown Boolean Literal: {}", value),
+            "true" => Ok(PyObject::True(add_ref)),
+            "false" => Ok(PyObject::False(add_ref)),
+            _ => bail!("Invalid boolean value: {}", value),
         }
     }
 }
 
 impl PyObject {
-    pub fn write(&self, file: &mut File) {
+    pub fn write(&self, file: &mut File) -> Result<()> {
         let object_type = self.get_object_type();
-        file.write(&[object_type]).unwrap();
+        file.write(&[object_type])?;
         match &*self {
             PyObject::Int(v, _) => {
-                file.write(&(v.to_le_bytes())).unwrap();
+                file.write(&(v.to_le_bytes()))?;
             }
             PyObject::Float(v, _) => {
-                file.write(&(v.to_le_bytes())).unwrap();
+                file.write(&(v.to_le_bytes()))?;
             }
             PyObject::String(v, _) => {
                 let str_len = v.len() as u32;
-                file.write(&str_len.to_le_bytes()).unwrap();
-                file.write(v).unwrap();
+                file.write(&str_len.to_le_bytes())?;
+                file.write(v)?;
             }
             PyObject::Ascii(v, _) | PyObject::Unicode(v, _) => {
                 let str_len = v.len() as u32;
-                file.write(&str_len.to_le_bytes()).unwrap();
-                file.write(v.as_bytes()).unwrap();
+                file.write(&str_len.to_le_bytes())?;
+                file.write(v.as_bytes())?;
             }
             PyObject::AsciiShort(v, _) => {
                 let str_len = v.len() as u8;
-                file.write(&[str_len]).unwrap();
-                file.write(v.as_bytes()).unwrap();
+                file.write(&[str_len])?;
+                file.write(v.as_bytes())?;
             }
             PyObject::SmallTuple {
                 children,
                 add_ref: _,
             } => {
                 let tuple_len = children.len() as u8;
-                file.write(&[tuple_len]).unwrap();
+                file.write(&[tuple_len])?;
                 for child in children {
-                    child.write(file);
+                    child.write(file)?;
                 }
             }
             PyObject::Code {
@@ -129,55 +134,56 @@ impl PyObject {
                 local_list,
                 add_ref: _,
             } => {
-                file.write(&(num_args.to_le_bytes())).unwrap(); // ArgCount
-                file.write(&(num_pos_only_args.to_le_bytes())).unwrap(); // PosOnlyArgCount
-                file.write(&(num_kw_only_args.to_le_bytes())).unwrap(); // KwOnlyArgCount
-                file.write(&(num_locals.to_le_bytes())).unwrap(); // NumLocals
-                file.write(&(*stack_size as u32).to_le_bytes()).unwrap(); // StackSize
-                file.write(&(64u32.to_le_bytes())).unwrap(); // Flags
+                file.write(&(num_args.to_le_bytes()))?; // ArgCount
+                file.write(&(num_pos_only_args.to_le_bytes()))?; // PosOnlyArgCount
+                file.write(&(num_kw_only_args.to_le_bytes()))?; // KwOnlyArgCount
+                file.write(&(num_locals.to_le_bytes()))?; // NumLocals
+                file.write(&(*stack_size as u32).to_le_bytes())?; // StackSize
+                file.write(&(64u32.to_le_bytes()))?; // Flags
 
                 // コードをコンパイルして格納
                 let codes = bytecode::compile_code(&operation_list);
-                PyObject::new_bytes(codes, false).write(file);
+                PyObject::new_bytes(codes, false).write(file)?;
 
                 // 定数一覧
-                constant_list.write(file);
+                constant_list.write(file)?;
 
                 // 名前一覧
-                name_list.write(file);
+                name_list.write(file)?;
 
                 // ローカル変数一覧
-                local_list.write(file);
+                local_list.write(file)?;
 
                 // 自由変数
                 PyObject::SmallTuple {
                     children: vec![],
                     add_ref: false,
                 }
-                .write(file);
+                .write(file)?;
 
                 // セル変数
                 PyObject::SmallTuple {
                     children: vec![],
                     add_ref: false,
                 }
-                .write(file);
+                .write(file)?;
 
                 // ファイル名
-                PyObject::new_string(file_name.to_string(), true).write(file);
+                PyObject::new_string(file_name.to_string(), true).write(file)?;
 
                 // 名前
-                PyObject::new_string(code_name.to_string(), true).write(file);
+                PyObject::new_string(code_name.to_string(), true).write(file)?;
 
                 // first line
-                file.write(&(1u32).to_le_bytes()).unwrap();
+                file.write(&(1u32).to_le_bytes())?;
 
                 // line table
                 // StackTraceに使われるが、仕様が不明なので0埋め
-                PyObject::new_bytes((0u32).to_le_bytes().to_vec(), true).write(file);
+                PyObject::new_bytes((0u32).to_le_bytes().to_vec(), true).write(file)?;
             }
             PyObject::None(_) | PyObject::True(_) | PyObject::False(_) => (),
         };
+        Ok(())
     }
 
     fn get_object_type(&self) -> u8 {

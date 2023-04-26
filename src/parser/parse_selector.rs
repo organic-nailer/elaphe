@@ -1,4 +1,4 @@
-use std::error::Error;
+use anyhow::{bail, Result};
 
 use super::{
     node::{CallParameter, NodeExpression, Selector},
@@ -6,12 +6,12 @@ use super::{
     parse_expression::parse_expression,
     parse_identifier::parse_identifier,
     parse_statement::parse_label,
-    util::{flatten, gen_error},
+    util::flatten,
 };
 
 pub fn parse_slice_expression<'input>(
     node: &NodeInternal<'input>,
-) -> Result<NodeExpression<'input>, Box<dyn Error>> {
+) -> Result<NodeExpression<'input>> {
     if node.rule_name == "SliceExpression" {
         if node.children.len() == 3 {
             return Ok(NodeExpression::Slice {
@@ -40,12 +40,10 @@ pub fn parse_slice_expression<'input>(
         }
     }
 
-    Err(gen_error("parse_slice_expression", &node.rule_name))
+    bail!("Parse Error in parse_slice_expression: {}", node.rule_name);
 }
 
-pub fn parse_selector<'input>(
-    node: &NodeInternal<'input>,
-) -> Result<Selector<'input>, Box<dyn Error>> {
+pub fn parse_selector<'input>(node: &NodeInternal<'input>) -> Result<Selector<'input>> {
     if node.rule_name == "Selector" {
         if node.children.len() == 1 {
             return Ok(Selector::Args {
@@ -69,12 +67,10 @@ pub fn parse_selector<'input>(
         }
     }
 
-    Err(gen_error("parse_selector", &node.rule_name))
+    bail!("Parse Error in parse_selector: {}", node.rule_name);
 }
 
-fn parse_arguments<'input>(
-    node: &NodeInternal<'input>,
-) -> Result<Vec<CallParameter<'input>>, Box<dyn Error>> {
+fn parse_arguments<'input>(node: &NodeInternal<'input>) -> Result<Vec<CallParameter<'input>>> {
     if node.rule_name == "Arguments" {
         if node.children.len() == 2 {
             return Ok(vec![]);
@@ -83,12 +79,10 @@ fn parse_arguments<'input>(
         }
     }
 
-    Err(gen_error("parse_arguments", &node.rule_name))
+    bail!("Parse Error in parse_arguments: {}", node.rule_name);
 }
 
-fn parse_argument_item<'input>(
-    node: &NodeInternal<'input>,
-) -> Result<CallParameter<'input>, Box<dyn Error>> {
+fn parse_argument_item<'input>(node: &NodeInternal<'input>) -> Result<CallParameter<'input>> {
     if node.rule_name == "NormalArgument" {
         return Ok(CallParameter {
             identifier: None,
@@ -101,12 +95,10 @@ fn parse_argument_item<'input>(
         });
     }
 
-    Err(gen_error("parse_normal_argument", &node.rule_name))
+    bail!("Parse Error in parse_argument_item: {}", node.rule_name);
 }
 
-fn parse_argument_list<'input>(
-    node: &NodeInternal<'input>,
-) -> Result<Vec<CallParameter<'input>>, Box<dyn Error>> {
+fn parse_argument_list<'input>(node: &NodeInternal<'input>) -> Result<Vec<CallParameter<'input>>> {
     if node.rule_name == "ArgumentList" {
         if node.children.len() == 1 {
             return Ok(vec![parse_argument_item(&node.children[0])?]);
@@ -118,5 +110,5 @@ fn parse_argument_list<'input>(
         }
     }
 
-    Err(gen_error("parse_argument_list", &node.rule_name))
+    bail!("Parse Error in parse_argument_list: {}", node.rule_name);
 }

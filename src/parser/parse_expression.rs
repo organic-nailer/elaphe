@@ -1,4 +1,4 @@
-use std::error::Error;
+use anyhow::{bail, Result};
 
 use super::{
     node::{DartType, NodeExpression, TypeTest},
@@ -7,12 +7,10 @@ use super::{
     parse_literal::{parse_list_literal, parse_set_or_map_literal, parse_string_literal_list},
     parse_selector::{parse_selector, parse_slice_expression},
     parse_type::parse_type,
-    util::{flatten, gen_error},
+    util::flatten,
 };
 
-pub fn parse_expression<'input>(
-    node: &NodeInternal<'input>,
-) -> Result<NodeExpression<'input>, Box<dyn Error>> {
+pub fn parse_expression<'input>(node: &NodeInternal<'input>) -> Result<NodeExpression<'input>> {
     match node.rule_name.as_str() {
         "Expression" | "ExpressionNotBrace" => {
             if node.children.len() == 1 {
@@ -185,13 +183,13 @@ pub fn parse_expression<'input>(
         "ThrowExpression" => Ok(NodeExpression::Throw {
             expr: Box::new(parse_expression(&node.children[1])?),
         }),
-        v => Err(gen_error("parse_expression", v)),
+        v => bail!("Parse error in parse_expression: {}", v),
     }
 }
 
 pub fn parse_expression_opt<'input>(
     node: &NodeInternal<'input>,
-) -> Result<Option<Box<NodeExpression<'input>>>, Box<dyn Error>> {
+) -> Result<Option<Box<NodeExpression<'input>>>> {
     if node.rule_name == "ExpressionOpt" {
         if node.children.len() == 0 {
             return Ok(None);
@@ -200,12 +198,12 @@ pub fn parse_expression_opt<'input>(
         }
     }
 
-    Err(gen_error("parse_expression_opt", &node.rule_name))
+    bail!("Parse error in parse_expression_opt: {}", node.rule_name);
 }
 
 pub fn parse_expression_list<'input>(
     node: &NodeInternal<'input>,
-) -> Result<Vec<Box<NodeExpression<'input>>>, Box<dyn Error>> {
+) -> Result<Vec<Box<NodeExpression<'input>>>> {
     if node.rule_name == "ExpressionList" {
         if node.children.len() == 1 {
             return Ok(vec![Box::new(parse_expression(&node.children[0])?)]);
@@ -217,12 +215,12 @@ pub fn parse_expression_list<'input>(
         }
     }
 
-    Err(gen_error("parse_expression_list", &node.rule_name))
+    bail!("Parse error in parse_expression_list: {}", node.rule_name);
 }
 
 pub fn parse_expression_list_opt<'input>(
     node: &NodeInternal<'input>,
-) -> Result<Option<Vec<Box<NodeExpression<'input>>>>, Box<dyn Error>> {
+) -> Result<Option<Vec<Box<NodeExpression<'input>>>>> {
     if node.rule_name == "ExpressionListOpt" {
         if node.children.len() == 0 {
             return Ok(None);
@@ -231,12 +229,13 @@ pub fn parse_expression_list_opt<'input>(
         }
     }
 
-    Err(gen_error("parse_expression_list_opt", &node.rule_name))
+    bail!(
+        "Parse error in parse_expression_list_opt: {}",
+        node.rule_name
+    );
 }
 
-fn parse_type_test<'input>(
-    node: &NodeInternal<'input>,
-) -> Result<TypeTest<'input>, Box<dyn Error>> {
+fn parse_type_test<'input>(node: &NodeInternal<'input>) -> Result<TypeTest<'input>> {
     if node.rule_name == "TypeTest" {
         if node.children.len() == 2 {
             return Ok(TypeTest {
@@ -251,15 +250,13 @@ fn parse_type_test<'input>(
         }
     }
 
-    Err(gen_error("parse_type_test", &node.rule_name))
+    bail!("Parse error in parse_type_test: {}", node.rule_name);
 }
 
-fn parse_type_cast<'input>(
-    node: &NodeInternal<'input>,
-) -> Result<DartType<'input>, Box<dyn Error>> {
+fn parse_type_cast<'input>(node: &NodeInternal<'input>) -> Result<DartType<'input>> {
     if node.rule_name == "TypeCast" {
         return Ok(parse_type(&node.children[1])?);
     }
 
-    Err(gen_error("parse_type_cast", &node.rule_name))
+    bail!("Parse error in parse_type_cast: {}", node.rule_name);
 }

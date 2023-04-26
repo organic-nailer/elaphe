@@ -1,4 +1,4 @@
-use std::error::Error;
+use anyhow::{bail, Result};
 
 use super::{
     node::{
@@ -9,13 +9,13 @@ use super::{
     parse_identifier::parse_identifier,
     parse_statement::parse_block_statement,
     parse_type::parse_type,
-    util::{flatten, gen_error},
+    util::flatten,
 };
 
 pub fn parse_function_body<'input>(
     node: &NodeInternal<'input>,
     returns_none: bool,
-) -> Result<NodeStatement<'input>, Box<dyn Error>> {
+) -> Result<NodeStatement<'input>> {
     if node.rule_name == "FunctionBody" {
         if node.children.len() == 1 {
             return parse_block_statement(&node.children[0]);
@@ -32,12 +32,12 @@ pub fn parse_function_body<'input>(
         }
     }
 
-    Err(gen_error("parse_function_body", &node.rule_name))
+    bail!("Parse Error in parse_function_body: {}", node.rule_name);
 }
 
 pub fn parse_function_signature<'input>(
     node: &NodeInternal<'input>,
-) -> Result<FunctionSignature<'input>, Box<dyn Error>> {
+) -> Result<FunctionSignature<'input>> {
     if node.rule_name == "FunctionSignature" {
         if node.children.len() == 2 {
             return Ok(FunctionSignature {
@@ -54,12 +54,15 @@ pub fn parse_function_signature<'input>(
         }
     }
 
-    Err(gen_error("parse_function_signature", &node.rule_name))
+    bail!(
+        "Parse Error in parse_function_signature: {}",
+        node.rule_name
+    );
 }
 
 fn parse_formal_parameter_list<'input>(
     node: &NodeInternal<'input>,
-) -> Result<FunctionParamSignature<'input>, Box<dyn Error>> {
+) -> Result<FunctionParamSignature<'input>> {
     if node.rule_name == "FormalParameterList" {
         if node.children.len() == 2 {
             return Ok(FunctionParamSignature {
@@ -106,12 +109,15 @@ fn parse_formal_parameter_list<'input>(
         }
     }
 
-    Err(gen_error("parse_formal_parameter_list", &node.rule_name))
+    bail!(
+        "Parse Error in parse_formal_parameter_list: {}",
+        node.rule_name
+    );
 }
 
 fn parse_optional_or_named_formal_parameter_list<'input>(
     node: &NodeInternal<'input>,
-) -> Result<(Vec<FunctionParameter<'input>>, bool), Box<dyn Error>> {
+) -> Result<(Vec<FunctionParameter<'input>>, bool)> {
     if node.rule_name == "OptionalOrNamedFormalParameterList" {
         if node.children[0].rule_name == "OptionalPositionalFormalParameterList" {
             return Ok((
@@ -123,15 +129,15 @@ fn parse_optional_or_named_formal_parameter_list<'input>(
         }
     }
 
-    Err(gen_error(
-        "parse_optional_or_named_formal_parameter_list",
-        &node.rule_name,
-    ))
+    bail!(
+        "Parse Error in parse_optional_or_named_formal_parameter_list: {}",
+        node.rule_name
+    );
 }
 
 fn parse_optional_positional_formal_parameter_list<'input>(
     node: &NodeInternal<'input>,
-) -> Result<Vec<FunctionParameter<'input>>, Box<dyn Error>> {
+) -> Result<Vec<FunctionParameter<'input>>> {
     if node.rule_name == "OptionalPositionalFormalParameterList" {
         if node.children.len() == 2 {
             return Ok(vec![]);
@@ -140,15 +146,15 @@ fn parse_optional_positional_formal_parameter_list<'input>(
         }
     }
 
-    Err(gen_error(
-        "parse_optional_positional_formal_parameter_list",
-        &node.rule_name,
-    ))
+    bail!(
+        "Parse Error in parse_optional_positional_formal_parameter_list: {}",
+        node.rule_name
+    );
 }
 
 fn parse_optional_positional_formal_parameter_list_internal<'input>(
     node: &NodeInternal<'input>,
-) -> Result<Vec<FunctionParameter<'input>>, Box<dyn Error>> {
+) -> Result<Vec<FunctionParameter<'input>>> {
     if node.rule_name == "OptionalPositionalFormalParameterListInternal" {
         if node.children.len() == 1 {
             return Ok(vec![parse_default_formal_parameter(&node.children[0])?]);
@@ -160,15 +166,15 @@ fn parse_optional_positional_formal_parameter_list_internal<'input>(
         }
     }
 
-    Err(gen_error(
-        "parse_optional_positional_formal_parameter_list_internal",
-        &node.rule_name,
-    ))
+    bail!(
+        "Parse Error in parse_optional_positional_formal_parameter_list_internal: {}",
+        node.rule_name
+    );
 }
 
 fn parse_named_formal_parameter_list<'input>(
     node: &NodeInternal<'input>,
-) -> Result<Vec<FunctionParameter<'input>>, Box<dyn Error>> {
+) -> Result<Vec<FunctionParameter<'input>>> {
     if node.rule_name == "NamedFormalParameterList" {
         if node.children.len() == 2 {
             return Ok(vec![]);
@@ -177,15 +183,15 @@ fn parse_named_formal_parameter_list<'input>(
         }
     }
 
-    Err(gen_error(
-        "parse_named_formal_parameter_list",
-        &node.rule_name,
-    ))
+    bail!(
+        "Parse Error in parse_named_formal_parameter_list: {}",
+        node.rule_name
+    );
 }
 
 fn parse_named_formal_parameter_list_internal<'input>(
     node: &NodeInternal<'input>,
-) -> Result<Vec<FunctionParameter<'input>>, Box<dyn Error>> {
+) -> Result<Vec<FunctionParameter<'input>>> {
     if node.rule_name == "NamedFormalParameterListInternal" {
         if node.children.len() == 1 {
             return Ok(vec![parse_default_named_parameter(&node.children[0])?]);
@@ -197,15 +203,15 @@ fn parse_named_formal_parameter_list_internal<'input>(
         }
     }
 
-    Err(gen_error(
-        "parse_named_formal_parameter_list_internal",
-        &node.rule_name,
-    ))
+    bail!(
+        "Parse Error in parse_named_formal_parameter_list_internal: {}",
+        node.rule_name
+    );
 }
 
 fn parse_normal_formal_parameter<'input>(
     node: &NodeInternal<'input>,
-) -> Result<Identifier<'input>, Box<dyn Error>> {
+) -> Result<Identifier<'input>> {
     if node.rule_name == "NormalFormalParameter" {
         if node.children[0].rule_name == "DeclaredIdentifier" {
             return Ok(parse_declared_identifier(&node.children[0])?);
@@ -213,12 +219,15 @@ fn parse_normal_formal_parameter<'input>(
         return Ok(parse_identifier(&node.children[0])?);
     }
 
-    Err(gen_error("parse_normal_formal_parameter", &node.rule_name))
+    bail!(
+        "Parse Error in parse_normal_formal_parameter: {}",
+        node.rule_name
+    );
 }
 
 fn parse_normal_formal_parameter_list<'input>(
     node: &NodeInternal<'input>,
-) -> Result<Vec<FunctionParameter<'input>>, Box<dyn Error>> {
+) -> Result<Vec<FunctionParameter<'input>>> {
     if node.rule_name == "NormalFormalParameterList" {
         if node.children.len() == 1 {
             return Ok(vec![FunctionParameter {
@@ -236,15 +245,15 @@ fn parse_normal_formal_parameter_list<'input>(
         }
     }
 
-    Err(gen_error(
-        "parse_normal_formal_parameter_list",
-        &node.rule_name,
-    ))
+    bail!(
+        "Parse Error in parse_normal_formal_parameter_list: {}",
+        node.rule_name
+    );
 }
 
 fn parse_default_formal_parameter<'input>(
     node: &NodeInternal<'input>,
-) -> Result<FunctionParameter<'input>, Box<dyn Error>> {
+) -> Result<FunctionParameter<'input>> {
     if node.rule_name == "DefaultFormalParameter" {
         if node.children.len() == 1 {
             return Ok(FunctionParameter {
@@ -259,12 +268,15 @@ fn parse_default_formal_parameter<'input>(
         }
     }
 
-    Err(gen_error("parse_default_formal_parameter", &node.rule_name))
+    bail!(
+        "Parse Error in parse_default_formal_parameter: {}",
+        node.rule_name
+    );
 }
 
 fn parse_default_named_parameter<'input>(
     node: &NodeInternal<'input>,
-) -> Result<FunctionParameter<'input>, Box<dyn Error>> {
+) -> Result<FunctionParameter<'input>> {
     if node.rule_name == "DefaultNamedParameter" {
         if node.children.len() == 1 {
             return Ok(FunctionParameter {
@@ -308,15 +320,21 @@ fn parse_default_named_parameter<'input>(
         }
     }
 
-    Err(gen_error("parse_default_named_parameter", &node.rule_name))
+    bail!(
+        "Parse Error in parse_default_named_parameter: {}",
+        node.rule_name
+    );
 }
 
 pub fn parse_declared_identifier<'input>(
     node: &NodeInternal<'input>,
-) -> Result<Identifier<'input>, Box<dyn Error>> {
+) -> Result<Identifier<'input>> {
     if node.rule_name == "DeclaredIdentifier" {
         return Ok(parse_identifier(&node.children.last().unwrap())?);
     }
 
-    Err(gen_error("parse_declared_identifier", &node.rule_name))
+    bail!(
+        "Parse Error in parse_declared_identifier: {}",
+        node.rule_name
+    );
 }

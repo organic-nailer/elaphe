@@ -1,4 +1,4 @@
-use std::error::Error;
+use anyhow::{bail, Result};
 
 use crate::tokenizer::{BUILT_IN_IDENTIFIER, OTHER_IDENTIFIER};
 
@@ -8,12 +8,12 @@ use super::{
     },
     node_internal::NodeInternal,
     parse_expression::parse_expression,
-    util::{flatten, gen_error},
+    util::flatten,
 };
 
 pub fn parse_string_literal_list<'input>(
     node: &NodeInternal<'input>,
-) -> Result<Vec<StringWithInterpolation<'input>>, Box<dyn Error>> {
+) -> Result<Vec<StringWithInterpolation<'input>>> {
     if node.rule_name == "StringLiteralList" {
         if node.children.len() == 1 {
             return Ok(vec![parse_string_literal(&node.children[0])?]);
@@ -25,12 +25,15 @@ pub fn parse_string_literal_list<'input>(
         }
     }
 
-    Err(gen_error("parse_string_literal_list", &node.rule_name))
+    bail!(
+        "Parse Error in parse_string_literal_list: {}",
+        node.rule_name
+    );
 }
 
 fn parse_string_literal<'input>(
     node: &NodeInternal<'input>,
-) -> Result<StringWithInterpolation<'input>, Box<dyn Error>> {
+) -> Result<StringWithInterpolation<'input>> {
     if node.rule_name == "StringLiteral" {
         if node.children.len() == 1 {
             return Ok(parse_string_no_brace(&node.children[0])?);
@@ -46,12 +49,12 @@ fn parse_string_literal<'input>(
         }
     }
 
-    Err(gen_error("parse_string_literal", &node.rule_name))
+    bail!("Parse Error in parse_string_literal: {}", node.rule_name);
 }
 
 fn parse_string_no_brace<'input>(
     node: &NodeInternal<'input>,
-) -> Result<StringWithInterpolation<'input>, Box<dyn Error>> {
+) -> Result<StringWithInterpolation<'input>> {
     let regex_non_escaped_dollar = regex::Regex::new(r#"(^|[^\\])(\\\\)*\$"#).unwrap();
     let regex_identifier_or_keyword = regex::Regex::new(r"^[a-zA-Z_\$][0-9a-zA-Z_\$]*").unwrap();
     if node.rule_name == "STRING_BEGIN_END"
@@ -68,7 +71,7 @@ fn parse_string_no_brace<'input>(
                     id_start_end_list.push((end, end + m.end()));
                 }
                 None => {
-                    return Err(gen_error("parse_string_no_brace", &node.rule_name));
+                    bail!("$ must be followed by identifier: {}", text);
                 }
             }
         }
@@ -114,12 +117,12 @@ fn parse_string_no_brace<'input>(
         });
     }
 
-    Err(gen_error("parse_string_no_brace", &node.rule_name))
+    bail!("Parse Error in parse_string_no_brace: {}", node.rule_name);
 }
 
 fn parse_string_interpolation<'input>(
     node: &NodeInternal<'input>,
-) -> Result<StringWithInterpolation<'input>, Box<dyn Error>> {
+) -> Result<StringWithInterpolation<'input>> {
     if node.rule_name == "StringInterpolation" {
         if node.children.len() == 1 {
             return Ok(StringWithInterpolation {
@@ -136,12 +139,13 @@ fn parse_string_interpolation<'input>(
         }
     }
 
-    Err(gen_error("parse_string_interpolation", &node.rule_name))
+    bail!(
+        "Parse Error in parse_string_interpolation: {}",
+        node.rule_name
+    );
 }
 
-pub fn parse_list_literal<'input>(
-    node: &NodeInternal<'input>,
-) -> Result<NodeExpression<'input>, Box<dyn Error>> {
+pub fn parse_list_literal<'input>(node: &NodeInternal<'input>) -> Result<NodeExpression<'input>> {
     if node.rule_name == "ListLiteral" {
         if node.children.len() == 2 || node.children.len() == 3 {
             return Ok(NodeExpression::ListLiteral {
@@ -168,12 +172,12 @@ pub fn parse_list_literal<'input>(
         }
     }
 
-    Err(gen_error("parse_list_literal", &node.rule_name))
+    bail!("Parse Error in parse_list_literal: {}", node.rule_name);
 }
 
 pub fn parse_set_or_map_literal<'input>(
     node: &NodeInternal<'input>,
-) -> Result<NodeExpression<'input>, Box<dyn Error>> {
+) -> Result<NodeExpression<'input>> {
     if node.rule_name == "SetOrMapLiteral" {
         if node.children.len() == 2 || node.children.len() == 3 {
             return Ok(NodeExpression::SetOrMapLiteral {
@@ -200,12 +204,15 @@ pub fn parse_set_or_map_literal<'input>(
         }
     }
 
-    Err(gen_error("parse_set_or_map_literal", &node.rule_name))
+    bail!(
+        "Parse Error in parse_set_or_map_literal: {}",
+        node.rule_name
+    );
 }
 
 fn parse_element_list<'input>(
     node: &NodeInternal<'input>,
-) -> Result<Vec<CollectionElement<'input>>, Box<dyn Error>> {
+) -> Result<Vec<CollectionElement<'input>>> {
     if node.rule_name == "ElementList" {
         if node.children.len() == 1 {
             return Ok(vec![parse_element(&node.children[0])?]);
@@ -217,12 +224,10 @@ fn parse_element_list<'input>(
         }
     }
 
-    Err(gen_error("parse_element_list", &node.rule_name))
+    bail!("Parse Error in parse_element_list: {}", node.rule_name);
 }
 
-fn parse_element<'input>(
-    node: &NodeInternal<'input>,
-) -> Result<CollectionElement<'input>, Box<dyn Error>> {
+fn parse_element<'input>(node: &NodeInternal<'input>) -> Result<CollectionElement<'input>> {
     if node.rule_name == "Element" {
         if node.children[0].rule_name == "ExpressionElement" {
             return parse_expression_element(&node.children[0]);
@@ -231,24 +236,25 @@ fn parse_element<'input>(
         }
     }
 
-    Err(gen_error("parse_element", &node.rule_name))
+    bail!("Parse Error in parse_element: {}", node.rule_name);
 }
 
 fn parse_expression_element<'input>(
     node: &NodeInternal<'input>,
-) -> Result<CollectionElement<'input>, Box<dyn Error>> {
+) -> Result<CollectionElement<'input>> {
     if node.rule_name == "ExpressionElement" {
         return Ok(CollectionElement::ExpressionElement {
             expr: Box::new(parse_expression(&node.children[0])?),
         });
     }
 
-    Err(gen_error("parse_expression_element", &node.rule_name))
+    bail!(
+        "Parse Error in parse_expression_element: {}",
+        node.rule_name
+    );
 }
 
-fn parse_map_element<'input>(
-    node: &NodeInternal<'input>,
-) -> Result<CollectionElement<'input>, Box<dyn Error>> {
+fn parse_map_element<'input>(node: &NodeInternal<'input>) -> Result<CollectionElement<'input>> {
     if node.rule_name == "MapElement" {
         return Ok(CollectionElement::MapElement {
             key_expr: Box::new(parse_expression(&node.children[0])?),
@@ -256,5 +262,5 @@ fn parse_map_element<'input>(
         });
     }
 
-    Err(gen_error("parse_map_element", &node.rule_name))
+    bail!("Parse Error in parse_map_element: {}", node.rule_name);
 }

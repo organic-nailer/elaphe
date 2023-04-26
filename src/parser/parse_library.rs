@@ -1,4 +1,6 @@
-use std::{error::Error, vec};
+use std::vec;
+
+use anyhow::{bail, Result};
 
 use super::{
     node::{Combinator, DartType, LibraryDeclaration, LibraryImport, NodeStatement},
@@ -7,12 +9,10 @@ use super::{
     parse_functions::{parse_function_body, parse_function_signature},
     parse_identifier::{parse_identifier, parse_identifier_list},
     parse_variables::parse_initialized_identifier_list,
-    util::{flatten, gen_error},
+    util::flatten,
 };
 
-pub fn parse_library<'input>(
-    node: &NodeInternal<'input>,
-) -> Result<LibraryDeclaration<'input>, Box<dyn Error>> {
+pub fn parse_library<'input>(node: &NodeInternal<'input>) -> Result<LibraryDeclaration<'input>> {
     Ok(LibraryDeclaration {
         import_list: parse_library_import_list(&node.children[0])?,
         top_level_declaration_list: parse_top_level_declaration_list(&node.children[1])?,
@@ -21,7 +21,7 @@ pub fn parse_library<'input>(
 
 fn parse_top_level_declaration_list<'input>(
     node: &NodeInternal<'input>,
-) -> Result<Vec<Box<NodeStatement<'input>>>, Box<dyn Error>> {
+) -> Result<Vec<Box<NodeStatement<'input>>>> {
     if node.rule_name == "TopLevelDeclarationList" {
         if node.children.len() == 0 {
             return Ok(vec![]);
@@ -33,15 +33,15 @@ fn parse_top_level_declaration_list<'input>(
         }
     }
 
-    Err(gen_error(
-        "parse_top_level_declaration_list",
-        &node.rule_name,
-    ))
+    bail!(
+        "Parse Error in parse_top_level_declaration_list: {}",
+        node.rule_name
+    );
 }
 
 fn parse_top_level_declaration<'input>(
     node: &NodeInternal<'input>,
-) -> Result<NodeStatement<'input>, Box<dyn Error>> {
+) -> Result<NodeStatement<'input>> {
     if node.rule_name == "TopLevelDeclaration" {
         match node.children[0].rule_name.as_str() {
             "TopFunctionDeclaration" => {
@@ -57,12 +57,15 @@ fn parse_top_level_declaration<'input>(
         }
     }
 
-    Err(gen_error("parse_top_level_declaration", &node.rule_name))
+    bail!(
+        "Parse Error in parse_top_level_declaration: {}",
+        node.rule_name
+    );
 }
 
 fn parse_library_import_list<'input>(
     node: &NodeInternal<'input>,
-) -> Result<Vec<LibraryImport<'input>>, Box<dyn Error>> {
+) -> Result<Vec<LibraryImport<'input>>> {
     if node.rule_name == "LibraryImportList" {
         if node.children.len() == 0 {
             return Ok(vec![]);
@@ -74,12 +77,13 @@ fn parse_library_import_list<'input>(
         }
     }
 
-    Err(gen_error("parse_library_import_list", &node.rule_name))
+    bail!(
+        "Parse Error in parse_library_import_list: {}",
+        node.rule_name
+    );
 }
 
-fn parse_library_import<'input>(
-    node: &NodeInternal<'input>,
-) -> Result<LibraryImport<'input>, Box<dyn Error>> {
+fn parse_library_import<'input>(node: &NodeInternal<'input>) -> Result<LibraryImport<'input>> {
     if node.rule_name == "LibraryImport" {
         if node.children.len() == 3 {
             return Ok(LibraryImport {
@@ -108,12 +112,12 @@ fn parse_library_import<'input>(
         }
     }
 
-    Err(gen_error("parse_library_import", &node.rule_name))
+    bail!("Parse Error in parse_library_import: {}", node.rule_name);
 }
 
 fn parse_top_function_declaration<'input>(
     node: &NodeInternal<'input>,
-) -> Result<NodeStatement<'input>, Box<dyn Error>> {
+) -> Result<NodeStatement<'input>> {
     if node.rule_name == "TopFunctionDeclaration" {
         let signature = parse_function_signature(&node.children[0])?;
         let return_is_void = match &signature.return_type {
@@ -129,12 +133,15 @@ fn parse_top_function_declaration<'input>(
         });
     }
 
-    Err(gen_error("parse_top_function_declaration", &node.rule_name))
+    bail!(
+        "Parse Error in parse_top_function_declaration: {}",
+        node.rule_name
+    );
 }
 
 fn parse_top_variable_declaration<'input>(
     node: &NodeInternal<'input>,
-) -> Result<NodeStatement<'input>, Box<dyn Error>> {
+) -> Result<NodeStatement<'input>> {
     if node.rule_name == "TopVariableDeclaration" {
         if node.children.len() == 3 {
             return Ok(NodeStatement::VariableDeclarationList {
@@ -151,12 +158,13 @@ fn parse_top_variable_declaration<'input>(
         }
     }
 
-    Err(gen_error("parse_top_variable_declaration", &node.rule_name))
+    bail!(
+        "Parse Error in parse_top_variable_declaration: {}",
+        node.rule_name
+    );
 }
 
-fn parse_combinator_list<'input>(
-    node: &NodeInternal<'input>,
-) -> Result<Vec<Combinator<'input>>, Box<dyn Error>> {
+fn parse_combinator_list<'input>(node: &NodeInternal<'input>) -> Result<Vec<Combinator<'input>>> {
     if node.rule_name == "CombinatorList" {
         if node.children.len() == 1 {
             return Ok(vec![parse_combinator(&node.children[0])?]);
@@ -168,12 +176,10 @@ fn parse_combinator_list<'input>(
         }
     }
 
-    Err(gen_error("parse_combinator_list", &node.rule_name))
+    bail!("Parse Error in parse_combinator_list: {}", node.rule_name);
 }
 
-fn parse_combinator<'input>(
-    node: &NodeInternal<'input>,
-) -> Result<Combinator<'input>, Box<dyn Error>> {
+fn parse_combinator<'input>(node: &NodeInternal<'input>) -> Result<Combinator<'input>> {
     if node.rule_name == "Combinator" {
         if node.children[0].rule_name == "show" {
             return Ok(Combinator {
@@ -188,5 +194,5 @@ fn parse_combinator<'input>(
         }
     }
 
-    Err(gen_error("parse_combinator", &node.rule_name))
+    bail!("Parse Error in parse_combinator: {}", node.rule_name);
 }

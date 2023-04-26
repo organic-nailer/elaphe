@@ -1,12 +1,12 @@
+use anyhow::{anyhow, Result};
 use elaphe::{build_from_code, build_from_file};
 use getopts::Options;
-use std::error::Error;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::str;
 use std::{env, fs};
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
     let now = std::time::SystemTime::now();
 
@@ -42,7 +42,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     build_from_code(output, &source, now)?;
                     execute_pyc(output)
                 }
-                None => Err("invalid arguments".into()),
+                None => Err(anyhow!("invalid arguments")),
             }
         }
     } else if command == "build" {
@@ -59,7 +59,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         elaphe_add(package_name)?;
         Ok(())
     } else {
-        Err("invalid command".into())
+        Err(anyhow!("invalid arguments"))
     }
 }
 
@@ -73,7 +73,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 //     Ok(())
 // }
 
-fn execute_pyc(file_name: &str) -> Result<(), Box<dyn Error>> {
+fn execute_pyc(file_name: &str) -> Result<()> {
     println!("run {}", file_name);
     match Command::new("python").args(&[file_name]).output() {
         Ok(e) => {
@@ -86,7 +86,7 @@ fn execute_pyc(file_name: &str) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn elaphe_init(dir: &str) -> Result<(), Box<dyn Error>> {
+fn elaphe_init(dir: &str) -> Result<()> {
     let mut path = env::current_dir()?;
     path.push(dir);
     if !path.exists() {
@@ -98,7 +98,7 @@ fn elaphe_init(dir: &str) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn elaphe_add(package_name: &str) -> Result<(), Box<dyn Error>> {
+fn elaphe_add(package_name: &str) -> Result<()> {
     println!("add {}", package_name);
 
     match Command::new("python")
@@ -114,7 +114,7 @@ fn elaphe_add(package_name: &str) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn copy_directory_contents(source: &Path, destination: &Path) -> Result<(), Box<dyn Error>> {
+fn copy_directory_contents(source: &Path, destination: &Path) -> Result<()> {
     for entry in fs::read_dir(source)? {
         let entry = entry?;
         let path = entry.path();
