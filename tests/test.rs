@@ -2,7 +2,7 @@ use std::path::Path;
 use std::process::Command;
 use std::{fs, str};
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use uuid::Uuid;
 
 fn exec_py_and_assert(filename: &str, expect: &str) -> Result<()> {
@@ -11,6 +11,17 @@ fn exec_py_and_assert(filename: &str, expect: &str) -> Result<()> {
         .args(&["-c", &py_command])
         .output()
         .with_context(|| format!("failed to execute {}", py_command))?;
+
+    match output.status.code() {
+        Some(code) => {
+            if code != 0 {
+                let stderr = str::from_utf8(&output.stderr)
+                    .with_context(|| format!("failed to parse stderr {}", py_command))?;
+                bail!("failed to execute. code: {}, stderr:\n {}", code, stderr);
+            }
+        }
+        None => bail!("failed to execute {}", py_command),
+    }
 
     let stdout = str::from_utf8(&output.stdout)
         .with_context(|| format!("failed to parse stdout {}", py_command))?;
@@ -50,7 +61,7 @@ fn calc_float() -> Result<()> {
 #[test]
 fn calc_hex() -> Result<()> {
     let output = format!("{}.pyc", Uuid::new_v4().hyphenated().to_string());
-    elaphe::build_from_code_single(&output, "main() { print(0x47 - 0X05); }")?;
+    elaphe::build_from_code_single(&output, "mai() { print(0x47 - 0X05); }")?;
     exec_py_and_assert(&output, "66\n")?;
     clean(&output);
     Ok(())

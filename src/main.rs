@@ -70,14 +70,19 @@ fn main() -> Result<()> {
 // }
 
 fn execute_pyc(file_name: &str) -> Result<()> {
-    println!("run {}", file_name);
-    match Command::new("python").args(&[file_name]).output() {
-        Ok(e) => {
-            println!("----- result -----");
-            println!("{}", str::from_utf8(&e.stdout).unwrap());
-            println!("------ end -------");
-        }
-        Err(e) => println!("Error: {}", e),
+    let output = Command::new("python")
+        .args(&[file_name])
+        .output()
+        .with_context(|| format!("failed to execute python file: {}", file_name))?;
+
+    if output.status.success() {
+        println!("----- result -----");
+        println!("{}", str::from_utf8(&output.stdout).unwrap());
+        println!("------ end -------");
+    } else {
+        println!("----- error -----");
+        println!("{}", str::from_utf8(&output.stderr).unwrap());
+        println!("------ end -------");
     }
     Ok(())
 }
