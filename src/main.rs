@@ -101,15 +101,19 @@ fn elaphe_init(dir: &str) -> Result<()> {
 
 fn elaphe_add(package_name: &str) -> Result<()> {
     println!("add {}", package_name);
+    
+    let exec_path = env::current_exe()?;
+    let exec_dir = exec_path.parent().unwrap();
 
-    match Command::new("python")
-        .args(&["-u", "script/gen_type_stubs.py", package_name])
+    let output = Command::new("python")
+        .args(&["-u", exec_dir.join("script/gen_type_stubs.py").to_str().unwrap(), package_name])
         .output()
-    {
-        Ok(e) => {
-            println!("{}", str::from_utf8(&e.stdout).unwrap());
-        }
-        Err(e) => println!("Error: {}", e),
+        .with_context(|| format!("failed to execute python file: {}", package_name))?;
+
+    if output.status.success() {
+        println!("{}", str::from_utf8(&output.stdout).unwrap());
+    } else {
+        println!("{}", str::from_utf8(&output.stderr).unwrap());
     }
 
     Ok(())

@@ -66,6 +66,9 @@ def write_package_recursively(lib: ModuleType, dir: str, only_package = True) ->
     指定されたモジュールとそのサブモジュールを再帰的に処理する
     """
     write_package(lib, lib.__name__, dir)
+    if not hasattr(lib, "__path__"):
+        # if lib is not a package
+        return
     def onerror(modname):
         print(f"Error: cannot process module {modname}.", file=sys.stderr)
     for importer, modname, ispkg in pkgutil.walk_packages(path=lib.__path__, prefix=lib.__name__ + ".", onerror=onerror):
