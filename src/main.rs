@@ -76,15 +76,27 @@ fn execute_pyc(file_name: &str) -> Result<()> {
         .with_context(|| format!("failed to execute python file: {}", file_name))?;
 
     if output.status.success() {
+        let out = decode_str(&output.stdout)?;
         println!("----- result -----");
-        println!("{}", str::from_utf8(&output.stdout).unwrap());
+        println!("{}", out);
         println!("------ end -------");
     } else {
+        let out = decode_str(&output.stderr)?;
         println!("----- error -----");
-        println!("{}", str::from_utf8(&output.stderr).unwrap());
+        println!("{}", out);
         println!("------ end -------");
     }
     Ok(())
+}
+
+fn decode_str(v: &[u8]) -> Result<String> {
+    match String::from_utf8(v.to_vec()) {
+        Ok(s) => Ok(s),
+        Err(_) => {
+            let (res, _, _) = encoding_rs::SHIFT_JIS.decode(v);
+            Ok(res.into_owned())
+        }
+    }
 }
 
 fn elaphe_init(dir: &str) -> Result<()> {
@@ -101,12 +113,16 @@ fn elaphe_init(dir: &str) -> Result<()> {
 
 fn elaphe_add(package_name: &str) -> Result<()> {
     println!("add {}", package_name);
-    
+
     let exec_path = env::current_exe()?;
     let exec_dir = exec_path.parent().unwrap();
 
     let output = Command::new("python")
-        .args(&["-u", exec_dir.join("script/gen_type_stubs.py").to_str().unwrap(), package_name])
+        .args(&[
+            "-u",
+            exec_dir.join("script/gen_type_stubs.py").to_str().unwrap(),
+            package_name,
+        ])
         .output()
         .with_context(|| format!("failed to execute python file: {}", package_name))?;
 
