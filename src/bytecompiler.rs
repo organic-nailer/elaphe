@@ -82,6 +82,10 @@ impl<'ctx, 'value> ByteCompiler<'ctx, 'value> {
             // import Python modules
             let last = path_splitted.pop().unwrap();
             assert!(last.ends_with(".d.dart"));
+            if last == "core.d.dart" {
+                // ignore core.d.dart
+                return Ok(());
+            }
 
             // remove "elaphe"
             path_splitted.drain(0..1);
